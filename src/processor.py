@@ -1,7 +1,8 @@
 import pandas as pd
 from data_loader import download_data
 from indicators import compute_cd_indicator, compute_nx_break_through
-
+import time
+    
 def calculate_score(data, interval, signal_date):
     interval_weights = {
         # '1m': 1, 
@@ -10,7 +11,10 @@ def calculate_score(data, interval, signal_date):
         '15m': 4,
         '30m': 5, 
         '1h': 6, 
-        '1d': 7
+        '2h': 7,
+        '3h': 8,
+        '4h': 9,
+        '1d': 10
     }
     iw = interval_weights.get(interval, 0)
     
@@ -27,7 +31,7 @@ def calculate_score(data, interval, signal_date):
 
 def process_ticker(ticker):
     # intervals = ['1m', '2m', '5m', '15m', '30m', '1h', '1d']
-    intervals = ['5m', '15m', '30m', '1h', '1d']
+    intervals = ['5m', '15m', '30m', '1h', '2h', '3h', '4h', '1d']
     period_map = {
             # '1m': 'max',
             # '2m': '5d',
@@ -35,6 +39,9 @@ def process_ticker(ticker):
             '15m': '1mo',
             '30m': '1mo',
             '1h': '3mo',
+            '2h': '3mo',
+            '3h': '3mo',
+            '4h': '3mo',
             '1d': '6mo',
         }
     
@@ -43,6 +50,9 @@ def process_ticker(ticker):
     for interval in intervals:
         print ("interval:", interval)
         data = download_data(ticker, interval, period_map[interval])
+        if data.empty:
+            time.sleep(0.5)
+            data = download_data(ticker, interval, period_map[interval])
         print ("start:", data.index[0].strftime('%Y-%m-%d %H:%M:%S'))
         print ("end:", data.index[-1].strftime('%Y-%m-%d %H:%M:%S'))
         if data.empty:
@@ -60,7 +70,8 @@ def process_ticker(ticker):
             # print ("买入日期：", signal_dates)
             print ("突破日期：", breakthrough_dates.strftime('%Y-%m-%d %H:%M:%S'))
             
-            for date in signal_dates:
+            # for date in signal_dates:
+            for date in data.index[dxdx]:
                 print(date)
                 score = calculate_score(data, interval, date)
                 # Find the next breakthrough date after the signal date
