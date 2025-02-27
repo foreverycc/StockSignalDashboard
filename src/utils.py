@@ -60,21 +60,21 @@ def identify_1234(file_path):
     
     unique_dates = df['date'].unique()[::-1]
     # Get unique dates to iterate through
-    for i in range(len(unique_dates) - 2):
+    for i in range(len(unique_dates)):
         date = unique_dates[i]
         # print("date:", date)
         # Get data within 3-day window starting from current date
-        window_end = unique_dates[i+2]
-        window_data = df[(df['signal_date'] >= pd.to_datetime(date)) & 
-                        (df['signal_date'] <= pd.to_datetime(window_end))]
+        window_end = unique_dates[min(i+2, (len(unique_dates) - 1))]
+        # print("window_end:", window_end)
+        window_data = df[(df['date'] >= pd.to_datetime(date)) & 
+                        (df['date'] <= pd.to_datetime(window_end))]
         # print("window_data:", window_data)
         # Check each ticker in this window
         for ticker in window_data['ticker'].unique():
             ticker_data = window_data[window_data['ticker'] == ticker]
             unique_intervals = set(ticker_data['interval'])
             if len(unique_intervals.intersection(required_intervals)) >= 3:
-                if ticker not in breakout_candidates:
-                    breakout_candidates.append([ticker, date, len(unique_intervals.intersection(required_intervals))])
+                breakout_candidates.append([ticker, date, len(unique_intervals.intersection(required_intervals))])
     df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=['ticker', 'date', 'score']).sort_values(by=['date', 'ticker'], ascending=[False, True])
 
     dict_nx_1d = {}
@@ -109,7 +109,7 @@ def identify_1234(file_path):
         nx_1d.index = nx_1d.index.date
         dict_nx_1d[ticker] = nx_1d.to_dict()
     
-    print (dict_nx_1d)
+    # print (dict_nx_1d)
     # remove tickers that failed to get data
     print ("tickers_failed:", tickers_failed)
     df_breakout_candidates =df_breakout_candidates[~df_breakout_candidates['ticker'].isin(tickers_failed)]
@@ -167,13 +167,13 @@ def identify_5230(file_path):
     
     unique_dates = df['date'].unique()[::-1]
     # Get unique dates to iterate through
-    for i in range(len(unique_dates) - 2):
+    for i in range(len(unique_dates)):
         date = unique_dates[i]
         # print("date:", date)
         # Get data within 3-day window starting from current date
-        window_end = unique_dates[i+2]
-        window_data = df[(df['signal_date'] >= pd.to_datetime(date)) & 
-                        (df['signal_date'] <= pd.to_datetime(window_end))]
+        window_end = unique_dates[min(i+2, (len(unique_dates) - 1))]
+        window_data = df[(df['date'] >= pd.to_datetime(date)) & 
+                        (df['date'] <= pd.to_datetime(window_end))]
         # print("window_data:", window_data)
         # Check each ticker in this window
         for ticker in window_data['ticker'].unique():
