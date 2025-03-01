@@ -113,14 +113,17 @@ def evaluate_interval(ticker, interval, daily_data=None):
                 'test_count_5': 0,
                 'test_count_10': 0,
                 'test_count_20': 0,
+                'test_count_50': 0,
                 'success_rate_3': 0,
                 'success_rate_5': 0,
                 'success_rate_10': 0,
                 'success_rate_20': 0,
+                'success_rate_50': 0,
                 'avg_return_3': 0,
                 'avg_return_5': 0,
                 'avg_return_10': 0,
                 'avg_return_20': 0,
+                'avg_return_50': 0,
                 'max_return': 0,
                 'min_return': 0
             }
@@ -138,14 +141,17 @@ def evaluate_interval(ticker, interval, daily_data=None):
                 'test_count_5': 0,
                 'test_count_10': 0,
                 'test_count_20': 0,
+                'test_count_50': 0,
                 'success_rate_3': 0,
                 'success_rate_5': 0,
                 'success_rate_10': 0,
                 'success_rate_20': 0,
+                'success_rate_50': 0,
                 'avg_return_3': 0,
                 'avg_return_5': 0,
                 'avg_return_10': 0,
                 'avg_return_20': 0,
+                'avg_return_50': 0,
                 'max_return': 0,
                 'min_return': 0
             }
@@ -155,19 +161,19 @@ def evaluate_interval(ticker, interval, daily_data=None):
         test_count_5 = returns_df['return_5'].count() if 'return_5' in returns_df else 0
         test_count_10 = returns_df['return_10'].count() if 'return_10' in returns_df else 0
         test_count_20 = returns_df['return_20'].count() if 'return_20' in returns_df else 0
-            
+        test_count_50 = returns_df['return_50'].count() if 'return_50' in returns_df else 0
         # Calculate success rates (percentage of positive returns)
         success_rate_3 = (returns_df['return_3'] > 0).mean() * 100 if 'return_3' in returns_df and test_count_3 > 0 else 0
         success_rate_5 = (returns_df['return_5'] > 0).mean() * 100 if 'return_5' in returns_df and test_count_5 > 0 else 0
         success_rate_10 = (returns_df['return_10'] > 0).mean() * 100 if 'return_10' in returns_df and test_count_10 > 0 else 0
         success_rate_20 = (returns_df['return_20'] > 0).mean() * 100 if 'return_20' in returns_df and test_count_20 > 0 else 0
-        
+        success_rate_50 = (returns_df['return_50'] > 0).mean() * 100 if 'return_50' in returns_df and test_count_50 > 0 else 0
         # Calculate average returns
         avg_return_3 = returns_df['return_3'].mean() if 'return_3' in returns_df and test_count_3 > 0 else 0
         avg_return_5 = returns_df['return_5'].mean() if 'return_5' in returns_df and test_count_5 > 0 else 0
         avg_return_10 = returns_df['return_10'].mean() if 'return_10' in returns_df and test_count_10 > 0 else 0
         avg_return_20 = returns_df['return_20'].mean() if 'return_20' in returns_df and test_count_20 > 0 else 0
-        
+        avg_return_50 = returns_df['return_50'].mean() if 'return_50' in returns_df and test_count_50 > 0 else 0
         # Calculate max and min returns across all periods
         all_returns = []
         for col in returns_df.columns:
@@ -186,14 +192,17 @@ def evaluate_interval(ticker, interval, daily_data=None):
             'test_count_5': test_count_5,
             'test_count_10': test_count_10,
             'test_count_20': test_count_20,
+            'test_count_50': test_count_50,
             'success_rate_3': success_rate_3,
             'success_rate_5': success_rate_5,
             'success_rate_10': success_rate_10,
             'success_rate_20': success_rate_20,
+            'success_rate_50': success_rate_50,
             'avg_return_3': avg_return_3,
             'avg_return_5': avg_return_5,
             'avg_return_10': avg_return_10,
             'avg_return_20': avg_return_20,
+            'avg_return_50': avg_return_50,
             'max_return': max_return,
             'min_return': min_return
         }
@@ -268,7 +277,7 @@ def evaluate_cd_signals(file_path):
         df = pd.DataFrame(all_results)
         
         # Save detailed results with ticker information
-        df.to_csv(f'cd_evaluation_{output_base}_custom_detailed.csv', index=False)
+        df.to_csv(f'cd_eval_custom_detailed_{output_base}.csv', index=False)
 
         # Find the best interval for each ticker based on success rate and returns
         # Only consider intervals with at least 3 tests for period 10
@@ -281,10 +290,10 @@ def evaluate_cd_signals(file_path):
             best_intervals = best_intervals[['ticker', 'interval', 'signal_count', 
                                            'latest_signal', 'test_count_20', 
                                            'success_rate_20', 'avg_return_20']].sort_values('latest_signal', ascending=False)
-            best_intervals.to_csv(f'cd_evaluation_{output_base}_best_intervals.csv', index=False)
+            best_intervals.to_csv(f'cd_eval_best_intervals_{output_base}.csv', index=False)
 
             good_signals = valid_df.sort_values('latest_signal', ascending=False)
-            good_signals.to_csv(f'cd_evaluation_{output_base}_good_signals.csv', index=False)
+            good_signals.to_csv(f'cd_eval_good_signals_{output_base}.csv', index=False)
         else:
             print("Not enough data to determine best intervals (need at least 3 tests)")
         
@@ -305,12 +314,13 @@ def evaluate_cd_signals(file_path):
             'avg_return_20': 'mean'
         }).reset_index()
         
-        interval_summary.to_csv(f'cd_evaluation_{output_base}_interval_summary.csv', index=False)
+        interval_summary.to_csv(f'cd_eval_interval_summary_{output_base}.csv', index=False)
         
         print(f"Evaluation complete. Results saved to:")
-        print(f"  - cd_evaluation_{output_base}_custom_detailed.csv (all data)")
-        print(f"  - cd_evaluation_{output_base}_best_intervals.csv (best interval per ticker)")
-        print(f"  - cd_evaluation_{output_base}_interval_summary.csv (summary by interval)")
+        print(f"  - cd_eval_good_signals_{output_base}.csv (all data)")
+        print(f"  - cd_eval_best_intervals_{output_base}.csv (best interval per ticker)")
+        print(f"  - cd_eval_custom_detailed_{output_base}.csv (all data)")
+        print(f"  - cd_eval_interval_summary_{output_base}.csv (summary by interval)")
         
         # Print some statistics for quick reference
         print("\nOverall statistics by interval:")
