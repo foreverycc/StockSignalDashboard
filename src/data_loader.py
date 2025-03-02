@@ -1,49 +1,72 @@
 import pandas as pd
 import yfinance as yf
 import time
+
 def load_stock_list(file_path):
     return pd.read_csv(file_path, sep='\t', header=None, names=['ticker'])['ticker'].tolist()
 
-def download_data_1234(ticker):
-    period_map = {
-            # '1m': 'max',
-            # '2m': '5d',
-            # '5m': '5d',
-            # '15m': '1mo',
-            # '30m': '1mo',
-            '1h': '3mo',
-            '2h': '3mo',
-            '3h': '3mo',
-            '4h': '3mo',
-        }
+def download_stock_data(ticker):
+    """
+    Download stock data for all required intervals in a single function
+    Returns a dictionary with data for all intervals needed
+    """
+    print(f"Downloading data for {ticker}...")
     data_ticker = {}
     stock = yf.Ticker(ticker)
-    # data_ticker['1h'] = stock.history(interval='60m', period=period_map['1h'], actions=False, auto_adjust=True)
-    try:
-        data_ticker['1h'] = stock.history(interval='60m', period=period_map['1h'])
-    except Exception as e:
-        print(f"Error downloading {ticker} 1h: {e}")
-        data_ticker['1h'] = pd.DataFrame()
-    print("ticker:", ticker)
-    # print(data_ticker['1h'])
-
-    for interval in period_map:
-        print("interval:", interval)
-        try:
-            if interval in ['1h', '2h', '3h', '4h']:
-                data_ticker[interval] = data_ticker['1h']
-                data_ticker[interval] = transform_1h_data(data_ticker[interval], interval)
-            else:
-                # data_ticker[interval] = stock.history(interval=interval, period=period_map[interval], actions=False, auto_adjust=True)
-                data_ticker[interval] = stock.history(interval=interval, period=period_map[interval])
-        except Exception as e:
-            print(f"Error downloading {ticker} {interval}: {e}")
-            data_ticker[interval] = pd.DataFrame()
-        # time.sleep(0.1)
-
-    # print(data_ticker)
-    return data_ticker
     
+    # Define base timeframes to download directly
+    try:
+        # Get 5-minute data for short timeframes
+        data_ticker['5m'] = stock.history(interval='5m', period='1mo')
+        if not data_ticker['5m'].empty:
+            print(f"Downloaded 5m data for {ticker}")
+    except Exception as e:
+        print(f"Error downloading {ticker} 5m data: {e}")
+        data_ticker['5m'] = pd.DataFrame()
+    
+    try:
+        # Get 1-hour data for medium timeframes
+        data_ticker['1h'] = stock.history(interval='60m', period='3mo')
+        if not data_ticker['1h'].empty:
+            print(f"Downloaded 1h data for {ticker}")
+    except Exception as e:
+        print(f"Error downloading {ticker} 1h data: {e}")
+        data_ticker['1h'] = pd.DataFrame()
+    
+    try:
+        # Get daily data for long timeframes
+        data_ticker['1d'] = stock.history(interval='1d', period='1y')
+        if not data_ticker['1d'].empty:
+            print(f"Downloaded 1d data for {ticker}")
+    except Exception as e:
+        print(f"Error downloading {ticker} 1d data: {e}")
+        data_ticker['1d'] = pd.DataFrame()
+    
+    # Generate derived timeframes from base downloads
+    # Process 5m to create 10m, 15m, 30m
+    if not data_ticker['5m'].empty:
+        for interval in ['10m', '15m', '30m']:
+            data_ticker[interval] = transform_5m_data(data_ticker['5m'], interval)
+            
+    # Process 1h to create 2h, 3h, 4h
+    if not data_ticker['1h'].empty:
+        for interval in ['2h', '3h', '4h']:
+            data_ticker[interval] = transform_1h_data(data_ticker['1h'], interval)
+    
+    # Create weekly data from daily data
+    if not data_ticker['1d'].empty:
+        data_ticker['1w'] = data_ticker['1d'].resample('W').agg({
+            'Open': 'first',
+            'High': 'max',
+            'Low': 'min',
+            'Close': 'last',
+            'Volume': 'sum'
+        })
+    else:
+        data_ticker['1w'] = pd.DataFrame()
+    
+    return data_ticker
+
 def transform_1h_data(df_1h, new_interval = '2h'):
     if df_1h.empty:
         return pd.DataFrame()
@@ -95,45 +118,9 @@ def transform_1h_data(df_1h, new_interval = '2h'):
         df_xh_list.append(bar_xh)
 
     # 合并成完整的X小时数据表
-    df_xh = pd.concat(df_xh_list).sort_index()
-    # print(df_xh.tail(20))
+    df_xh = pd.concat(df_xh_list).sort_index() if df_xh_list else pd.DataFrame()
     return df_xh
 
-def download_data_5230(ticker):
-    period_map = {
-            '5m': '1mo',
-            '10m': '1mo',
-            '15m': '1mo',
-            '30m': '1mo',
-        }
-    data_ticker = {}
-    stock = yf.Ticker(ticker)
-    # data_ticker['1h'] = stock.history(interval='60m', period=period_map['1h'], actions=False, auto_adjust=True)
-    try:
-        data_ticker['5m'] = stock.history(interval='5m', period=period_map['5m'])
-        # print(data_ticker['5m'])
-    except Exception as e:
-        print(f"Error downloading {ticker} 5m: {e}")
-        data_ticker['5m'] = pd.DataFrame()
-    print("ticker:", ticker)
-
-    for interval in period_map:
-        print("interval:", interval)
-        try:
-            if interval in ['5m', '10m', '15m', '30m']:
-                data_ticker[interval] = data_ticker['5m']
-                data_ticker[interval] = transform_5m_data(data_ticker[interval], interval)
-            else:
-                # data_ticker[interval] = stock.history(interval=interval, period=period_map[interval], actions=False, auto_adjust=True)
-                data_ticker[interval] = stock.history(interval=interval, period=period_map[interval])
-        except Exception as e:
-            print(f"Error downloading {ticker} {interval}: {e}")
-            data_ticker[interval] = pd.DataFrame()
-        # time.sleep(0.1)
-
-    # print(data_ticker)
-    return data_ticker
-    
 def transform_5m_data(df_5m, new_interval = '10m'):
     if df_5m.empty:
         return pd.DataFrame()
@@ -158,7 +145,6 @@ def transform_5m_data(df_5m, new_interval = '10m'):
         """
         # 注意这里 origin="start_day", offset="9h30min" 是关键
         # 使得日内区间从 当日00:00+9h30 => 当日09:30 开始切分
-        # 结果区间: 9:30~11:30, 11:30~13:30, 13:30~15:30, 15:30~17:30(只到16:00)
         return daily_df.resample(
             rule=new_interval.replace('m', 'T'),
             closed="left",   # 区间左闭右开
@@ -185,6 +171,14 @@ def transform_5m_data(df_5m, new_interval = '10m'):
         df_xh_list.append(bar_xh)
 
     # 合并成完整的X小时数据表
-    df_xh = pd.concat(df_xh_list).sort_index()
-    # print(df_xh.tail(20))
+    df_xh = pd.concat(df_xh_list).sort_index() if df_xh_list else pd.DataFrame()
     return df_xh
+
+# Keep these for backward compatibility
+def download_data_1234(ticker):
+    data = download_stock_data(ticker)
+    return {k: v for k, v in data.items() if k in ['1h', '2h', '3h', '4h']}
+
+def download_data_5230(ticker):
+    data = download_stock_data(ticker)
+    return {k: v for k, v in data.items() if k in ['5m', '10m', '15m', '30m']}

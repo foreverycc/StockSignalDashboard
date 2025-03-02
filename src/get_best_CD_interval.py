@@ -47,14 +47,14 @@ def calculate_returns(data, cd_signals, periods=[3, 5, 10, 20, 50]):
     
     return pd.DataFrame(results)
 
-def evaluate_interval(ticker, interval, daily_data=None):
+def evaluate_interval(ticker, interval, data=None):
     """
     Evaluate CD signals for a specific ticker and interval.
     
     Args:
         ticker: Stock ticker symbol
         interval: Time interval to evaluate
-        daily_data: Optional daily data for the ticker (for weekly calculations)
+        data: Optional pre-downloaded data dictionary
     
     Returns:
         Dictionary with evaluation metrics
@@ -62,45 +62,52 @@ def evaluate_interval(ticker, interval, daily_data=None):
     print(f"Evaluating {ticker} at {interval} interval")
     
     try:
-        # Handle weekly interval separately
-        if interval == '1w':
-            if daily_data is None or daily_data.empty:
+        # If data dictionary is provided, use it
+        if data and interval in data and not data[interval].empty:
+            data_frame = data[interval]
+        else:
+            # Handle weekly interval separately
+            if interval == '1w':
+                # Try to use daily data from the provided dictionary
+                if data and '1d' in data and not data['1d'].empty:
+                    daily_data = data['1d']
+                else:
+                    stock = yf.Ticker(ticker)
+                    daily_data = stock.history(interval='1d', period='1y')
+                    
+                if daily_data.empty:
+                    return None
+                    
+                # Resample daily data to weekly
+                data_frame = daily_data.resample('W').agg({
+                    'Open': 'first',
+                    'High': 'max',
+                    'Low': 'min',
+                    'Close': 'last',
+                    'Volume': 'sum'
+                })
+            # Get data based on interval type
+            elif interval in ['5m', '10m', '15m', '30m']:
+                data_ticker = download_data_5230(ticker)
+                data_frame = data_ticker[interval]
+            elif interval in ['1h', '2h', '3h', '4h']:
+                data_ticker = download_data_1234(ticker)
+                data_frame = data_ticker[interval]
+            elif interval == '1d':
                 stock = yf.Ticker(ticker)
-                daily_data = stock.history(interval='1d', period='1y')
-                
-            if daily_data.empty:
+                data_frame = stock.history(interval='1d', period='1y')
+            else:
                 return None
                 
-            # Resample daily data to weekly
-            data = daily_data.resample('W').agg({
-                'Open': 'first',
-                'High': 'max',
-                'Low': 'min',
-                'Close': 'last',
-                'Volume': 'sum'
-            })
-        # Get data based on interval type
-        elif interval in ['5m', '10m', '15m', '30m']:
-            data_ticker = download_data_5230(ticker)
-            data = data_ticker[interval]
-        elif interval in ['1h', '2h', '3h', '4h']:
-            data_ticker = download_data_1234(ticker)
-            data = data_ticker[interval]
-        elif interval == '1d':
-            stock = yf.Ticker(ticker)
-            data = stock.history(interval='1d', period='1y')
-        else:
-            return None
-            
-        if data.empty:
+        if data_frame.empty:
             return None
             
         # Compute CD signals
-        cd_signals = compute_cd_indicator(data)
+        cd_signals = compute_cd_indicator(data_frame)
         signal_count = cd_signals.sum()
         
         # Get the latest signal date
-        latest_signal_date = data.index[cd_signals].max() if signal_count > 0 else None
+        latest_signal_date = data_frame.index[cd_signals].max() if signal_count > 0 else None
         latest_signal_str = latest_signal_date.strftime('%Y-%m-%d %H:%M:%S') if latest_signal_date else None
         
         if signal_count == 0:
@@ -129,7 +136,7 @@ def evaluate_interval(ticker, interval, daily_data=None):
             }
             
         # Calculate returns for each signal
-        returns_df = calculate_returns(data, cd_signals)
+        returns_df = calculate_returns(data_frame, cd_signals)
         
         if returns_df.empty:
             return {
@@ -162,18 +169,21 @@ def evaluate_interval(ticker, interval, daily_data=None):
         test_count_10 = returns_df['return_10'].count() if 'return_10' in returns_df else 0
         test_count_20 = returns_df['return_20'].count() if 'return_20' in returns_df else 0
         test_count_50 = returns_df['return_50'].count() if 'return_50' in returns_df else 0
+        
         # Calculate success rates (percentage of positive returns)
         success_rate_3 = (returns_df['return_3'] > 0).mean() * 100 if 'return_3' in returns_df and test_count_3 > 0 else 0
         success_rate_5 = (returns_df['return_5'] > 0).mean() * 100 if 'return_5' in returns_df and test_count_5 > 0 else 0
         success_rate_10 = (returns_df['return_10'] > 0).mean() * 100 if 'return_10' in returns_df and test_count_10 > 0 else 0
         success_rate_20 = (returns_df['return_20'] > 0).mean() * 100 if 'return_20' in returns_df and test_count_20 > 0 else 0
         success_rate_50 = (returns_df['return_50'] > 0).mean() * 100 if 'return_50' in returns_df and test_count_50 > 0 else 0
+        
         # Calculate average returns
         avg_return_3 = returns_df['return_3'].mean() if 'return_3' in returns_df and test_count_3 > 0 else 0
         avg_return_5 = returns_df['return_5'].mean() if 'return_5' in returns_df and test_count_5 > 0 else 0
         avg_return_10 = returns_df['return_10'].mean() if 'return_10' in returns_df and test_count_10 > 0 else 0
         avg_return_20 = returns_df['return_20'].mean() if 'return_20' in returns_df and test_count_20 > 0 else 0
         avg_return_50 = returns_df['return_50'].mean() if 'return_50' in returns_df and test_count_50 > 0 else 0
+        
         # Calculate max and min returns across all periods
         all_returns = []
         for col in returns_df.columns:

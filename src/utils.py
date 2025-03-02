@@ -1,5 +1,7 @@
 import pandas as pd
 import yfinance as yf
+import os
+
 def save_results(results, output_file):
     df = pd.DataFrame(results)
     if df.empty:
@@ -9,10 +11,18 @@ def save_results(results, output_file):
     df.to_csv(output_file, sep='\t', index=False, columns=['ticker', 'interval', 'score', 'signal_date', 'breakthrough_date'])
 
 def save_breakout_candidates_1234(df, file_path):
-    df.to_csv(f'breakout_candidates_{file_path}', sep='\t', index=False, columns=['ticker', 'date', 'score', 'nx_1d'])
+    # Extract base name and directory from the input file path
+    directory = os.path.dirname(file_path)
+    base_name = os.path.basename(file_path)
+    output_path = os.path.join(directory, base_name).replace("details", "summary")
+    df.to_csv(output_path, sep='\t', index=False, columns=['ticker', 'date', 'score', 'nx_1d'])
 
 def save_breakout_candidates_5230(df, file_path):
-    df.to_csv(f'breakout_candidates_{file_path}', sep='\t', index=False, columns=['ticker', 'date', 'score', 'nx_1h'])
+    # Extract base name and directory from the input file path
+    directory = os.path.dirname(file_path)
+    base_name = os.path.basename(file_path)
+    output_path = os.path.join(directory, base_name).replace("details", "summary")
+    df.to_csv(output_path, sep='\t', index=False, columns=['ticker', 'date', 'score', 'nx_1h'])
 
 def identify_1234(file_path):
     """

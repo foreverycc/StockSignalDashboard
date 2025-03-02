@@ -30,22 +30,30 @@ def calculate_score(data, interval, signal_date):
     score = iw * 0.5 + candle_size * 0.3 + volume_ratio * 0.2
     return round(score, 2)
 
-def process_ticker_1234(ticker):
-    # intervals = ['1m', '2m', '5m', '15m', '30m', '1h', '1d']
-    # intervals = ['5m', '15m', '30m', '1h', '2h', '3h', '4h', '1d']
+def process_ticker_1234(ticker, data_ticker=None):
+    """
+    Process ticker for 1234 breakout analysis
+    
+    Args:
+        ticker: Stock symbol
+        data_ticker: Optional pre-downloaded data dictionary
+    
+    Returns:
+        List of results
+    """
     intervals = ['1h', '2h', '3h', '4h']
     
     results = []
-    data_ticker = download_data_1234(ticker)
+    # Use provided data or download if not provided
+    if data_ticker is None:
+        data_ticker = download_data_1234(ticker)
 
     for interval in intervals:
-        print ("ticker:", ticker,  "interval:", interval)
-        data = data_ticker[interval]
+        print(f"ticker: {ticker} interval: {interval}")
+        data = data_ticker.get(interval, pd.DataFrame())
         if data.empty:
             print(f"data is empty: {ticker} {interval}")
             continue
-        # print ("start:", data.index[0].strftime('%Y-%m-%d %H:%M:%S'))
-        # print ("end:", data.index[-1].strftime('%Y-%m-%d %H:%M:%S'))
         
         try:
             cd = compute_cd_indicator(data)
@@ -54,14 +62,7 @@ def process_ticker_1234(ticker):
             signal_dates = data.index[buy_signals]
             breakthrough_dates = data.index[breakthrough]
             
-            # print ("抄底日期：", data.index[cd].strftime('%Y-%m-%d %H:%M:%S'))
-            # print ("买入信号：", buy_signals)
-            # print ("买入日期：", signal_dates)
-            # print ("突破日期：", breakthrough_dates.strftime('%Y-%m-%d %H:%M:%S'))
-            
-            # for date in signal_dates:
             for date in data.index[cd]:
-                # print(date)
                 score = calculate_score(data, interval, date)
                 # Find the next breakthrough date after the signal date
                 future_breakthroughs = breakthrough_dates[breakthrough_dates >= date]
@@ -80,23 +81,30 @@ def process_ticker_1234(ticker):
     return results
 
 
-def process_ticker_5230(ticker):
-    # intervals = ['1m', '2m', '5m', '15m', '30m', '1h', '1d']
-    # intervals = ['5m', '15m', '30m', '1h', '2h', '3h', '4h', '1d']
+def process_ticker_5230(ticker, data_ticker=None):
+    """
+    Process ticker for 5230 breakout analysis
+    
+    Args:
+        ticker: Stock symbol
+        data_ticker: Optional pre-downloaded data dictionary
+    
+    Returns:
+        List of results
+    """
     intervals = ['5m', '10m', '15m', '30m']
     
     results = []
-    data_ticker = download_data_5230(ticker)
-    # print("data_ticker:", data_ticker)
+    # Use provided data or download if not provided
+    if data_ticker is None:
+        data_ticker = download_data_5230(ticker)
 
     for interval in intervals:
-        print ("ticker:", ticker,  "interval:", interval)
-        data = data_ticker[interval]
+        print(f"ticker: {ticker} interval: {interval}")
+        data = data_ticker.get(interval, pd.DataFrame())
         if data.empty:
             print(f"data is empty: {ticker} {interval}")
             continue
-        # print ("start:", data.index[0].strftime('%Y-%m-%d %H:%M:%S'))
-        # print ("end:", data.index[-1].strftime('%Y-%m-%d %H:%M:%S'))
         
         try:
             cd = compute_cd_indicator(data)
@@ -105,14 +113,7 @@ def process_ticker_5230(ticker):
             signal_dates = data.index[buy_signals]
             breakthrough_dates = data.index[breakthrough]
             
-            # print ("抄底日期：", data.index[cd].strftime('%Y-%m-%d %H:%M:%S'))
-            # print ("买入信号：", buy_signals)
-            # print ("买入日期：", signal_dates)
-            # print ("突破日期：", breakthrough_dates.strftime('%Y-%m-%d %H:%M:%S'))
-            
-            # for date in signal_dates:
             for date in data.index[cd]:
-                # print(date)
                 score = calculate_score(data, interval, date)
                 # Find the next breakthrough date after the signal date
                 future_breakthroughs = breakthrough_dates[breakthrough_dates >= date]

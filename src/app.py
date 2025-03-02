@@ -2,9 +2,8 @@ import streamlit as st
 import pandas as pd
 import os
 import time
-from get_1234 import get_1234_breakout_candidates
-from get_5230 import get_5230_breakout_candidates
-from get_best_CD_interval import evaluate_cd_signals
+from stock_analyzer import analyze_stocks
+from concurrent.futures import ThreadPoolExecutor
 
 # Set page configuration
 st.set_page_config(
@@ -50,9 +49,12 @@ with col1:
 with col2:
     # Analysis selection
     st.subheader("Analysis Options")
+    
+    # Keep the analysis type radio button for UI consistency
+    # But we'll run all analyses regardless of selection
     analysis_type = st.radio(
-        "Select Analysis Type",
-        ["1234 Breakout", "5230 Breakout", "CD Signal Evaluation"],
+        "Select Analysis Type (all will run)",
+        ["Comprehensive Analysis"],
         horizontal=True
     )
 
@@ -71,26 +73,11 @@ with col3:
             status_text = st.empty()
             
             try:
-                status_text.text("Starting analysis...")
+                status_text.text("Starting comprehensive analysis...")
+                progress_bar.progress(25)
                 
-                # Run the selected analysis
-                if analysis_type == "1234 Breakout":
-                    status_text.text("Running 1234 Breakout analysis...")
-                    get_1234_breakout_candidates(file_path)
-                    output_base = selected_file.split('.')[0]
-                    result_file = f'breakout_candidates_output_{output_base}.1234.tab'
-                    
-                elif analysis_type == "5230 Breakout":
-                    status_text.text("Running 5230 Breakout analysis...")
-                    get_5230_breakout_candidates(file_path)
-                    output_base = selected_file.split('.')[0]
-                    result_file = f'breakout_candidates_output_{output_base}.5230.tab'
-                    
-                else:  # CD Signal Evaluation
-                    status_text.text("Evaluating CD signals...")
-                    evaluate_cd_signals(file_path)
-                    output_base = selected_file.split('.')[0]
-                    result_file = f'cd_eval_custom_detailed_{output_base}.csv'
+                # Run the consolidated analysis function
+                analyze_stocks(file_path)
                 
                 progress_bar.progress(100)
                 status_text.text("Analysis complete!")
@@ -108,20 +95,26 @@ st.markdown("---")
 
 # Function to load and display results
 def load_results(file_pattern, default_sort=None):
-    result_files = [f for f in os.listdir('.') if f.startswith(file_pattern)]
+    # Look in output directory for result files
+    output_dir = './output'
+    if not os.path.exists(output_dir):
+        return None, "No output directory found. Please run an analysis first."
+        
+    result_files = [f for f in os.listdir(output_dir) if f.startswith(file_pattern)]
     
     if not result_files:
         return None, "No results found. Please run an analysis first."
     
     # Get the most recent file
-    latest_file = max(result_files, key=os.path.getctime)
+    latest_file = max(result_files, key=lambda f: os.path.getctime(os.path.join(output_dir, f)))
+    file_path = os.path.join(output_dir, latest_file)
     
     try:
         # Determine file type and load accordingly
         if latest_file.endswith('.csv'):
-            df = pd.read_csv(latest_file)
+            df = pd.read_csv(file_path)
         else:  # .tab files
-            df = pd.read_csv(latest_file, sep='\t')
+            df = pd.read_csv(file_path, sep='\t')
             
         if default_sort and default_sort in df.columns:
             df = df.sort_values(by=default_sort, ascending=False)
@@ -136,108 +129,149 @@ def load_results(file_pattern, default_sort=None):
 # Create two columns for the two table views
 col_left, col_right = st.columns(2)
 
-# First table view with tabs 1-2 (left column)
+# First table view with tabs 1-4 (left column)
 with col_left:
     st.subheader("Breakout Analysis")
-    tab1, tab2 = st.tabs(["Breakout Candidates", "Detailed Results"])
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "1234 Candidates", 
+        "5230 Candidates", 
+        "1234 Details", 
+        "5230 Details"
+    ])
 
-    # Display breakout candidates
+    # Display 1234 breakout candidates
     with tab1:
-        # Determine which breakout type to show based on analysis type
-        breakout_pattern = "breakout_candidates_"
+        df, message = load_results('breakout_candidates_summary_1234_', 'score')
         
-        df, message = load_results(breakout_pattern)
-        
-        if df is not None:
-            st.write(f"Showing breakout candidates from: {message}")
+        if df is not None and '1234' in message:
+            st.write(f"Showing 1234 breakout candidates from: {message}")
             
             # Add filtering options
             if 'ticker' in df.columns:
-                ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_breakout")
+                ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_1234")
                 if ticker_filter:
                     df = df[df['ticker'].str.contains(ticker_filter, case=False)]
             
             # Add date filtering if available
             if 'date' in df.columns:
                 dates = sorted(df['date'].unique(), reverse=True)
-                selected_dates = st.multiselect("Filter by date:", dates, default=dates[:4] if len(dates) > 4 else dates)
+                selected_dates = st.multiselect("Filter by date:", dates, 
+                                               default=dates[:4] if len(dates) > 4 else dates,
+                                               key="date_filter_1234")
                 if selected_dates:
                     df = df[df['date'].isin(selected_dates)]
             
-            # # Add sorting options
-            # if not df.empty:
-            #     sort_columns = df.columns.tolist()
-            #     sort_by = st.selectbox("Sort by:", sort_columns, 
-            #                           index=sort_columns.index('score') if 'score' in sort_columns else 0,
-            #                           key="sort_by_breakout")
-            #     sort_order = st.radio("Sort order:", ["Descending", "Ascending"], horizontal=True, key="sort_order_breakout")
-                
-            #     df = df.sort_values(by=sort_by, ascending=(sort_order == "Ascending"))
-            
             # Display the dataframe
             st.dataframe(df.sort_values(by='date', ascending=False), use_container_width=True)
-            
-            # Add download button
-            # csv = df.to_csv(index=False).encode('utf-8')
-            # st.download_button(
-            #     "Download filtered breakout candidates as CSV",
-            #     csv,
-            #     "filtered_breakout_candidates.csv",
-            #     "text/csv",
-            #     key='download-breakout-csv'
-            # )
         else:
-            st.info("No breakout candidates found. Please run a breakout analysis first.")
+            st.info("No 1234 breakout candidates found. Please run analysis first.")
 
-    # Display detailed results
+    # Display 5230 breakout candidates
     with tab2:
-        df, message = load_results('output_stocks_')
+        df, message = load_results('breakout_candidates_summary_5230_', 'score')
         
-        if df is not None:
-            st.write(f"Showing results from: {message}")
+        if df is not None and '5230' in message:
+            st.write(f"Showing 5230 breakout candidates from: {message}")
             
             # Add filtering options
             if 'ticker' in df.columns:
-                ticker_filter = st.text_input("Filter by ticker symbol:")
+                ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_5230")
+                if ticker_filter:
+                    df = df[df['ticker'].str.contains(ticker_filter, case=False)]
+            
+            # Add date filtering if available
+            if 'date' in df.columns:
+                dates = sorted(df['date'].unique(), reverse=True)
+                selected_dates = st.multiselect("Filter by date:", dates, 
+                                               default=dates[:4] if len(dates) > 4 else dates,
+                                               key="date_filter_5230")
+                if selected_dates:
+                    df = df[df['date'].isin(selected_dates)]
+            
+            # Display the dataframe
+            st.dataframe(df.sort_values(by='date', ascending=False), use_container_width=True)
+        else:
+            st.info("No 5230 breakout candidates found. Please run analysis first.")
+
+    # Display 1234 detailed results
+    with tab3:
+        df, message = load_results('breakout_candidates_details_1234_', 'signal_date')
+        
+        if df is not None and '1234' in message:
+            st.write(f"Showing 1234 detailed results from: {message}")
+            
+            # Add filtering options
+            if 'ticker' in df.columns:
+                ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_details_1234")
                 if ticker_filter:
                     df = df[df['ticker'].str.contains(ticker_filter, case=False)]
             
             if 'interval' in df.columns:
                 intervals = sorted(df['interval'].unique())
-                selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals)
+                selected_intervals = st.multiselect("Filter by interval:", intervals, 
+                                                   default=intervals,
+                                                   key="interval_filter_1234")
                 if selected_intervals:
                     df = df[df['interval'].isin(selected_intervals)]
             
-            # Add sorting options
-            # if not df.empty:
-            #     sort_columns = df.columns.tolist()
-            #     sort_by = st.selectbox("Sort by:", sort_columns, index=sort_columns.index('latest_signal') if 'latest_signal' in sort_columns else 0)
-            #     sort_order = st.radio("Sort order:", ["Descending", "Ascending"], horizontal=True)
-                
-            #     df = df.sort_values(by=sort_by, ascending=(sort_order == "Ascending"))
-            
             # Display the dataframe
-            st.dataframe(df.sort_values(by='signal_date', ascending=False) if 'signal_date' in df.columns else df, use_container_width=True)
+            st.dataframe(df.sort_values(by='signal_date', ascending=False), use_container_width=True)
             
             # Add download button
             csv = df.to_csv(index=False).encode('utf-8')
             st.download_button(
-                "Download filtered results as CSV",
+                "Download filtered 1234 details as CSV",
                 csv,
-                "filtered_results.csv",
+                "filtered_1234_details.csv",
                 "text/csv",
-                key='download-csv'
+                key='download-1234-csv'
             )
         else:
-            st.info(message)
+            st.info("No 1234 detailed results found. Please run analysis first.")
+
+    # Display 5230 detailed results
+    with tab4:
+        df, message = load_results('breakout_candidates_details_5230_', 'signal_date')
+        
+        if df is not None and '5230' in message:
+            st.write(f"Showing 5230 detailed results from: {message}")
+            
+            # Add filtering options
+            if 'ticker' in df.columns:
+                ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_details_5230")
+                if ticker_filter:
+                    df = df[df['ticker'].str.contains(ticker_filter, case=False)]
+            
+            if 'interval' in df.columns:
+                intervals = sorted(df['interval'].unique())
+                selected_intervals = st.multiselect("Filter by interval:", intervals, 
+                                                   default=intervals,
+                                                   key="interval_filter_5230")
+                if selected_intervals:
+                    df = df[df['interval'].isin(selected_intervals)]
+            
+            # Display the dataframe
+            st.dataframe(df.sort_values(by='signal_date', ascending=False), use_container_width=True)
+            
+            # Add download button
+            csv = df.to_csv(index=False).encode('utf-8')
+            st.download_button(
+                "Download filtered 5230 details as CSV",
+                csv,
+                "filtered_5230_details.csv",
+                "text/csv",
+                key='download-5230-csv'
+            )
+        else:
+            st.info("No 5230 detailed results found. Please run analysis first.")
 
 # Second table view with tabs 3-5 (right column)
 with col_right:
     st.subheader("Interval Analysis")
-    tab3, tab4, tab5 = st.tabs(["Recent Signals", "Best Intervals", "Interval Details"])
+    tab1, tab2, tab3 = st.tabs(["High Return Intervals", "Best Intervals", "Interval Details"])
 
     # Display recent signals
-    with tab3:
+    with tab1:
         df, message = load_results('cd_eval_good_signals_', 'latest_signal')
         
         if df is not None:
@@ -268,7 +302,7 @@ with col_right:
             st.info("No recent signals data available. Please run an analysis first.")
 
     # Display best intervals
-    with tab4:
+    with tab2:
         df, message = load_results('cd_eval_best_intervals_', 'avg_return_10')
         
         if df is not None:
@@ -302,7 +336,7 @@ with col_right:
             st.info("No best intervals data available. Please run CD Signal Evaluation first.")
 
     # Display cd eval details
-    with tab5:
+    with tab3:
         df, message = load_results('cd_eval_custom_detailed_', 'avg_return_10')
         
         if df is not None:
