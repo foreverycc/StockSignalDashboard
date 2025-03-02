@@ -54,7 +54,7 @@ with col2:
     # But we'll run all analyses regardless of selection
     analysis_type = st.radio(
         "Select Analysis Type (all will run)",
-        ["Comprehensive Analysis"],
+        ["1234, 5230, CD Signal Evaluation"],
         horizontal=True
     )
 
@@ -365,7 +365,7 @@ with col_right:
             #     df = df.sort_values(by=sort_by, ascending=(sort_order == "Ascending"))
             
             # Display the dataframe
-            st.dataframe(df, use_container_width=True)
+            st.dataframe(df.sort_values(by = "latest_signal", ascending = False), use_container_width=True)
         else:
             st.info("No interval summary data available. Please run CD Signal Evaluation first.")
 
