@@ -121,8 +121,8 @@ def analyze_stocks(file_path):
         
         if not valid_df.empty:
             # Find max return across all time periods for each ticker/interval combination
-            valid_df['max_return'] = valid_df[['avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20']].max(axis=1)
-            valid_df['best_period'] = valid_df[['avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20']].idxmax(axis=1).str.extract('(\d+)').astype(int)
+            valid_df['max_return'] = valid_df[['avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50']].max(axis=1)
+            valid_df['best_period'] = valid_df[['avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50']].idxmax(axis=1).str.extract('(\d+)').astype(int)
             
             # Get row with highest max_return for each ticker
             best_intervals = valid_df.loc[valid_df.groupby('ticker')['max_return'].idxmax()]
