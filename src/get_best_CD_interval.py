@@ -1,12 +1,8 @@
 import pandas as pd
 import numpy as np
-import os
-from data_loader import download_data_1234, download_data_5230, load_stock_list
+from data_loader import download_data_1234, download_data_5230
 from indicators import compute_cd_indicator
-from multiprocessing import Pool, cpu_count
 import yfinance as yf
-import time
-from datetime import datetime
 
 def calculate_returns(data, cd_signals, periods=[3, 5, 10, 20, 50]):
     """
@@ -220,130 +216,6 @@ def evaluate_interval(ticker, interval, data=None):
     except Exception as e:
         print(f"Error evaluating {ticker} at {interval} interval: {e}")
         return None
-
-def process_ticker(ticker):
-    """
-    Process a single ticker across all intervals.
-    
-    Args:
-        ticker: Stock ticker symbol
-    
-    Returns:
-        List of evaluation results for each interval
-    """
-    print(f"Processing {ticker}")
-    results = []
-    
-    # Get daily data once for reuse
-    try:
-        stock = yf.Ticker(ticker)
-        daily_data = stock.history(interval='1d', period='1y')
-    except Exception as e:
-        print(f"Error getting daily data for {ticker}: {e}")
-        daily_data = pd.DataFrame()
-    
-    # Evaluate each interval
-    intervals = ['5m', '10m', '15m', '30m', '1h', '2h', '3h', '4h', '1d', '1w']
-    for interval in intervals:
-        result = evaluate_interval(ticker, interval, daily_data)
-        if result:
-            results.append(result)
-            
-    return results
-
-def evaluate_cd_signals(file_path):
-    """
-    Evaluate CD signals for all tickers in the file.
-    
-    Args:
-        file_path: Path to file containing ticker symbols
-    """
-    output_base = file_path.split('/')[-1].split('.')[0]
-    stock_list = load_stock_list(file_path)
-    
-    # Use multiprocessing for faster processing
-    num_processes = max(1, cpu_count() - 1)
-    
-    # Process in batches
-    results_list = []
-    batch_size = 10  # Smaller batch size for more detailed progress
-    
-    for i in range(0, len(stock_list), batch_size):
-        batch = stock_list[i:i+batch_size]
-        print(f"Processing batch {i//batch_size + 1}/{(len(stock_list) + batch_size - 1)//batch_size}")
-        
-        with Pool(processes=num_processes) as pool:
-            batch_results = pool.map(process_ticker, batch)
-            results_list.extend(batch_results)
-    
-    # Flatten results
-    all_results = []
-    for results in results_list:
-        if results:
-            all_results.extend(results)
-    
-    # Convert to DataFrame and save
-    if all_results:
-        df = pd.DataFrame(all_results)
-        
-        # Save detailed results with ticker information
-        df.to_csv(f'cd_eval_custom_detailed_{output_base}.csv', index=False)
-
-        # Find the best interval for each ticker based on success rate and returns
-        # Only consider intervals with at least 3 tests for period 10
-        valid_df = df[df['test_count_10'] >= 2]
-        valid_df = valid_df[(valid_df['avg_return_3'] >= 5) | (valid_df['avg_return_5'] >=5 ) | (valid_df['avg_return_10'] >= 5) | (valid_df['avg_return_20'] >= 5)]
-
-        
-        if not valid_df.empty:
-            best_intervals = valid_df.groupby('ticker').apply(lambda x: x.loc[x['avg_return_20'].idxmax()])
-            best_intervals = best_intervals[['ticker', 'interval', 'signal_count', 
-                                           'latest_signal', 'test_count_20', 
-                                           'success_rate_20', 'avg_return_20']].sort_values('latest_signal', ascending=False)
-            best_intervals.to_csv(f'cd_eval_best_intervals_{output_base}.csv', index=False)
-
-            good_signals = valid_df.sort_values('latest_signal', ascending=False)
-            good_signals.to_csv(f'cd_eval_good_signals_{output_base}.csv', index=False)
-        else:
-            print("Not enough data to determine best intervals (need at least 3 tests)")
-        
-        # Create a summary by interval that includes test counts
-        interval_summary = df.groupby('interval').agg({
-            'signal_count': 'sum',
-            'test_count_3': 'sum',
-            'test_count_5': 'sum',
-            'test_count_10': 'sum',
-            'test_count_20': 'sum',
-            'success_rate_3': 'mean',
-            'success_rate_5': 'mean',
-            'success_rate_10': 'mean',
-            'success_rate_20': 'mean',
-            'avg_return_3': 'mean',
-            'avg_return_5': 'mean',
-            'avg_return_10': 'mean',
-            'avg_return_20': 'mean'
-        }).reset_index()
-        
-        interval_summary.to_csv(f'cd_eval_interval_summary_{output_base}.csv', index=False)
-        
-        print(f"Evaluation complete. Results saved to:")
-        print(f"  - cd_eval_good_signals_{output_base}.csv (all data)")
-        print(f"  - cd_eval_best_intervals_{output_base}.csv (best interval per ticker)")
-        print(f"  - cd_eval_custom_detailed_{output_base}.csv (all data)")
-        print(f"  - cd_eval_interval_summary_{output_base}.csv (summary by interval)")
-        
-        # Print some statistics for quick reference
-        print("\nOverall statistics by interval:")
-        interval_stats = df.groupby('interval').agg({
-            'signal_count': 'sum',
-            'test_count_10': 'sum',
-            'success_rate_10': 'mean',
-            'avg_return_10': 'mean'
-        }).sort_values('avg_return_10', ascending=False)
-        
-        print(interval_stats)
-    else:
-        print("No results to save.")
 
 if __name__ == '__main__':
     # Use the custom stock list for evaluation

@@ -3,7 +3,6 @@ import pandas as pd
 import os
 import time
 from stock_analyzer import analyze_stocks
-from concurrent.futures import ThreadPoolExecutor
 
 # Set page configuration
 st.set_page_config(
@@ -268,41 +267,10 @@ with col_left:
 # Second table view with tabs 3-5 (right column)
 with col_right:
     st.subheader("Interval Analysis")
-    tab1, tab2, tab3 = st.tabs(["High Return Intervals", "Best Intervals", "Interval Details"])
+    tab1, tab2, tab3 = st.tabs(["Best Intervals", "High Return Intervals",  "Interval Details"])
 
-    # Display recent signals
+# Display best intervals
     with tab1:
-        df, message = load_results('cd_eval_good_signals_', 'latest_signal')
-        
-        if df is not None:
-            # Filter for rows with recent signals (non-null latest_signal)
-            if 'latest_signal' in df.columns:
-                df = df[df['latest_signal'].notna()]
-                df = df.sort_values(by='latest_signal', ascending=False)
-                
-                st.write(f"Showing recent signals from: {message}")
-                
-                # Add filtering options
-                if 'ticker' in df.columns:
-                    ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_recent")
-                    if ticker_filter:
-                        df = df[df['ticker'].str.contains(ticker_filter, case=False)]
-                
-                if 'interval' in df.columns:
-                    intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_recent")
-                    if selected_intervals:
-                        df = df[df['interval'].isin(selected_intervals)]
-                
-                # Display the dataframe
-                st.dataframe(df.sort_values(by='latest_signal', ascending=False), use_container_width=True)
-            else:
-                st.info("No signal date information available in the results.")
-        else:
-            st.info("No recent signals data available. Please run an analysis first.")
-
-    # Display best intervals
-    with tab2:
         df, message = load_results('cd_eval_best_intervals_', 'avg_return_10')
         
         if df is not None:
@@ -335,6 +303,38 @@ with col_right:
         else:
             st.info("No best intervals data available. Please run CD Signal Evaluation first.")
 
+    # Display recent signals
+    with tab2:
+        df, message = load_results('cd_eval_good_signals_', 'latest_signal')
+        
+        if df is not None:
+            # Filter for rows with recent signals (non-null latest_signal)
+            if 'latest_signal' in df.columns:
+                df = df[df['latest_signal'].notna()]
+                df = df.sort_values(by='latest_signal', ascending=False)
+                
+                st.write(f"Showing recent signals from: {message}")
+                
+                # Add filtering options
+                if 'ticker' in df.columns:
+                    ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_recent")
+                    if ticker_filter:
+                        df = df[df['ticker'].str.contains(ticker_filter, case=False)]
+                
+                if 'interval' in df.columns:
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_recent")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
+                
+                # Display the dataframe
+                st.dataframe(df.sort_values(by='latest_signal', ascending=False), use_container_width=True)
+            else:
+                st.info("No signal date information available in the results.")
+        else:
+            st.info("No recent signals data available. Please run an analysis first.")
+
+    
     # Display cd eval details
     with tab3:
         df, message = load_results('cd_eval_custom_detailed_', 'avg_return_10')

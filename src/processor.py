@@ -1,7 +1,6 @@
 import pandas as pd
 from data_loader import download_data_1234, download_data_5230
 from indicators import compute_cd_indicator, compute_nx_break_through
-import time 
     
 def calculate_score(data, interval, signal_date):
     interval_weights = {

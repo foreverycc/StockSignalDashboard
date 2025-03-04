@@ -1,6 +1,5 @@
 import pandas as pd
 import yfinance as yf
-import time
 
 def load_stock_list(file_path):
     return pd.read_csv(file_path, sep='\t', header=None, names=['ticker'])['ticker'].tolist()

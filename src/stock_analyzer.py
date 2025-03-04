@@ -3,9 +3,8 @@ import os
 from data_loader import load_stock_list, download_stock_data
 from processor import process_ticker_1234, process_ticker_5230
 from utils import save_results, identify_1234, save_breakout_candidates_1234, identify_5230, save_breakout_candidates_5230
-from get_best_CD_interval import calculate_returns, evaluate_interval
+from get_best_CD_interval import evaluate_interval
 from multiprocessing import Pool, cpu_count
-import time
 
 # Move this function outside the analyze_stocks function so it can be pickled
 def process_ticker_all(ticker):
@@ -121,11 +120,21 @@ def analyze_stocks(file_path):
                             (valid_df['avg_return_10'] >= 5) | (valid_df['avg_return_20'] >= 5)]
         
         if not valid_df.empty:
-            # Best intervals - taking the one with highest avg_return_20 for each ticker
-            best_intervals = valid_df.groupby('ticker').apply(lambda x: x.loc[x['avg_return_20'].idxmax()])
-            best_intervals = best_intervals[['ticker', 'interval', 'signal_count', 
-                                           'latest_signal', 'test_count_20', 
-                                           'success_rate_20', 'avg_return_20']].sort_values('latest_signal', ascending=False)
+            # Find max return across all time periods for each ticker/interval combination
+            valid_df['max_return'] = valid_df[['avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20']].max(axis=1)
+            valid_df['best_period'] = valid_df[['avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20']].idxmax(axis=1).str.extract('(\d+)').astype(int)
+            
+            # Get row with highest max_return for each ticker
+            best_intervals = valid_df.loc[valid_df.groupby('ticker')['max_return'].idxmax()]
+            
+            # Select and rename columns
+            best_intervals = best_intervals.assign(
+                test_count=best_intervals.apply(lambda x: x[f'test_count_{int(x.best_period)}'], axis=1),
+                success_rate=best_intervals.apply(lambda x: x[f'success_rate_{int(x.best_period)}'], axis=1),
+                avg_return=best_intervals['max_return']
+            )[['ticker', 'interval', 'signal_count', 'latest_signal', 'test_count', 
+               'success_rate', 'best_period', 'avg_return']].sort_values('latest_signal', ascending=False)
+            
             best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{output_base}.csv'), index=False)
 
             # Good signals - all signals that meet criteria, sorted by date
