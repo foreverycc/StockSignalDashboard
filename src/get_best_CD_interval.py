@@ -216,7 +216,3 @@ def evaluate_interval(ticker, interval, data=None):
     except Exception as e:
         print(f"Error evaluating {ticker} at {interval} interval: {e}")
         return None
-
-if __name__ == '__main__':
-    # Use the custom stock list for evaluation
-    evaluate_cd_signals('./data/stocks_custom.tab')
