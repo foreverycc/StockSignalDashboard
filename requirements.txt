@@ -2,3 +2,4 @@ multiprocess==0.70.16
 numpy==1.26.3
 pandas==1.4.4
 yfinance==0.2.61
+streamlit
