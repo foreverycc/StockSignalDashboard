@@ -229,19 +229,81 @@ with col2:
                 status_text.text("Starting comprehensive analysis...")
                 progress_bar.progress(25)
                 
-                # Run the consolidated analysis function
-                analyze_stocks(file_path)
-                
-                progress_bar.progress(100)
-                status_text.text("Analysis complete!")
-                time.sleep(1)
-                status_text.empty()
-                progress_bar.empty()
-                
-                st.success(f"Analysis completed successfully!")
+                # Check if the stock list file exists and is readable
+                if not os.path.exists(file_path):
+                    st.error(f"Stock list file not found: {file_path}")
+                    progress_bar.empty()
+                    status_text.empty()
+                elif True:  # Continue with analysis
+                    # Check if the file has content
+                    with open(file_path, 'r') as f:
+                        content = f.read().strip()
+                        if not content:
+                            st.error("Stock list file is empty.")
+                            progress_bar.empty()
+                            status_text.empty()
+                        else:
+                            stock_symbols = content.splitlines()
+                            stock_symbols = [s.strip() for s in stock_symbols if s.strip()]
+                            
+                            if not stock_symbols:
+                                st.error("No valid stock symbols found in the file.")
+                                progress_bar.empty()
+                                status_text.empty()
+                            else:
+                                status_text.text(f"Analyzing {len(stock_symbols)} stocks...")
+                                progress_bar.progress(50)
+                                
+                                # Run the consolidated analysis function
+                                analyze_stocks(file_path)
+                                
+                                progress_bar.progress(100)
+                                status_text.text("Analysis complete!")
+                                time.sleep(1)
+                                status_text.empty()
+                                progress_bar.empty()
+                                
+                                st.success(f"Analysis completed successfully for {len(stock_symbols)} stocks!")
                 
             except Exception as e:
-                st.error(f"Error during analysis: {e}")
+                progress_bar.empty()
+                status_text.empty()
+                
+                # More detailed error reporting
+                import traceback
+                error_details = traceback.format_exc()
+                
+                st.error(f"Error during analysis: {str(e)}")
+                
+                # Show detailed error in an expander for debugging
+                with st.expander("🔍 Error Details (for debugging)", expanded=False):
+                    st.code(error_details, language="python")
+                    
+                    # Additional debugging info
+                    st.write("**Debugging Information:**")
+                    st.write(f"- Selected file: {selected_file}")
+                    st.write(f"- File path: {file_path}")
+                    st.write(f"- File exists: {os.path.exists(file_path)}")
+                    
+                    if os.path.exists(file_path):
+                        try:
+                            with open(file_path, 'r') as f:
+                                content = f.read().strip()
+                                lines = content.splitlines()
+                                st.write(f"- File size: {len(content)} characters")
+                                st.write(f"- Number of lines: {len(lines)}")
+                                st.write(f"- First few symbols: {lines[:5] if lines else 'None'}")
+                        except Exception as read_error:
+                            st.write(f"- Error reading file: {read_error}")
+                
+                # Suggest solutions
+                st.info("""
+                **Possible solutions:**
+                1. Check if the stock symbols in your list are valid
+                2. Ensure you have internet connection for data download
+                3. Try with a smaller stock list first
+                4. Check if the stock symbols are properly formatted (one per line)
+                """)
 
 
 # Horizontal line to separate configuration from results

@@ -15,14 +15,42 @@ def save_breakout_candidates_1234(df, file_path):
     directory = os.path.dirname(file_path)
     base_name = os.path.basename(file_path)
     output_path = os.path.join(directory, base_name).replace("details", "summary")
-    df.to_csv(output_path, sep='\t', index=False, columns=['ticker', 'date', 'score', 'nx_1d'])
+    
+    # Handle empty DataFrame
+    if df.empty:
+        print("No 1234 breakout candidates to save")
+        # Create empty file with headers
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'score', 'nx_1d'])
+        empty_df.to_csv(output_path, sep='\t', index=False)
+        return
+    
+    # Check which columns exist and save accordingly
+    available_columns = ['ticker', 'date', 'score']
+    if 'nx_1d' in df.columns:
+        available_columns.append('nx_1d')
+    
+    df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
 def save_breakout_candidates_5230(df, file_path):
     # Extract base name and directory from the input file path
     directory = os.path.dirname(file_path)
     base_name = os.path.basename(file_path)
     output_path = os.path.join(directory, base_name).replace("details", "summary")
-    df.to_csv(output_path, sep='\t', index=False, columns=['ticker', 'date', 'score', 'nx_1h'])
+    
+    # Handle empty DataFrame
+    if df.empty:
+        print("No 5230 breakout candidates to save")
+        # Create empty file with headers
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'score', 'nx_1h'])
+        empty_df.to_csv(output_path, sep='\t', index=False)
+        return
+    
+    # Check which columns exist and save accordingly
+    available_columns = ['ticker', 'date', 'score']
+    if 'nx_1h' in df.columns:
+        available_columns.append('nx_1h')
+    
+    df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
 def identify_1234(file_path):
     """
@@ -123,6 +151,12 @@ def identify_1234(file_path):
     # remove tickers that failed to get data
     print ("tickers_failed:", tickers_failed)
     df_breakout_candidates =df_breakout_candidates[~df_breakout_candidates['ticker'].isin(tickers_failed)]
+    
+    # Check if DataFrame is empty after filtering
+    if df_breakout_candidates.empty:
+        print("No breakout candidates found after filtering")
+        return df_breakout_candidates  # Return empty DataFrame
+    
     # add nx_1d to df_breakout_candidates according to ticker and date
     df_breakout_candidates['nx_1d'] = df_breakout_candidates.apply(lambda row: dict_nx_1d[row['ticker']][row['date']], axis=1)
     # filter df_breakout_candidates to only include rows where nx_1d is True
@@ -230,6 +264,12 @@ def identify_5230(file_path):
     # remove tickers that failed to get data
     print ("tickers_failed:", tickers_failed)
     df_breakout_candidates =df_breakout_candidates[~df_breakout_candidates['ticker'].isin(tickers_failed)]
+    
+    # Check if DataFrame is empty after filtering
+    if df_breakout_candidates.empty:
+        print("No breakout candidates found after filtering")
+        return df_breakout_candidates  # Return empty DataFrame
+    
     # add nx_1d to df_breakout_candidates according to ticker and date
     df_breakout_candidates['nx_1h'] = df_breakout_candidates.apply(lambda row: dict_nx_1h[row['ticker']][row['date']], axis=1)
     # filter df_breakout_candidates to only include rows where nx_1h is True

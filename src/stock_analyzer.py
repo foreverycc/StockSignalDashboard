@@ -140,28 +140,46 @@ def analyze_stocks(file_path):
             # Good signals - all signals that meet criteria, sorted by date
             good_signals = valid_df.sort_values('latest_signal', ascending=False)
             good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
-            
-            # Create a summary by interval
-            interval_summary = df_cd_eval.groupby('interval').agg({
-                'signal_count': 'sum',
-                'test_count_3': 'sum',
-                'test_count_5': 'sum',
-                'test_count_10': 'sum',
-                'test_count_20': 'sum',
-                'success_rate_3': 'mean',
-                'success_rate_5': 'mean',
-                'success_rate_10': 'mean',
-                'success_rate_20': 'mean',
-                'avg_return_3': 'mean',
-                'avg_return_5': 'mean',
-                'avg_return_10': 'mean',
-                'avg_return_20': 'mean'
-            }).reset_index()
-            
-            interval_summary.to_csv(os.path.join(output_dir, f'cd_eval_interval_summary_{output_base}.csv'), index=False)
         else:
             print("Not enough data to determine best intervals (need at least 2 tests)")
+            # Create empty files with proper headers
+            empty_best_intervals = pd.DataFrame(columns=['ticker', 'interval', 'signal_count', 'latest_signal', 'test_count', 'success_rate', 'best_period', 'avg_return'])
+            empty_best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{output_base}.csv'), index=False)
+            
+            empty_good_signals = pd.DataFrame(columns=df_cd_eval.columns.tolist() + ['max_return', 'best_period'])
+            empty_good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
+            
+        # Create a summary by interval (always create this if we have any CD results)
+        interval_summary = df_cd_eval.groupby('interval').agg({
+            'signal_count': 'sum',
+            'test_count_3': 'sum',
+            'test_count_5': 'sum',
+            'test_count_10': 'sum',
+            'test_count_20': 'sum',
+            'success_rate_3': 'mean',
+            'success_rate_5': 'mean',
+            'success_rate_10': 'mean',
+            'success_rate_20': 'mean',
+            'avg_return_3': 'mean',
+            'avg_return_5': 'mean',
+            'avg_return_10': 'mean',
+            'avg_return_20': 'mean'
+        }).reset_index()
+        
+        interval_summary.to_csv(os.path.join(output_dir, f'cd_eval_interval_summary_{output_base}.csv'), index=False)
     else:
         print("No CD evaluation results to save")
+        # Create empty files with proper headers when no CD results at all
+        empty_detailed = pd.DataFrame(columns=['ticker', 'interval', 'signal_count', 'latest_signal', 'test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'test_count_50', 'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'success_rate_50', 'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50', 'max_return', 'min_return'])
+        empty_detailed.to_csv(os.path.join(output_dir, f'cd_eval_custom_detailed_{output_base}.csv'), index=False)
+        
+        empty_best_intervals = pd.DataFrame(columns=['ticker', 'interval', 'signal_count', 'latest_signal', 'test_count', 'success_rate', 'best_period', 'avg_return'])
+        empty_best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{output_base}.csv'), index=False)
+        
+        empty_good_signals = pd.DataFrame(columns=['ticker', 'interval', 'signal_count', 'latest_signal', 'test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'test_count_50', 'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'success_rate_50', 'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50', 'max_return', 'min_return', 'best_period'])
+        empty_good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
+        
+        empty_interval_summary = pd.DataFrame(columns=['interval', 'signal_count', 'test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20'])
+        empty_interval_summary.to_csv(os.path.join(output_dir, f'cd_eval_interval_summary_{output_base}.csv'), index=False)
     
     print("All analyses completed successfully!")
