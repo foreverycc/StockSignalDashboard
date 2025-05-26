@@ -203,7 +203,7 @@ with col1:
 
 with col2:
     # Analysis selection
-    st.write("**Analysis Options:**")
+    st.write("**Analysis Algorithms:**")
     
     # Keep the analysis type radio button for UI consistency
     # But we'll run all analyses regardless of selection
@@ -247,9 +247,43 @@ with col2:
 # Horizontal line to separate configuration from results
 st.markdown("---")
 
+# Function to get the latest update time for a stock list
+def get_latest_update_time(stock_list_file):
+    if not stock_list_file:
+        return None
+    
+    output_dir = './output'
+    if not os.path.exists(output_dir):
+        return None
+    
+    # Extract stock list name from file (remove extension)
+    stock_list_name = os.path.splitext(stock_list_file)[0]
+    
+    # Find all result files for this stock list
+    result_files = [f for f in os.listdir(output_dir) if stock_list_name in f]
+    
+    if not result_files:
+        return None
+    
+    # Get the most recent modification time
+    latest_time = 0
+    for file in result_files:
+        file_path = os.path.join(output_dir, file)
+        mod_time = os.path.getmtime(file_path)
+        if mod_time > latest_time:
+            latest_time = mod_time
+    
+    return latest_time
+
 # Results section header with stock list indicator
 if selected_file:
-    st.header(f"Results for: {selected_file}")
+    latest_time = get_latest_update_time(selected_file)
+    if latest_time:
+        import datetime
+        formatted_time = datetime.datetime.fromtimestamp(latest_time).strftime("%Y-%m-%d %H:%M:%S")
+        st.header(f"Results for: {selected_file} (Last updated: {formatted_time})")
+    else:
+        st.header(f"Results for: {selected_file} (No results found)")
 else:
     st.header("Results")
     st.info("Please select a stock list to view corresponding results.")
