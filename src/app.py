@@ -259,8 +259,15 @@ def get_latest_update_time(stock_list_file):
     # Extract stock list name from file (remove extension)
     stock_list_name = os.path.splitext(stock_list_file)[0]
     
-    # Find all result files for this stock list
-    result_files = [f for f in os.listdir(output_dir) if stock_list_name in f]
+    # Find all result files for this specific stock list (exact match)
+    result_files = []
+    for f in os.listdir(output_dir):
+        if f.endswith('.csv') or f.endswith('.tab'):
+            # Simple approach: check if the file ends with the stock list name + extension
+            # This handles cases like "breakout_candidates_summary_1234_stocks_all.tab"
+            base_name = f.rsplit('.', 1)[0]  # Remove file extension
+            if base_name.endswith('_' + stock_list_name) or base_name == stock_list_name:
+                result_files.append(f)
     
     if not result_files:
         return None
@@ -280,7 +287,21 @@ if selected_file:
     latest_time = get_latest_update_time(selected_file)
     if latest_time:
         import datetime
-        formatted_time = datetime.datetime.fromtimestamp(latest_time).strftime("%Y-%m-%d %H:%M:%S")
+        
+        try:
+            # Try to use pytz for PST conversion
+            import pytz
+            utc_time = datetime.datetime.fromtimestamp(latest_time, tz=pytz.UTC)
+            pst_tz = pytz.timezone('US/Pacific')
+            pst_time = utc_time.astimezone(pst_tz)
+            formatted_time = pst_time.strftime("%Y-%m-%d %H:%M:%S PST")
+        except ImportError:
+            # Fallback: manually adjust for PST (UTC-8, or UTC-7 during DST)
+            # This is a simple approximation
+            utc_time = datetime.datetime.fromtimestamp(latest_time)
+            pst_time = utc_time - datetime.timedelta(hours=8)  # Approximate PST
+            formatted_time = pst_time.strftime("%Y-%m-%d %H:%M:%S PST")
+        
         st.header(f"Results for: {selected_file} (Last updated: {formatted_time})")
     else:
         st.header(f"Results for: {selected_file} (No results found)")
