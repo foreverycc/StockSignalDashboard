@@ -29,39 +29,193 @@ selected_file = st.selectbox(
     index=0 if stock_list_files else None
 )
 
-# Create a 3-column layout for the top section
-col1, col2, col3 = st.columns(3)
+# Create a 2-column layout for the top section
+col1, col2 = st.columns(2)
 
 with col1:
-    # Display stock list preview
+    # Display and edit stock list
     if selected_file:
         file_path = os.path.join('./data', selected_file)
         
         try:
             with open(file_path, 'r') as f:
-                stocks = f.read().splitlines()
-            st.write(f"Preview ({len(stocks)} stocks):")
-            st.write(", ".join(stocks[:5]) + ("..." if len(stocks) > 5 else ""))
+                original_stocks = f.read().strip()
+            
+            # Show basic info about the selected stock list
+            current_stocks_list = original_stocks.strip().splitlines() if original_stocks.strip() else []
+            # st.write(f"**Selected: {selected_file}**")
+            st.write(f"📊 {len(current_stocks_list)} stocks")
+            if current_stocks_list:
+                st.write(f"Preview: {', '.join(current_stocks_list[:3])}{'...' if len(current_stocks_list) > 3 else ''}")
+            
+            # Expandable stock list management section
+            with st.expander("📋 Manage Stock List", expanded=False):
+                # Create tabs for stock list management
+                tab_edit, tab_delete, tab_create = st.tabs(["✏️ Edit", "🗑️ Delete", "➕ Create New"])
+                
+                # Edit tab
+                with tab_edit:
+                    st.write(f"**Editing: {selected_file}**")
+                    
+                    # Handle temporary stocks from utility functions
+                    if 'temp_stocks' in st.session_state:
+                        display_stocks = st.session_state.temp_stocks
+                        del st.session_state.temp_stocks
+                    else:
+                        display_stocks = original_stocks
+                    
+                    # Editable text area for stock list
+                    edited_stocks = st.text_area(
+                        "Stock symbols (one per line):",
+                        value=display_stocks,
+                        height=200,
+                        help="Enter stock symbols, one per line. Changes will be saved when you click 'Save Changes'."
+                    )
+                    
+                    # Save button and status
+                    col_save, col_status = st.columns([1, 2])
+                    
+                    with col_save:
+                        if st.button("Save Changes", type="primary"):
+                            try:
+                                # Save the edited content back to the file
+                                with open(file_path, 'w') as f:
+                                    f.write(edited_stocks.strip())
+                                st.success("✅ Saved!")
+                                # Force a rerun to refresh the preview
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error saving file: {e}")
+                    
+                    with col_status:
+                        # Show if there are unsaved changes
+                        if edited_stocks.strip() != original_stocks:
+                            st.warning("⚠️ Unsaved changes")
+                        else:
+                            st.info("📄 No changes")
+                    
+                    # Utility buttons
+                    col_util1, col_util2, col_util3 = st.columns(3)
+                    
+                    with col_util1:
+                        if st.button("Remove Duplicates", help="Remove duplicate stock symbols"):
+                            lines = edited_stocks.strip().splitlines()
+                            unique_lines = list(dict.fromkeys([line.strip().upper() for line in lines if line.strip()]))
+                            st.session_state.temp_stocks = '\n'.join(unique_lines)
+                            st.rerun()
+                    
+                    with col_util2:
+                        if st.button("Sort A-Z", help="Sort stock symbols alphabetically"):
+                            lines = edited_stocks.strip().splitlines()
+                            sorted_lines = sorted([line.strip().upper() for line in lines if line.strip()])
+                            st.session_state.temp_stocks = '\n'.join(sorted_lines)
+                            st.rerun()
+                    
+                    with col_util3:
+                        if st.button("Validate Symbols", help="Check for invalid stock symbols"):
+                            lines = edited_stocks.strip().splitlines()
+                            invalid_symbols = []
+                            valid_symbols = []
+                            
+                            for line in lines:
+                                symbol = line.strip().upper()
+                                if symbol:
+                                    # Basic validation: should be 1-5 characters, letters only
+                                    if len(symbol) >= 1 and len(symbol) <= 5 and symbol.isalpha():
+                                        valid_symbols.append(symbol)
+                                    else:
+                                        invalid_symbols.append(symbol)
+                            
+                            if invalid_symbols:
+                                st.warning(f"⚠️ Potentially invalid symbols: {', '.join(invalid_symbols)}")
+                            else:
+                                st.success("✅ All symbols appear valid")
+                    
+                    # Show preview of current stocks in editor
+                    current_stocks = edited_stocks.strip().splitlines() if edited_stocks.strip() else []
+                    if current_stocks:
+                        st.write(f"**Preview ({len(current_stocks)} stocks):**")
+                        st.write(", ".join(current_stocks[:5]) + ("..." if len(current_stocks) > 5 else ""))
+                    else:
+                        st.write("**Preview:** No stocks in list")
+                
+                # Delete tab
+                with tab_delete:
+                    st.warning(f"⚠️ This will permanently delete '{selected_file}'")
+                    
+                    # Confirmation checkbox
+                    confirm_delete = st.checkbox(f"I confirm I want to delete '{selected_file}'")
+                    
+                    if st.button("Delete Stock List", type="secondary", disabled=not confirm_delete):
+                        try:
+                            os.remove(file_path)
+                            st.success(f"✅ Deleted '{selected_file}' successfully!")
+                            st.info("Please refresh the page to update the dropdown.")
+                            # Clear the selection by rerunning
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Error deleting file: {e}")
+                
+                # Create new tab
+                with tab_create:
+                    new_file_name = st.text_input(
+                        "New file name (without extension):",
+                        placeholder="e.g., my_custom_stocks"
+                    )
+                    
+                    new_file_extension = st.selectbox(
+                        "File extension:",
+                        [".tab", ".txt"],
+                        index=0
+                    )
+                    
+                    new_stocks_content = st.text_area(
+                        "Stock symbols (one per line):",
+                        placeholder="AAPL\nMSFT\nGOOGL\nTSLA",
+                        height=150
+                    )
+                    
+                    if st.button("Create Stock List", type="primary"):
+                        if new_file_name and new_stocks_content:
+                            try:
+                                new_file_path = os.path.join('./data', f"{new_file_name}{new_file_extension}")
+                                
+                                # Check if file already exists
+                                if os.path.exists(new_file_path):
+                                    st.error(f"File '{new_file_name}{new_file_extension}' already exists!")
+                                else:
+                                    # Create the new file
+                                    with open(new_file_path, 'w') as f:
+                                        f.write(new_stocks_content.strip())
+                                    
+                                    st.success(f"✅ Created '{new_file_name}{new_file_extension}' successfully!")
+                                    st.info("Please refresh the page to see the new file in the dropdown.")
+                                    
+                            except Exception as e:
+                                st.error(f"Error creating file: {e}")
+                        else:
+                            st.error("Please provide both a file name and stock symbols.")
+                
         except Exception as e:
             st.error(f"Error reading file: {e}")
+    else:
+        st.info("Select a stock list to edit")
 
 with col2:
     # Analysis selection
-    st.subheader("Analysis Options")
+    st.write("**Analysis Options:**")
     
     # Keep the analysis type radio button for UI consistency
     # But we'll run all analyses regardless of selection
-    analysis_type = st.radio(
-        "Select Analysis Type (all will run)",
-        ["1234, 5230, CD Signal Evaluation"],
-        horizontal=True
-    )
-
-with col3:
-    # Run analysis button (with some vertical spacing to align with other elements)
-    st.write("")
-    st.write("")
-    if st.button("Run Analysis", use_container_width=True):
+    # analysis_type = st.radio(       
+    #     "Select Analysis Type (all will run)",
+    #     ["1234, 5230, CD Signal Evaluation"],
+    #     horizontal=True
+    # )
+    st.write("1234, 5230, CD Signal Evaluation")
+    
+    # Run analysis button (moved here from col3)
+    if st.button("Run Analysis", use_container_width=True, type="primary"):
         if not selected_file:
             st.error("Please select a stock list file first.")
         else:
@@ -88,6 +242,7 @@ with col3:
                 
             except Exception as e:
                 st.error(f"Error during analysis: {e}")
+
 
 # Horizontal line to separate configuration from results
 st.markdown("---")
@@ -159,7 +314,7 @@ if selected_file:
             df, message = load_results('breakout_candidates_summary_1234_', selected_file, 'score')
             
             if df is not None and '1234' in message:
-                st.write(f"Showing 1234 breakout candidates from: {message}")
+                # st.write(f"Showing 1234 breakout candidates from: {message}")
                 
                 # Add filtering options
                 if 'ticker' in df.columns:
@@ -186,7 +341,7 @@ if selected_file:
             df, message = load_results('breakout_candidates_summary_5230_', selected_file, 'score')
             
             if df is not None and '5230' in message:
-                st.write(f"Showing 5230 breakout candidates from: {message}")
+                # st.write(f"Showing 5230 breakout candidates from: {message}")
                 
                 # Add filtering options
                 if 'ticker' in df.columns:
@@ -213,7 +368,7 @@ if selected_file:
             df, message = load_results('breakout_candidates_details_1234_', selected_file, 'signal_date')
             
             if df is not None and '1234' in message:
-                st.write(f"Showing 1234 detailed results from: {message}")
+                # st.write(f"Showing 1234 detailed results from: {message}")
                 
                 # Add filtering options
                 if 'ticker' in df.columns:
@@ -249,7 +404,7 @@ if selected_file:
             df, message = load_results('breakout_candidates_details_5230_', selected_file, 'signal_date')
             
             if df is not None and '5230' in message:
-                st.write(f"Showing 5230 detailed results from: {message}")
+                # st.write(f"Showing 5230 detailed results from: {message}")
                 
                 # Add filtering options
                 if 'ticker' in df.columns:
@@ -290,7 +445,7 @@ if selected_file:
             df, message = load_results('cd_eval_best_intervals_', selected_file, 'avg_return_10')
             
             if df is not None:
-                st.write(f"Showing results from: {message}")
+                # st.write(f"Showing results from: {message}")
                 
                 # Add filtering options
                 if 'ticker' in df.columns:
@@ -329,7 +484,7 @@ if selected_file:
                     df = df[df['latest_signal'].notna()]
                     df = df.sort_values(by='latest_signal', ascending=False)
                     
-                    st.write(f"Showing recent signals from: {message}")
+                    # st.write(f"Showing recent signals from: {message}")
                     
                     # Add filtering options
                     if 'ticker' in df.columns:
@@ -356,7 +511,7 @@ if selected_file:
             df, message = load_results('cd_eval_custom_detailed_', selected_file, 'avg_return_10')
             
             if df is not None:
-                st.write(f"Showing results from: {message}")
+                # st.write(f"Showing results from: {message}")
 
                 # Add filtering options
                 if 'ticker' in df.columns:
