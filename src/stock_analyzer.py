@@ -6,6 +6,48 @@ from utils import save_results, identify_1234, save_breakout_candidates_1234, id
 from get_best_CD_interval import evaluate_interval
 from multiprocessing import Pool, cpu_count
 
+def parse_interval_to_minutes(interval_str):
+    """
+    Parse interval string to minutes.
+    Examples: '5m' -> 5, '1h' -> 60, '1d' -> 480 (8 hours), '1w' -> 2400 (5 trading days * 8 hours)
+    """
+    if interval_str.endswith('m'):
+        return int(interval_str[:-1])
+    elif interval_str.endswith('h'):
+        return int(interval_str[:-1]) * 60
+    elif interval_str.endswith('d'):
+        return int(interval_str[:-1]) * 8 * 60  # 8 trading hours per day
+    elif interval_str.endswith('w'):
+        return int(interval_str[:-1]) * 5 * 8 * 60  # 5 trading days * 8 hours per day
+    else:
+        return 0
+
+def format_hold_time(total_minutes):
+    """
+    Format total minutes into readable format.
+    Examples: 150 -> '2hr30min', 600 -> '1day2hr', 250 -> '4hr10min'
+    """
+    if total_minutes < 60:
+        return f"{total_minutes}min"
+    
+    # Convert to trading time (8 hours per day)
+    trading_hours_per_day = 8
+    
+    days = total_minutes // (trading_hours_per_day * 60)
+    remaining_minutes = total_minutes % (trading_hours_per_day * 60)
+    hours = remaining_minutes // 60
+    minutes = remaining_minutes % 60
+    
+    result = []
+    if days > 0:
+        result.append(f"{days}day{'s' if days > 1 else ''}")
+    if hours > 0:
+        result.append(f"{hours}hr")
+    if minutes > 0:
+        result.append(f"{minutes}min")
+    
+    return "".join(result) if result else "0min"
+
 # Move this function outside the analyze_stocks function so it can be pickled
 def process_ticker_all(ticker):
     """Process a single ticker for all analysis types"""
@@ -135,18 +177,53 @@ def analyze_stocks(file_path):
             )[['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price', 'test_count', 
                'success_rate', 'best_period', 'avg_return']].sort_values('latest_signal', ascending=False)
             
+            # Calculate hold_time as interval * best_period
+            best_intervals['hold_time'] = best_intervals.apply(
+                lambda row: format_hold_time(parse_interval_to_minutes(row['interval']) * row['best_period']), axis=1
+            )
+            
+            # Reorder columns to put hold_time after interval
+            best_intervals_columns = ['ticker', 'interval', 'hold_time', 'signal_count', 'avg_return', 'latest_signal', 'latest_signal_price', 'test_count', 'success_rate', 'best_period']
+            best_intervals = best_intervals[best_intervals_columns]
+            best_intervals = best_intervals[best_intervals['success_rate'] >= 50]
             best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{output_base}.csv'), index=False)
 
             # Good signals - all signals that meet criteria, sorted by date
             good_signals = valid_df.sort_values('latest_signal', ascending=False)
+            
+            # Calculate hold_time as interval * best_period
+            good_signals['hold_time'] = good_signals.apply(
+                lambda row: format_hold_time(parse_interval_to_minutes(row['interval']) * row['best_period']), axis=1
+            )
+            
+            # Calculate exp_return as the avg_return for the best_period
+            good_signals['exp_return'] = good_signals.apply(
+                lambda row: row[f'avg_return_{int(row.best_period)}'], axis=1
+            )
+            good_signals['test_count'] = good_signals.apply(
+                lambda row: row[f'test_count_{int(row.best_period)}'], axis=1
+            )
+            good_signals['success_rate'] = good_signals.apply(
+                lambda row: row[f'success_rate_{int(row.best_period)}'], axis=1
+            )
+            
+            # Reorder columns to put hold_time after interval and exp_return after signal_count
+            good_signals_columns = ['ticker', 'interval', 'hold_time', 'signal_count', 'exp_return', 'latest_signal', 'latest_signal_price', 'test_count', 'success_rate', 'best_period','test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'test_count_50', 'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'success_rate_50', 'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50', 'max_return', 'min_return']
+
+            good_signals = good_signals[good_signals_columns]
+            good_signals = good_signals[good_signals['success_rate'] >= 50]
+            
             good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
         else:
             print("Not enough data to determine best intervals (need at least 2 tests)")
             # Create empty files with proper headers
-            empty_best_intervals = pd.DataFrame(columns=['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price', 'test_count', 'success_rate', 'best_period', 'avg_return'])
+            best_intervals_columns = ['ticker', 'interval', 'hold_time', 'signal_count', 'avg_return', 'latest_signal', 'latest_signal_price', 'test_count', 'success_rate', 'best_period']
+            empty_best_intervals = pd.DataFrame(columns=best_intervals_columns)
             empty_best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{output_base}.csv'), index=False)
             
-            empty_good_signals = pd.DataFrame(columns=df_cd_eval.columns.tolist() + ['max_return', 'best_period'])
+            # For good_signals, we need to include all the original columns plus hold_time after interval and exp_return after signal_count
+            good_signals_columns = ['ticker', 'interval', 'hold_time', 'signal_count', 'exp_return', 'latest_signal', 'latest_signal_price', 'test_count', 'success_rate', 'best_period','test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'test_count_50', 'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'success_rate_50', 'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50', 'max_return', 'min_return']
+            empty_good_signals = pd.DataFrame(columns=good_signals_columns)
             empty_good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
             
         # Create a summary by interval (always create this if we have any CD results)
@@ -173,10 +250,10 @@ def analyze_stocks(file_path):
         empty_detailed = pd.DataFrame(columns=['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price', 'test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'test_count_50', 'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'success_rate_50', 'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50', 'max_return', 'min_return'])
         empty_detailed.to_csv(os.path.join(output_dir, f'cd_eval_custom_detailed_{output_base}.csv'), index=False)
         
-        empty_best_intervals = pd.DataFrame(columns=['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price', 'test_count', 'success_rate', 'best_period', 'avg_return'])
+        empty_best_intervals = pd.DataFrame(columns=['ticker', 'interval', 'hold_time', 'signal_count', 'avg_return', 'latest_signal', 'latest_signal_price', 'test_count', 'success_rate', 'best_period'])
         empty_best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{output_base}.csv'), index=False)
         
-        empty_good_signals = pd.DataFrame(columns=['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price', 'test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'test_count_50', 'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'success_rate_50', 'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50', 'max_return', 'min_return', 'best_period'])
+        empty_good_signals = pd.DataFrame(columns=['ticker', 'interval', 'hold_time', 'signal_count', 'exp_return', 'latest_signal', 'latest_signal_price', 'test_count', 'success_rate', 'best_period','test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'test_count_50', 'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'success_rate_50', 'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50', 'max_return', 'min_return'])
         empty_good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
         
         empty_interval_summary = pd.DataFrame(columns=['interval', 'signal_count', 'test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20'])

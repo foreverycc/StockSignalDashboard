@@ -118,6 +118,8 @@ def identify_1234(file_path):
         # Get data within 3-day window starting from current date
         window_end = unique_dates[min(i+2, (len(unique_dates) - 1))]
         # print("window_end:", window_end)
+        # if window_end > date + pd.Timedelta(days=5):
+        #     raise Exception(f"window_end is greater than date + 5 days: {window_end} > {date + pd.Timedelta(days=5)}")
         window_data = df[(df['date'] >= pd.to_datetime(date)) & 
                         (df['date'] <= pd.to_datetime(window_end))]
         # if date == '2025-05-22':
