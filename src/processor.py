@@ -63,6 +63,7 @@ def process_ticker_1234(ticker, data_ticker=None):
             
             for date in data.index[cd]:
                 score = calculate_score(data, interval, date)
+                signal_price = data.loc[date, 'Close']  # Get the Close price at signal date
                 # Find the next breakthrough date after the signal date
                 future_breakthroughs = breakthrough_dates[breakthrough_dates >= date]
                 next_breakthrough = future_breakthroughs[0] if len(future_breakthroughs) > 0 else None
@@ -72,6 +73,7 @@ def process_ticker_1234(ticker, data_ticker=None):
                     'interval': interval,
                     'score': score,
                     'signal_date': date.strftime('%Y-%m-%d %H:%M:%S'),
+                    'signal_price': round(signal_price, 2),
                     'breakthrough_date': next_breakthrough.strftime('%Y-%m-%d %H:%M:%S') if next_breakthrough is not None else None
                 })
         except Exception as e:
@@ -114,6 +116,7 @@ def process_ticker_5230(ticker, data_ticker=None):
             
             for date in data.index[cd]:
                 score = calculate_score(data, interval, date)
+                signal_price = data.loc[date, 'Close']  # Get the Close price at signal date
                 # Find the next breakthrough date after the signal date
                 future_breakthroughs = breakthrough_dates[breakthrough_dates >= date]
                 next_breakthrough = future_breakthroughs[0] if len(future_breakthroughs) > 0 else None
@@ -123,6 +126,7 @@ def process_ticker_5230(ticker, data_ticker=None):
                     'interval': interval,
                     'score': score,
                     'signal_date': date.strftime('%Y-%m-%d %H:%M:%S'),
+                    'signal_price': round(signal_price, 2),
                     'breakthrough_date': next_breakthrough.strftime('%Y-%m-%d %H:%M:%S') if next_breakthrough is not None else None
                 })
         except Exception as e:

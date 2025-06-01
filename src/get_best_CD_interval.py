@@ -105,6 +105,7 @@ def evaluate_interval(ticker, interval, data=None):
         # Get the latest signal date
         latest_signal_date = data_frame.index[cd_signals].max() if signal_count > 0 else None
         latest_signal_str = latest_signal_date.strftime('%Y-%m-%d %H:%M:%S') if latest_signal_date else None
+        latest_signal_price = round(data_frame.loc[latest_signal_date, 'Close'], 2) if latest_signal_date is not None else None
         
         if signal_count == 0:
             return {
@@ -112,6 +113,7 @@ def evaluate_interval(ticker, interval, data=None):
                 'interval': interval,
                 'signal_count': 0,
                 'latest_signal': None,
+                'latest_signal_price': None,
                 'test_count_3': 0,
                 'test_count_5': 0,
                 'test_count_10': 0,
@@ -140,6 +142,7 @@ def evaluate_interval(ticker, interval, data=None):
                 'interval': interval,
                 'signal_count': signal_count,
                 'latest_signal': latest_signal_str,
+                'latest_signal_price': latest_signal_price,
                 'test_count_3': 0,
                 'test_count_5': 0,
                 'test_count_10': 0,
@@ -194,6 +197,7 @@ def evaluate_interval(ticker, interval, data=None):
             'interval': interval,
             'signal_count': signal_count,
             'latest_signal': latest_signal_str,
+            'latest_signal_price': latest_signal_price,
             'test_count_3': test_count_3,
             'test_count_5': test_count_5,
             'test_count_10': test_count_10,

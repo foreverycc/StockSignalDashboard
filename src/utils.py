@@ -8,7 +8,14 @@ def save_results(results, output_file):
         print("No results to save")
         return
     df = df.sort_values(by=['signal_date', 'breakthrough_date', 'score', 'interval'], ascending=[False, False, False, False])
-    df.to_csv(output_file, sep='\t', index=False, columns=['ticker', 'interval', 'score', 'signal_date', 'breakthrough_date'])
+    
+    # Include signal_price in the saved columns if it exists
+    columns_to_save = ['ticker', 'interval', 'score', 'signal_date']
+    if 'signal_price' in df.columns:
+        columns_to_save.append('signal_price')
+    columns_to_save.append('breakthrough_date')
+    
+    df.to_csv(output_file, sep='\t', index=False, columns=columns_to_save)
 
 def save_breakout_candidates_1234(df, file_path):
     # Extract base name and directory from the input file path
@@ -20,12 +27,14 @@ def save_breakout_candidates_1234(df, file_path):
     if df.empty:
         print("No 1234 breakout candidates to save")
         # Create empty file with headers
-        empty_df = pd.DataFrame(columns=['ticker', 'date', 'score', 'nx_1d'])
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'score', 'signal_price', 'nx_1d'])
         empty_df.to_csv(output_path, sep='\t', index=False)
         return
     
     # Check which columns exist and save accordingly
     available_columns = ['ticker', 'date', 'score']
+    if 'signal_price' in df.columns:
+        available_columns.append('signal_price')
     if 'nx_1d' in df.columns:
         available_columns.append('nx_1d')
     
@@ -41,12 +50,14 @@ def save_breakout_candidates_5230(df, file_path):
     if df.empty:
         print("No 5230 breakout candidates to save")
         # Create empty file with headers
-        empty_df = pd.DataFrame(columns=['ticker', 'date', 'score', 'nx_1h'])
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'score', 'signal_price', 'nx_1h'])
         empty_df.to_csv(output_path, sep='\t', index=False)
         return
     
     # Check which columns exist and save accordingly
     available_columns = ['ticker', 'date', 'score']
+    if 'signal_price' in df.columns:
+        available_columns.append('signal_price')
     if 'nx_1h' in df.columns:
         available_columns.append('nx_1h')
     
@@ -75,6 +86,7 @@ def identify_1234(file_path):
     try:
         # Read the data. The file is assumed to be tab-delimited.
         df = pd.read_csv(file_path, sep="\t", engine="python")
+        print(df)
     except Exception as e:
         print(f"Failed to read file {file_path}: {e}")
         return []
@@ -89,6 +101,7 @@ def identify_1234(file_path):
     df = df[df["interval"].isin(required_intervals)]
 
     breakout_candidates = []
+    processed_combinations = set()  # Track (ticker, date) combinations to avoid duplicates
 
     # Group data by ticker
     # Convert signal_date to date only (removing time component)
@@ -97,6 +110,7 @@ def identify_1234(file_path):
     # print(df)
     
     unique_dates = df['date'].unique()[::-1]
+    # print("unique_dates:", unique_dates)
     # Get unique dates to iterate through
     for i in range(len(unique_dates)):
         date = unique_dates[i]
@@ -106,21 +120,42 @@ def identify_1234(file_path):
         # print("window_end:", window_end)
         window_data = df[(df['date'] >= pd.to_datetime(date)) & 
                         (df['date'] <= pd.to_datetime(window_end))]
+        # if date == '2025-05-22':
         # print("window_data:", window_data)
         # Check each ticker in this window
         for ticker in window_data['ticker'].unique():
             ticker_data = window_data[window_data['ticker'] == ticker]
             unique_intervals = set(ticker_data['interval'])
+            # print("unique_intervals:", unique_intervals)
+
             if len(unique_intervals.intersection(required_intervals)) >= 3:
-                breakout_candidates.append([ticker, date, len(unique_intervals.intersection(required_intervals))])
-    df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=['ticker', 'date', 'score']).sort_values(by=['date', 'ticker'], ascending=[False, True])
+                # print("entered into the loop!")
+                # print("ticker:", ticker)
+                # print("date:", date)
+                # Get the most recent signal date within this window for this ticker
+                most_recent_signal_date = ticker_data['signal_date'].max().date()
+                # Check if we've already processed this combination
+                combination = (ticker, most_recent_signal_date)
+                if combination not in processed_combinations:
+                    processed_combinations.add(combination)
+                    # Get the latest signal price for this ticker/date combination (most recent signal)
+                    latest_signal_price = ticker_data.loc[ticker_data['signal_date'].idxmax(), 'signal_price'] if 'signal_price' in ticker_data.columns and not ticker_data.empty else None
+                    breakout_candidates.append([ticker, most_recent_signal_date, len(unique_intervals.intersection(required_intervals)), latest_signal_price])
+    
+    # print("breakout_candidates:", breakout_candidates)
+    # Include signal_price column if available
+    columns = ['ticker', 'date', 'score']
+    if any(len(candidate) > 3 for candidate in breakout_candidates):
+        columns.append('signal_price')
+        
+    df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=columns).sort_values(by=['date', 'ticker'], ascending=[False, True])
 
     dict_nx_1d = {}
     tickers_failed = []
 
-    print(df_breakout_candidates)
+    # print(df_breakout_candidates)
     for ticker in df_breakout_candidates['ticker'].unique():
-        print(ticker)
+        # print(ticker)
 
         try:
             stock = yf.Ticker(ticker)
@@ -160,7 +195,8 @@ def identify_1234(file_path):
     # add nx_1d to df_breakout_candidates according to ticker and date
     df_breakout_candidates['nx_1d'] = df_breakout_candidates.apply(lambda row: dict_nx_1d[row['ticker']][row['date']], axis=1)
     # filter df_breakout_candidates to only include rows where nx_1d is True
-    df_breakout_candidates_sel = df_breakout_candidates[df_breakout_candidates['nx_1d'] == True]
+    # df_breakout_candidates_sel = df_breakout_candidates[df_breakout_candidates['nx_1d'] == True]
+    df_breakout_candidates_sel = df_breakout_candidates
     
     return df_breakout_candidates_sel
 
@@ -202,6 +238,7 @@ def identify_5230(file_path):
     df = df[df["interval"].isin(required_intervals)]
 
     breakout_candidates = []
+    processed_combinations = set()  # Track (ticker, date) combinations to avoid duplicates
 
     # Group data by ticker
     # Convert signal_date to date only (removing time component)
@@ -224,9 +261,22 @@ def identify_5230(file_path):
             ticker_data = window_data[window_data['ticker'] == ticker]
             unique_intervals = set(ticker_data['interval'])
             if len(unique_intervals.intersection(required_intervals)) >= 3:
-                if ticker not in breakout_candidates:
-                    breakout_candidates.append([ticker, date, len(unique_intervals.intersection(required_intervals))])
-    df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=['ticker', 'date', 'score']).sort_values(by=['date', 'ticker'], ascending=[False, True])
+                # Get the most recent signal date within this window for this ticker
+                most_recent_signal_date = ticker_data['signal_date'].max().date()
+                # Check if we've already processed this combination
+                combination = (ticker, most_recent_signal_date)
+                if combination not in processed_combinations:
+                    processed_combinations.add(combination)
+                    # Get the latest signal price for this ticker/date combination (most recent signal)
+                    latest_signal_price = ticker_data.loc[ticker_data['signal_date'].idxmax(), 'signal_price'] if 'signal_price' in ticker_data.columns and not ticker_data.empty else None
+                    breakout_candidates.append([ticker, most_recent_signal_date, len(unique_intervals.intersection(required_intervals)), latest_signal_price])
+    
+    # Include signal_price column if available
+    columns = ['ticker', 'date', 'score']
+    if any(len(candidate) > 3 for candidate in breakout_candidates):
+        columns.append('signal_price')
+        
+    df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=columns).sort_values(by=['date', 'ticker'], ascending=[False, True])
 
     dict_nx_1h = {}
     tickers_failed = []
@@ -273,6 +323,7 @@ def identify_5230(file_path):
     # add nx_1d to df_breakout_candidates according to ticker and date
     df_breakout_candidates['nx_1h'] = df_breakout_candidates.apply(lambda row: dict_nx_1h[row['ticker']][row['date']], axis=1)
     # filter df_breakout_candidates to only include rows where nx_1h is True
-    df_breakout_candidates_sel = df_breakout_candidates[df_breakout_candidates['nx_1h'] == True]
+    # df_breakout_candidates_sel = df_breakout_candidates[df_breakout_candidates['nx_1h'] == True]
+    df_breakout_candidates_sel = df_breakout_candidates
     
     return df_breakout_candidates_sel
