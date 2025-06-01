@@ -414,11 +414,11 @@ def load_results(file_pattern, stock_list_file=None, default_sort=None):
 
 # Create two columns for the two table views
 if selected_file:
-    col_left, col_right = st.columns(2)
+    col_left, col_right = st.columns([1, 2])
 
     # First table view with tabs 1-4 (left column)
     with col_left:
-        st.subheader("Breakout Analysis")
+        st.subheader("Resonance Model")
         tab1, tab2, tab3, tab4 = st.tabs([
             "1234 Candidates", 
             "5230 Candidates", 
@@ -554,7 +554,7 @@ if selected_file:
 
     # Second table view with tabs 3-5 (right column)
     with col_right:
-        st.subheader("Interval Analysis")
+        st.subheader("Waikiki Model")
         tab1, tab2, tab3 = st.tabs(["Best Intervals", "High Return Intervals",  "Interval Details"])
 
     # Display best intervals
