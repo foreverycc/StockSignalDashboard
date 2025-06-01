@@ -439,14 +439,14 @@ if selected_file:
                     if ticker_filter:
                         df = df[df['ticker'].str.contains(ticker_filter, case=False)]
                 
-                # Add date filtering if available
-                if 'date' in df.columns:
-                    dates = sorted(df['date'].unique(), reverse=True)
-                    selected_dates = st.multiselect("Filter by date:", dates, 
-                                                   default=dates[:4] if len(dates) > 4 else dates,
-                                                   key="date_filter_1234")
-                    if selected_dates:
-                        df = df[df['date'].isin(selected_dates)]
+                # Add NX filtering if available
+                if 'nx_1d' in df.columns:
+                    nx_values = sorted(df['nx_1d'].unique())
+                    selected_nx = st.multiselect("Filter by NX:", nx_values, 
+                                               default=[True] if True in nx_values else nx_values,
+                                               key="nx_filter_1234")
+                    if selected_nx:
+                        df = df[df['nx_1d'].isin(selected_nx)]
                 
                 # Display the dataframe
                 st.dataframe(df.sort_values(by='date', ascending=False), use_container_width=True)
@@ -466,14 +466,14 @@ if selected_file:
                     if ticker_filter:
                         df = df[df['ticker'].str.contains(ticker_filter, case=False)]
                 
-                # Add date filtering if available
-                if 'date' in df.columns:
-                    dates = sorted(df['date'].unique(), reverse=True)
-                    selected_dates = st.multiselect("Filter by date:", dates, 
-                                                   default=dates[:4] if len(dates) > 4 else dates,
-                                                   key="date_filter_5230")
-                    if selected_dates:
-                        df = df[df['date'].isin(selected_dates)]
+                # Add NX filtering if available
+                if 'nx_1h' in df.columns:
+                    nx_values = sorted(df['nx_1h'].unique())
+                    selected_nx = st.multiselect("Filter by NX:", nx_values, 
+                                               default=[True] if True in nx_values else nx_values,
+                                               key="nx_filter_5230")
+                    if selected_nx:
+                        df = df[df['nx_1h'].isin(selected_nx)]
                 
                 # Display the dataframe
                 st.dataframe(df.sort_values(by='date', ascending=False), use_container_width=True)
