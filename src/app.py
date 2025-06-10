@@ -3,6 +3,7 @@ import pandas as pd
 import os
 import time
 from stock_analyzer import analyze_stocks
+import re
 
 # Set page configuration
 st.set_page_config(
@@ -10,6 +11,139 @@ st.set_page_config(
     page_icon="📈",
     layout="wide"
 )
+
+# Function to get Chinese stock name mapping
+def get_chinese_stock_mapping():
+    """Get mapping of Chinese stock codes to names using akshare."""
+    mapping_file = './data/chinese_stocks_mapping.csv'
+    
+    # Check if the mapping file exists
+    if os.path.exists(mapping_file):
+        try:
+            # Read from existing file
+            df = pd.read_csv(mapping_file)
+            mapping = {}
+            for _, row in df.iterrows():
+                code = str(row['code']).zfill(6)  # Ensure 6 digits with leading zeros
+                name = row['name']
+                # Add different formats that might be used
+                mapping[code] = name
+                mapping[f"{code}.SH"] = name  # Shanghai
+                mapping[f"{code}.SZ"] = name  # Shenzhen
+                mapping[f"{code}.SS"] = name  # Shanghai (alternative)
+            
+            # Debug: Check if specific codes are in mapping
+            test_codes = ['000723.SZ', '002519.SZ', '000723', '002519']
+            found_codes = [code for code in test_codes if code in mapping]
+            if found_codes:
+                st.info(f"Debug: Found test codes in mapping: {found_codes}")
+            
+            return mapping
+        except Exception as e:
+            st.warning(f"Failed to read Chinese stock mapping file: {e}")
+            return {}
+    else:
+        # File doesn't exist, fetch from akshare and save
+        try:
+            import akshare as ak
+            df = ak.stock_info_a_code_name()
+            
+            # Save to file for future use
+            os.makedirs('./data', exist_ok=True)
+            df.to_csv(mapping_file, index=False)
+            st.success(f"Chinese stock mapping saved to {mapping_file}")
+            
+            # Create a mapping dictionary: code -> name
+            mapping = {}
+            for _, row in df.iterrows():
+                code = str(row['code']).zfill(6)  # Ensure 6 digits with leading zeros
+                name = row['name']
+                # Add different formats that might be used
+                mapping[code] = name
+                mapping[f"{code}.SH"] = name  # Shanghai
+                mapping[f"{code}.SZ"] = name  # Shenzhen
+                mapping[f"{code}.SS"] = name  # Shanghai (alternative)
+            return mapping
+        except Exception as e:
+            st.warning(f"Failed to load Chinese stock names from akshare: {e}")
+            return {}
+
+def is_chinese_stock_code(ticker):
+    """Check if a ticker is a Chinese stock code (starts with digits)."""
+    if not isinstance(ticker, str):
+        return False
+    # Chinese stock codes typically start with digits and may have .SH/.SZ/.SS suffix
+    pattern = r'^\d{6}(\.(SH|SZ|SS))?$'
+    return bool(re.match(pattern, ticker))
+
+def replace_chinese_tickers_in_df(df, chinese_mapping):
+    """Replace Chinese ticker symbols with names in a dataframe."""
+    if df is None or df.empty or 'ticker' not in df.columns:
+        return df
+    
+    df_copy = df.copy()
+    
+    # Replace ticker symbols with names where applicable
+    def replace_ticker(ticker):
+        if is_chinese_stock_code(ticker) and ticker in chinese_mapping:
+            return f"{chinese_mapping[ticker]} ({ticker})"
+        return ticker
+    
+    df_copy['ticker'] = df_copy['ticker'].apply(replace_ticker)
+    return df_copy
+
+def update_output_files_with_chinese_names(chinese_mapping):
+    """Update all output files with Chinese stock names."""
+    output_dir = './output'
+    if not os.path.exists(output_dir) or not chinese_mapping:
+        return
+    
+    updated_files = []
+    
+    # Get all CSV and TAB files in output directory
+    for filename in os.listdir(output_dir):
+        if filename.endswith('.csv') or filename.endswith('.tab'):
+            file_path = os.path.join(output_dir, filename)
+            
+            try:
+                # Read the file
+                if filename.endswith('.csv'):
+                    df = pd.read_csv(file_path)
+                else:  # .tab files
+                    df = pd.read_csv(file_path, sep='\t')
+                
+                # Check if file has ticker column and Chinese stocks
+                if 'ticker' in df.columns:
+                    # Check if any Chinese stocks exist in this file
+                    has_chinese_stocks = any(is_chinese_stock_code(ticker) for ticker in df['ticker'])
+                    
+                    if has_chinese_stocks:
+                        # Check if names are already applied (avoid double processing)
+                        has_names_already = any('(' in str(ticker) and ')' in str(ticker) 
+                                               for ticker in df['ticker'] if pd.notna(ticker))
+                        
+                        if not has_names_already:
+                            # Apply Chinese name mapping
+                            df_updated = replace_chinese_tickers_in_df(df, chinese_mapping)
+                            
+                            # Save back to file
+                            if filename.endswith('.csv'):
+                                df_updated.to_csv(file_path, index=False)
+                            else:  # .tab files
+                                df_updated.to_csv(file_path, sep='\t', index=False)
+                            
+                            updated_files.append(filename)
+                
+            except Exception as e:
+                st.warning(f"Error updating file {filename}: {e}")
+    
+    if updated_files:
+        st.success(f"Updated {len(updated_files)} output files with Chinese stock names")
+        with st.expander("Updated files:", expanded=False):
+            for file in updated_files:
+                st.write(f"- {file}")
+    else:
+        st.info("No output files required Chinese stock name updates")
 
 # App title and description
 # st.title("Stock Analysis Dashboard")
@@ -214,7 +348,7 @@ with col2:
     # )
     st.write("1234, 5230, CD Signal Evaluation")
     
-    # Run analysis button (moved here from col3)
+    # Run analysis button
     if st.button("Run Analysis", use_container_width=True, type="primary"):
         if not selected_file:
             st.error("Please select a stock list file first.")
@@ -412,6 +546,13 @@ def load_results(file_pattern, stock_list_file=None, default_sort=None):
     except Exception as e:
         return None, f"Error loading results: {e}"
 
+# Load Chinese stock mapping once for all tables
+chinese_stock_mapping = get_chinese_stock_mapping() if selected_file else {}
+
+# Update output files with Chinese names if mapping is available
+if chinese_stock_mapping and selected_file:
+    update_output_files_with_chinese_names(chinese_stock_mapping)
+
 # Create two columns for the two table views
 if selected_file:
     col_left, col_right = st.columns([1, 2])
@@ -431,8 +572,6 @@ if selected_file:
             df, message = load_results('breakout_candidates_summary_1234_', selected_file, 'score')
             
             if df is not None and '1234' in message:
-                # st.write(f"Showing 1234 breakout candidates from: {message}")
-                
                 # Add filtering options
                 if 'ticker' in df.columns:
                     ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_1234")
@@ -458,8 +597,6 @@ if selected_file:
             df, message = load_results('breakout_candidates_summary_5230_', selected_file, 'score')
             
             if df is not None and '5230' in message:
-                # st.write(f"Showing 5230 breakout candidates from: {message}")
-                
                 # Add filtering options
                 if 'ticker' in df.columns:
                     ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_5230")
@@ -485,8 +622,6 @@ if selected_file:
             df, message = load_results('breakout_candidates_details_1234_', selected_file, 'signal_date')
             
             if df is not None and '1234' in message:
-                # st.write(f"Showing 1234 detailed results from: {message}")
-                
                 # Add filtering options
                 if 'ticker' in df.columns:
                     ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_details_1234")
@@ -521,8 +656,6 @@ if selected_file:
             df, message = load_results('breakout_candidates_details_5230_', selected_file, 'signal_date')
             
             if df is not None and '5230' in message:
-                # st.write(f"Showing 5230 detailed results from: {message}")
-                
                 # Add filtering options
                 if 'ticker' in df.columns:
                     ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_details_5230")
@@ -562,8 +695,6 @@ if selected_file:
             df, message = load_results('cd_eval_best_intervals_', selected_file, 'avg_return_10')
             
             if df is not None:
-                # st.write(f"Showing results from: {message}")
-                
                 # Add filtering options
                 if 'ticker' in df.columns:
                     ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_best")
@@ -601,8 +732,6 @@ if selected_file:
                     df = df[df['latest_signal'].notna()]
                     df = df.sort_values(by='latest_signal', ascending=False)
                     
-                    # st.write(f"Showing recent signals from: {message}")
-                    
                     # Add filtering options
                     if 'ticker' in df.columns:
                         ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_recent")
@@ -628,8 +757,6 @@ if selected_file:
             df, message = load_results('cd_eval_custom_detailed_', selected_file, 'avg_return_10')
             
             if df is not None:
-                # st.write(f"Showing results from: {message}")
-
                 # Add filtering options
                 if 'ticker' in df.columns:
                     ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_details")
