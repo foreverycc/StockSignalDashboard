@@ -117,13 +117,19 @@ def analyze_stocks(file_path):
     best_intervals_columns = ['ticker', 'interval', 'hold_time',  
                               'avg_return', 'latest_signal', 'latest_signal_price', 
                               'test_count', 'success_rate', 'best_period', 'signal_count']
+    # Define all periods for dynamic handling
+    periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+    
+    # Build good_signals_columns dynamically
     good_signals_columns = ['ticker', 'interval', 'hold_time', 
                             'exp_return', 'latest_signal', 'latest_signal_price', 
-                            'test_count', 'success_rate', 'best_period', 'signal_count', 
-                            'test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'test_count_50', 
-                            'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'success_rate_50', 
-                            'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50', 
-                            'max_return', 'min_return']
+                            'test_count', 'success_rate', 'best_period', 'signal_count']
+    
+    # Add all period-specific columns
+    for period in periods:
+        good_signals_columns.extend([f'test_count_{period}', f'success_rate_{period}', f'avg_return_{period}'])
+    
+    good_signals_columns.extend(['max_return', 'min_return'])
 
     for i in range(0, len(stock_list), batch_size):
         batch = stock_list[i:i+batch_size]
@@ -168,13 +174,25 @@ def analyze_stocks(file_path):
         # Find the best interval for each ticker based on success rate and returns
         # Only consider intervals with at least 2 tests for period 10
         valid_df = df_cd_eval[df_cd_eval['test_count_10'] >= 2]
-        valid_df = valid_df[(valid_df['avg_return_3'] >= 5) | (valid_df['avg_return_5'] >=5 ) | 
-                            (valid_df['avg_return_10'] >= 5) | (valid_df['avg_return_20'] >= 5)]
+        
+        # Create filter condition for any period having >= 5% average return
+        filter_conditions = []
+        for period in periods:
+            if f'avg_return_{period}' in df_cd_eval.columns:
+                filter_conditions.append(valid_df[f'avg_return_{period}'] >= 5)
+        
+        if filter_conditions:
+            # Combine all conditions with OR
+            combined_filter = filter_conditions[0]
+            for condition in filter_conditions[1:]:
+                combined_filter = combined_filter | condition
+            valid_df = valid_df[combined_filter]
         
         if not valid_df.empty:
             # Find max return across all time periods for each ticker/interval combination
-            valid_df['max_return'] = valid_df[['avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50']].max(axis=1)
-            valid_df['best_period'] = valid_df[['avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50']].idxmax(axis=1).str.extract('(\d+)').astype(int)
+            avg_return_cols = [f'avg_return_{period}' for period in periods if f'avg_return_{period}' in valid_df.columns]
+            valid_df['max_return'] = valid_df[avg_return_cols].max(axis=1)
+            valid_df['best_period'] = valid_df[avg_return_cols].idxmax(axis=1).str.extract('(\d+)').astype(int)
             
             # Get row with highest max_return for each ticker
             best_intervals = valid_df.loc[valid_df.groupby('ticker')['max_return'].idxmax()]
@@ -232,27 +250,30 @@ def analyze_stocks(file_path):
             empty_good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
             
         # Create a summary by interval (always create this if we have any CD results)
-            interval_summary = df_cd_eval.groupby('interval').agg({
-                'signal_count': 'sum',
-                'test_count_3': 'sum',
-                'test_count_5': 'sum',
-                'test_count_10': 'sum',
-                'test_count_20': 'sum',
-                'success_rate_3': 'mean',
-                'success_rate_5': 'mean',
-                'success_rate_10': 'mean',
-                'success_rate_20': 'mean',
-                'avg_return_3': 'mean',
-                'avg_return_5': 'mean',
-                'avg_return_10': 'mean',
-                'avg_return_20': 'mean'
-            }).reset_index()
+            agg_dict = {'signal_count': 'sum'}
             
+            # Add aggregation for all periods dynamically
+            for period in periods:
+                if f'test_count_{period}' in df_cd_eval.columns:
+                    agg_dict[f'test_count_{period}'] = 'sum'
+                if f'success_rate_{period}' in df_cd_eval.columns:
+                    agg_dict[f'success_rate_{period}'] = 'mean'
+                if f'avg_return_{period}' in df_cd_eval.columns:
+                    agg_dict[f'avg_return_{period}'] = 'mean'
+                    
+            interval_summary = df_cd_eval.groupby('interval').agg(agg_dict).reset_index()
             interval_summary.to_csv(os.path.join(output_dir, f'cd_eval_interval_summary_{output_base}.csv'), index=False)
     else:
         print("No CD evaluation results to save")
         # Create empty files with proper headers when no CD results at all
-        empty_detailed = pd.DataFrame(columns=['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price', 'test_count_3', 'test_count_5', 'test_count_10', 'test_count_20', 'test_count_50', 'success_rate_3', 'success_rate_5', 'success_rate_10', 'success_rate_20', 'success_rate_50', 'avg_return_3', 'avg_return_5', 'avg_return_10', 'avg_return_20', 'avg_return_50', 'max_return', 'min_return'])
+        empty_detailed_columns = ['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price']
+        
+        # Add all period-specific columns
+        for period in periods:
+            empty_detailed_columns.extend([f'test_count_{period}', f'success_rate_{period}', f'avg_return_{period}'])
+        
+        empty_detailed_columns.extend(['max_return', 'min_return'])
+        empty_detailed = pd.DataFrame(columns=empty_detailed_columns)
         empty_detailed.to_csv(os.path.join(output_dir, f'cd_eval_custom_detailed_{output_base}.csv'), index=False)
         
         empty_best_intervals = pd.DataFrame(columns=best_intervals_columns)
