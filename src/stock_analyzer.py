@@ -106,7 +106,7 @@ def analyze_stocks(file_path):
     print(f"Analyzing {len(stock_list)} stocks from {file_path}")
     
     # Configure multiprocessing
-    num_processes = max(1, cpu_count() - 1)
+    num_processes = max(1, min(8, cpu_count() - 1)) # limit to 8 processes to avoid API rate limit
     print(f"Using {num_processes} processes for analysis")
     
     # Process stocks in batches to avoid memory issues

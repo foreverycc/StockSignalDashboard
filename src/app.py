@@ -32,12 +32,6 @@ def get_chinese_stock_mapping():
                 mapping[f"{code}.SZ"] = name  # Shenzhen
                 mapping[f"{code}.SS"] = name  # Shanghai (alternative)
             
-            # Debug: Check if specific codes are in mapping
-            test_codes = ['000723.SZ', '002519.SZ', '000723', '002519']
-            found_codes = [code for code in test_codes if code in mapping]
-            if found_codes:
-                st.info(f"Debug: Found test codes in mapping: {found_codes}")
-            
             return mapping
         except Exception as e:
             st.warning(f"Failed to read Chinese stock mapping file: {e}")
