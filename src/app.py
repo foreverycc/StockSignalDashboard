@@ -549,7 +549,7 @@ if chinese_stock_mapping and selected_file:
 
 # Create two columns for the two table views
 if selected_file:
-    col_left, col_right = st.columns([1, 2])
+    col_left, col_middle, col_right = st.columns([1, 2, 1])     
 
     # First table view with tabs 1-4 (left column)
     with col_left:
@@ -680,44 +680,84 @@ if selected_file:
                 st.info("No 5230 detailed results found. Please run analysis first.")
 
     # Second table view with tabs 3-5 (right column)
-    with col_right:
+    with col_middle:
         st.subheader("Waikiki Model")
-        tab1, tab2, tab3 = st.tabs(["Best Intervals", "High Return Intervals",  "Interval Details"])
+        tabs = st.tabs([
+            "Best Intervals (50)", 
+            "Best Intervals (20)", 
+            "Best Intervals (100)", 
+            "High Return Intervals",
+            "Interval Details"
+        ])
 
-    # Display best intervals
-        with tab1:
-            df, message = load_results('cd_eval_best_intervals_', selected_file, 'avg_return_10')
+        # Display best intervals (50)
+        with tabs[0]:
+            df, message = load_results('cd_eval_best_intervals_50_', selected_file, 'avg_return_10')
             
             if df is not None:
                 # Add filtering options
                 if 'ticker' in df.columns:
-                    ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_best")
+                    ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_best_50")
                     if ticker_filter:
                         df = df[df['ticker'].str.contains(ticker_filter, case=False)]
                 
                 if 'interval' in df.columns:
-                        intervals = sorted(df['interval'].unique())
-                        selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best")
-                        if selected_intervals:
-                            df = df[df['interval'].isin(selected_intervals)]
-
-                # Add sorting options
-                # if not df.empty:
-                #     sort_columns = df.columns.tolist()
-                #     sort_by = st.selectbox("Sort by:", sort_columns, 
-                #                           index=sort_columns.index('latest_signal') if 'latest_signal' in sort_columns else 0,
-                #                           key="sort_by_best")
-                #     sort_order = st.radio("Sort order:", ["Descending", "Ascending"], horizontal=True, key="sort_order_best")
-                    
-                #     df = df.sort_values(by=sort_by, ascending=(sort_order == "Ascending"))
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_50")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
                 
                 # Display the dataframe
                 st.dataframe(df.sort_values(by='latest_signal', ascending=False), use_container_width=True)
             else:
-                st.info("No best intervals data available. Please run CD Signal Evaluation first.")
+                st.info("No best intervals data available for 50-period analysis. Please run CD Signal Evaluation first.")
 
-        # Display recent signals
-        with tab2:
+        # Display best intervals (20)
+        with tabs[1]:
+            df, message = load_results('cd_eval_best_intervals_20_', selected_file, 'avg_return_10')
+            
+            if df is not None:
+                # Add filtering options
+                if 'ticker' in df.columns:
+                    ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_best_20")
+                    if ticker_filter:
+                        df = df[df['ticker'].str.contains(ticker_filter, case=False)]
+                
+                if 'interval' in df.columns:
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_20")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
+                
+                # Display the dataframe
+                st.dataframe(df.sort_values(by='latest_signal', ascending=False), use_container_width=True)
+            else:
+                st.info("No best intervals data available for 20-period analysis. Please run CD Signal Evaluation first.")
+
+        # Display best intervals (100)
+        with tabs[2]:
+            df, message = load_results('cd_eval_best_intervals_100_', selected_file, 'avg_return_10')
+            
+            if df is not None:
+                # Add filtering options
+                if 'ticker' in df.columns:
+                    ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_best_100")
+                    if ticker_filter:
+                        df = df[df['ticker'].str.contains(ticker_filter, case=False)]
+                
+                if 'interval' in df.columns:
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_100")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
+                
+                # Display the dataframe
+                st.dataframe(df.sort_values(by='latest_signal', ascending=False), use_container_width=True)
+            else:
+                st.info("No best intervals data available for 100-period analysis. Please run CD Signal Evaluation first.")
+
+        # Display high return intervals
+        with tabs[3]:
             df, message = load_results('cd_eval_good_signals_', selected_file, 'latest_signal')
             
             if df is not None:
@@ -745,9 +785,8 @@ if selected_file:
             else:
                 st.info("No recent signals data available. Please run an analysis first.")
 
-        
-        # Display cd eval details
-        with tab3:
+        # Display interval details
+        with tabs[4]:
             df, message = load_results('cd_eval_custom_detailed_', selected_file, 'avg_return_10')
             
             if df is not None:
@@ -758,10 +797,10 @@ if selected_file:
                         df = df[df['ticker'].str.contains(ticker_filter, case=False)]
                 
                 if 'interval' in df.columns:
-                        intervals = sorted(df['interval'].unique())
-                        selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_details")
-                        if selected_intervals:
-                            df = df[df['interval'].isin(selected_intervals)]
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_details")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
 
                 # Add sorting options
                 # if not df.empty:

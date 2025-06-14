@@ -120,6 +120,13 @@ def analyze_stocks(file_path):
     # Define all periods for dynamic handling
     periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
     
+    # Define period ranges for different best intervals tables
+    period_ranges = {
+        '20': [3, 5, 10, 15, 20],
+        '50': [3, 5, 10, 15, 20, 25, 30, 40, 50],
+        '100': [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+    }
+    
     # Build good_signals_columns dynamically
     good_signals_columns = ['ticker', 'interval', 'hold_time', 
                             'exp_return', 'latest_signal', 'latest_signal_price', 
@@ -189,34 +196,45 @@ def analyze_stocks(file_path):
             valid_df = valid_df[combined_filter]
         
         if not valid_df.empty:
-            # Find max return across all time periods for each ticker/interval combination
-            avg_return_cols = [f'avg_return_{period}' for period in periods if f'avg_return_{period}' in valid_df.columns]
-            valid_df['max_return'] = valid_df[avg_return_cols].max(axis=1)
-            valid_df['best_period'] = valid_df[avg_return_cols].idxmax(axis=1).str.extract('(\d+)').astype(int)
-            
-            # Get row with highest max_return for each ticker
-            best_intervals = valid_df.loc[valid_df.groupby('ticker')['max_return'].idxmax()]
-            
-            # Select and rename columns
-            best_intervals = best_intervals.assign(
-                test_count=best_intervals.apply(lambda x: x[f'test_count_{int(x.best_period)}'], axis=1),
-                success_rate=best_intervals.apply(lambda x: x[f'success_rate_{int(x.best_period)}'], axis=1),
-                avg_return=best_intervals['max_return']
-            )[['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price', 'test_count', 
-               'success_rate', 'best_period', 'avg_return']].sort_values('latest_signal', ascending=False)
-            
-            # Calculate hold_time as interval * best_period
-            best_intervals['hold_time'] = best_intervals.apply(
-                lambda row: format_hold_time(parse_interval_to_minutes(row['interval']) * row['best_period']), axis=1
-            )
-            
-            # Reorder columns to put hold_time after interval
-            best_intervals = best_intervals[best_intervals_columns]
-            best_intervals = best_intervals[best_intervals['success_rate'] >= 50]
-            best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{output_base}.csv'), index=False)
+            # Create separate best intervals for each period range
+            for range_name, range_periods in period_ranges.items():
+                # Filter columns for this range
+                avg_return_cols = [f'avg_return_{period}' for period in range_periods if f'avg_return_{period}' in valid_df.columns]
+                
+                # Calculate max return and best period for this range
+                range_df = valid_df.copy()
+                range_df['max_return'] = range_df[avg_return_cols].max(axis=1)
+                range_df['best_period'] = range_df[avg_return_cols].idxmax(axis=1).str.extract('(\d+)').astype(int)
+                
+                # Get row with highest max_return for each ticker
+                best_intervals = range_df.loc[range_df.groupby('ticker')['max_return'].idxmax()]
+                
+                # Select and rename columns
+                best_intervals = best_intervals.assign(
+                    test_count=best_intervals.apply(lambda x: x[f'test_count_{int(x.best_period)}'], axis=1),
+                    success_rate=best_intervals.apply(lambda x: x[f'success_rate_{int(x.best_period)}'], axis=1),
+                    avg_return=best_intervals['max_return']
+                )[['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price', 'test_count', 
+                   'success_rate', 'best_period', 'avg_return']].sort_values('latest_signal', ascending=False)
+                
+                # Calculate hold_time as interval * best_period
+                best_intervals['hold_time'] = best_intervals.apply(
+                    lambda row: format_hold_time(parse_interval_to_minutes(row['interval']) * row['best_period']), axis=1
+                )
+                
+                # Reorder columns to put hold_time after interval
+                best_intervals = best_intervals[best_intervals_columns]
+                best_intervals = best_intervals[best_intervals['avg_return'] >= 5]
+                best_intervals = best_intervals[best_intervals['success_rate'] >= 50]
+                best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{range_name}_{output_base}.csv'), index=False)
 
             # Good signals - all signals that meet criteria, sorted by date
             good_signals = valid_df.sort_values('latest_signal', ascending=False)
+            
+            # Calculate max return and best period for good signals
+            avg_return_cols = [f'avg_return_{period}' for period in periods if f'avg_return_{period}' in good_signals.columns]
+            good_signals['max_return'] = good_signals[avg_return_cols].max(axis=1)
+            good_signals['best_period'] = good_signals[avg_return_cols].idxmax(axis=1).str.extract('(\d+)').astype(int)
             
             # Calculate hold_time as interval * best_period
             good_signals['hold_time'] = good_signals.apply(
@@ -241,9 +259,10 @@ def analyze_stocks(file_path):
             good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
         else:
             print("Not enough data to determine best intervals (need at least 2 tests)")
-            # Create empty files with proper headers
-            empty_best_intervals = pd.DataFrame(columns=best_intervals_columns)
-            empty_best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{output_base}.csv'), index=False)
+            # Create empty files with proper headers for each range
+            for range_name in period_ranges.keys():
+                empty_best_intervals = pd.DataFrame(columns=best_intervals_columns)
+                empty_best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{range_name}_{output_base}.csv'), index=False)
             
             # For good_signals, we need to include all the original columns plus hold_time after interval and exp_return after signal_count
             empty_good_signals = pd.DataFrame(columns=good_signals_columns)
@@ -276,8 +295,10 @@ def analyze_stocks(file_path):
         empty_detailed = pd.DataFrame(columns=empty_detailed_columns)
         empty_detailed.to_csv(os.path.join(output_dir, f'cd_eval_custom_detailed_{output_base}.csv'), index=False)
         
-        empty_best_intervals = pd.DataFrame(columns=best_intervals_columns)
-        empty_best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{output_base}.csv'), index=False)
+        # Create empty files with proper headers for each range
+        for range_name in period_ranges.keys():
+            empty_best_intervals = pd.DataFrame(columns=best_intervals_columns)
+            empty_best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{range_name}_{output_base}.csv'), index=False)
         
         empty_good_signals = pd.DataFrame(columns=good_signals_columns)
         empty_good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
