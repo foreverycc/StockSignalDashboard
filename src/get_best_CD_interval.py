@@ -107,6 +107,11 @@ def evaluate_interval(ticker, interval, data=None):
         latest_signal_str = latest_signal_date.strftime('%Y-%m-%d %H:%M:%S') if latest_signal_date else None
         latest_signal_price = round(data_frame.loc[latest_signal_date, 'Close'], 2) if latest_signal_date is not None else None
         
+        # Get current time and price
+        current_time = data_frame.index[-1]
+        current_time_str = current_time.strftime('%Y-%m-%d %H:%M:%S')
+        current_price = round(data_frame.iloc[-1]['Close'], 2)
+        
         if signal_count == 0:
             result = {
                 'ticker': ticker,
@@ -114,6 +119,9 @@ def evaluate_interval(ticker, interval, data=None):
                 'signal_count': 0,
                 'latest_signal': None,
                 'latest_signal_price': None,
+                'current_time': current_time_str,
+                'current_price': current_price,
+                'current_period': 0,
                 'max_return': 0,
                 'min_return': 0
             }
@@ -135,6 +143,9 @@ def evaluate_interval(ticker, interval, data=None):
                 'signal_count': signal_count,
                 'latest_signal': latest_signal_str,
                 'latest_signal_price': latest_signal_price,
+                'current_time': current_time_str,
+                'current_price': current_price,
+                'current_period': 0,
                 'max_return': 0,
                 'min_return': 0
             }
@@ -155,8 +166,22 @@ def evaluate_interval(ticker, interval, data=None):
             'interval': interval,
             'signal_count': signal_count,
             'latest_signal': latest_signal_str,
-            'latest_signal_price': latest_signal_price
+            'latest_signal_price': latest_signal_price,
+            'current_time': current_time_str,
+            'current_price': current_price
         }
+        
+        # Calculate current period if there's a latest signal
+        if latest_signal_date:
+            # Find the index of the latest signal and current time
+            signal_idx = data_frame.index.get_loc(latest_signal_date)
+            current_idx = len(data_frame) - 1
+            # Calculate current period as the number of data points between signal and current time
+            current_period = current_idx - signal_idx
+        else:
+            current_period = 0
+            
+        result['current_period'] = current_period
         
         # Calculate metrics for each period dynamically
         for period in periods:
