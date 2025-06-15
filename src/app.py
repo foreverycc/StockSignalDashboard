@@ -825,9 +825,9 @@ if selected_file:
                 ))
                 
                 # Add selected stock's returns for all periods as light gray dots and lines
-                periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-                stock_returns = []
-                for period in periods:
+                periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]  # Added 0 to periods
+                stock_returns = [(0, 100)]  # Start with (0, 100)
+                for period in periods[1:]:  # Skip 0 as we already added it
                     if f'avg_return_{period}' in selected_ticker:
                         stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
                 
@@ -846,9 +846,9 @@ if selected_file:
                 # Add current price at current period
                 if 'current_period' in selected_ticker and 'current_price' in selected_ticker and 'latest_signal_price' in selected_ticker:
                     current_period = selected_ticker['current_period']
-                    if current_period > 0:
-                        price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
-                                     selected_ticker['latest_signal_price'] * 100)
+                    price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
+                                 selected_ticker['latest_signal_price'] * 100)
+                    if current_period >= 0:
                         fig.add_trace(go.Scatter(
                             x=[current_period],
                             y=[100 + price_change],
