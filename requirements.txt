@@ -4,3 +4,4 @@ pandas==1.4.4
 yfinance==0.2.61
 akshare==1.16.98
 streamlit
+plotly==5.9.0

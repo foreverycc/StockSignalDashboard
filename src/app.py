@@ -927,7 +927,7 @@ if selected_file:
                     xaxis_title="Period",
                     yaxis_title="Relative Price (Baseline = 100)", 
                     showlegend=True,
-                    height=400,
+                    height=300,
                     plot_bgcolor='white',
                     paper_bgcolor='white',
                     xaxis=dict(
