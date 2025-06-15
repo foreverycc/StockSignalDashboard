@@ -805,9 +805,9 @@ if selected_file:
             selected_interval = st.session_state.selected_interval if st.session_state.selected_interval else '1d'
             
             # Display selected ticker info
-            if ticker_filter:
-                st.write(f"**Selected Stock:** {ticker_filter}")
-                st.write(f"**Selected Interval:** {selected_interval}")
+            # if ticker_filter:
+            #     st.write(f"**Selected Stock:** {ticker_filter}")
+            #     st.write(f"**Selected Interval:** {selected_interval}")
             
             # Filter the detailed DataFrame with exact match for ticker and interval
             filtered_detailed = detailed_df[
@@ -820,7 +820,9 @@ if selected_file:
                 selected_ticker = filtered_detailed.iloc[0]
                 
                 # Create figure
-                fig = go.Figure()
+                fig = go.Figure(layout=dict(
+                    font=dict(color='black')
+                ))
                 
                 # Add selected stock's returns for all periods as light gray dots and lines
                 periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
@@ -836,7 +838,7 @@ if selected_file:
                         y=returns,
                         mode='lines+markers',
                         line=dict(color='lightgray', width=1),
-                        marker=dict(color='lightgray', size=6),
+                        marker=dict(color='gray', size=6),
                         name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
                         showlegend=True
                     ))
@@ -858,20 +860,45 @@ if selected_file:
                 
                 # Update layout
                 fig.update_layout(
-                    title="Returns by Period",
+                    
+                    legend=dict(font=dict(color='black')),
+                    title=dict(
+                        text=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                        x=0.35,
+                        font=dict(size=24, color='black')
+                    ),
                     xaxis_title="Period",
-                    yaxis_title="Relative Price (Baseline = 100)",
+                    yaxis_title="Relative Price (Baseline = 100)", 
                     showlegend=True,
-                    height=400
+                    height=400,
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    xaxis=dict(
+                        showgrid=True,
+                        gridwidth=1,
+                        gridcolor='lightgray',
+                        showline=True,
+                        linewidth=1,
+                        linecolor='black', 
+                        tickfont=dict(color='black'),
+                        title=dict(text="Period", font=dict(color='black'))
+                    ),
+                    yaxis=dict(
+                        showgrid=True,
+                        gridwidth=1,
+                        gridcolor='lightgray',
+                        showline=True,
+                        linewidth=1,
+                        linecolor='black',
+                        tickfont=dict(color='black'),
+                        title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
+                    )
                 )
                 
                 # Display the plot
                 st.plotly_chart(fig, use_container_width=True)
                 
                 # Display additional information
-                st.write(f"**Selected Stock:** {selected_ticker['ticker']}")
-                st.write(f"**Interval:** {selected_ticker['interval']}")
-            
                 # Find the period with maximum return
                 max_return = -float('inf')
                 best_period = None
@@ -882,10 +909,12 @@ if selected_file:
                             best_period = period
                 
                 if best_period is not None:
+                    st.write(f"**Current Period:** {selected_ticker['current_period']}")
                     st.write(f"**Best Period:** {best_period}")
                     st.write(f"**Best Return:** {max_return:.2f}%")
                     st.write(f"**Success Rate:** {selected_ticker[f'success_rate_{best_period}']:.2f}%")
-                
+                    st.write(f"**Test Count:** {selected_ticker[f'test_count_{best_period}']}")
+
                 # Display period-specific information
                 st.write("**Period Returns:**")
                 period_data = []
