@@ -905,11 +905,20 @@ if selected_file:
                             best_period = period
                 
                 # Update layout
+                title_html = (
+                    f"<span style='font-size:24px'><b>{selected_ticker['ticker']} ({selected_ticker['interval']})</b></span><br>"
+                    f"<span style='font-size:12px'>best period: {best_period}\t  "
+                    f"best return: {max_return:.2f}%  "
+                    f"success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t  "
+                    f"test count: {selected_ticker[f'test_count_{best_period}']}</span>"
+                )
+                                
                 fig.update_layout(
                     
                     legend=dict(font=dict(color='black')),
                     title=dict(
-                        text=f"{selected_ticker['ticker']} ({selected_ticker['interval']}) <br><sub>best period: {best_period}\t best return: {max_return:.2f}% \t success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t test count: {selected_ticker[f'test_count_{best_period}']}</sub>",
+                        # text=f"{selected_ticker['ticker']} ({selected_ticker['interval']}) <br><sub>best period: {best_period}\t best return: {max_return:.2f}% \t <br>success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t test count: {selected_ticker[f'test_count_{best_period}']}</sub>",
+                        text = title_html,
                         x=0.5,
                         font=dict(size=24, color='black'),
                         xanchor='center',
