@@ -13,6 +13,17 @@ st.set_page_config(
     layout="wide"
 )
 
+# Initialize session state for selected ticker and interval
+if 'selected_ticker' not in st.session_state:
+    st.session_state.selected_ticker = None
+if 'selected_interval' not in st.session_state:
+    st.session_state.selected_interval = None
+
+# Function to handle ticker selection
+def handle_ticker_selection(ticker, interval):
+    st.session_state.selected_ticker = ticker
+    st.session_state.selected_interval = interval
+
 # Function to get Chinese stock name mapping
 def get_chinese_stock_mapping():
     """Get mapping of Chinese stock codes to names using akshare."""
@@ -563,71 +574,103 @@ if selected_file:
             "Interval Details"
         ])
 
+        # Helper for single-select tick column
+        def waikiki_tick_editor(df, tab_key):
+            if df is not None and not df.empty:
+                df = df.copy()
+                df['selected'] = (df['ticker'] == st.session_state.selected_ticker) & (df['interval'] == st.session_state.selected_interval)
+                # Move 'selected' column to the left
+                cols = ['selected'] + [c for c in df.columns if c != 'selected']
+                df = df[cols]
+                edited_df = st.data_editor(
+                    df,
+                    column_config={
+                        "selected": st.column_config.CheckboxColumn(
+                            "Select",
+                            help="Tick to select this row for visualization",
+                            default=False
+                        )
+                    },
+                    disabled=[col for col in df.columns if col != 'selected'],
+                    hide_index=True,
+                    key=f"waikiki_editor_{tab_key}"
+                )
+                # Enforce true single selection: only one row can be selected
+                selected_rows = edited_df[edited_df['selected']]
+                if len(selected_rows) > 1:
+                    # If multiple are selected, keep only the last one ticked
+                    last_selected_idx = selected_rows.index[-1]
+                    # Untick all except the last selected
+                    for idx in edited_df.index:
+                        edited_df.at[idx, 'selected'] = (idx == last_selected_idx)
+                    selected_row = edited_df.loc[last_selected_idx]
+                    st.session_state.selected_ticker = selected_row['ticker']
+                    st.session_state.selected_interval = selected_row['interval']
+                    # Rerun to update UI
+                    st.rerun()
+                elif len(selected_rows) == 1:
+                    selected_row = selected_rows.iloc[0]
+                    if (st.session_state.selected_ticker != selected_row['ticker'] or
+                        st.session_state.selected_interval != selected_row['interval']):
+                        st.session_state.selected_ticker = selected_row['ticker']
+                        st.session_state.selected_interval = selected_row['interval']
+                return edited_df
+            else:
+                st.info("No data available for this table. Please run analysis first.")
+                return None
+
         # Display best intervals (50)
         with tabs[0]:
             df, message = load_results('cd_eval_best_intervals_50_', selected_file, 'avg_return_10')
-            
             if df is not None:
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_50")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
-                
-                # Display the dataframe
-                st.dataframe(df.sort_values(by='latest_signal', ascending=False), use_container_width=True)
+                waikiki_tick_editor(df, '50')
             else:
                 st.info("No best intervals data available for 50-period analysis. Please run CD Signal Evaluation first.")
 
         # Display best intervals (20)
         with tabs[1]:
             df, message = load_results('cd_eval_best_intervals_20_', selected_file, 'avg_return_10')
-            
             if df is not None:
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_20")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
-                
-                # Display the dataframe
-                st.dataframe(df.sort_values(by='latest_signal', ascending=False), use_container_width=True)
+                waikiki_tick_editor(df, '20')
             else:
                 st.info("No best intervals data available for 20-period analysis. Please run CD Signal Evaluation first.")
 
         # Display best intervals (100)
         with tabs[2]:
             df, message = load_results('cd_eval_best_intervals_100_', selected_file, 'avg_return_10')
-            
             if df is not None:
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_100")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
-                
-                # Display the dataframe
-                st.dataframe(df.sort_values(by='latest_signal', ascending=False), use_container_width=True)
+                waikiki_tick_editor(df, '100')
             else:
                 st.info("No best intervals data available for 100-period analysis. Please run CD Signal Evaluation first.")
 
         # Display high return intervals
         with tabs[3]:
             df, message = load_results('cd_eval_good_signals_', selected_file, 'latest_signal')
-            
             if df is not None:
                 if 'latest_signal' in df.columns:
                     df = df[df['latest_signal'].notna()]
                     df = df.sort_values(by='latest_signal', ascending=False)
-                    
                     if 'interval' in df.columns:
                         intervals = sorted(df['interval'].unique())
                         selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_recent")
                         if selected_intervals:
                             df = df[df['interval'].isin(selected_intervals)]
-                    
-                    # Display the dataframe
-                    st.dataframe(df.sort_values(by='latest_signal', ascending=False), use_container_width=True)
+                    waikiki_tick_editor(df, 'good')
                 else:
                     st.info("No signal date information available in the results.")
             else:
@@ -636,16 +679,13 @@ if selected_file:
         # Display interval details
         with tabs[4]:
             df, message = load_results('cd_eval_custom_detailed_', selected_file, 'avg_return_10')
-            
             if df is not None:
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_details")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
-                
-                # Display the dataframe
-                st.dataframe(df.sort_values(by='latest_signal', ascending=False), use_container_width=True)
+                waikiki_tick_editor(df, 'details')
             else:
                 st.info("No interval summary data available. Please run CD Signal Evaluation first.")
 
@@ -754,118 +794,113 @@ if selected_file:
 
     # Visualization panel (right column)
     with col_right:
-        st.subheader("Stock Visualization")
+        st.subheader("Visualization")
         
         # Load the detailed results for period information
         detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
         
         if detailed_df is not None and 'ticker' in detailed_df.columns:
-            # Ticker filter
-            ticker_filter = st.text_input("Filter by ticker symbol:", key="ticker_filter_visualization")
+            # Use selected ticker and interval from session state
+            ticker_filter = st.session_state.selected_ticker if st.session_state.selected_ticker else ""
+            selected_interval = st.session_state.selected_interval if st.session_state.selected_interval else '1d'
             
-            # Interval selection
-            if 'interval' in detailed_df.columns:
-                intervals = sorted(detailed_df['interval'].unique())
-                selected_interval = st.selectbox("Filter by interval:", intervals, 
-                                              index=intervals.index('1d') if '1d' in intervals else 0,
-                                              key="interval_filter_visualization")
-                selected_intervals = [selected_interval]
-            else:
-                selected_intervals = []
-            
+            # Display selected ticker info
             if ticker_filter:
-                # Filter the detailed DataFrame
-                filtered_detailed = detailed_df[detailed_df['ticker'].str.contains(ticker_filter, case=False)]
+                st.write(f"**Selected Stock:** {ticker_filter}")
+                st.write(f"**Selected Interval:** {selected_interval}")
+            
+            # Filter the detailed DataFrame with exact match for ticker and interval
+            filtered_detailed = detailed_df[
+                (detailed_df['ticker'] == ticker_filter) &
+                (detailed_df['interval'] == selected_interval)
+            ]
+            
+            if not filtered_detailed.empty:
+                # Get the first matching ticker's data
+                selected_ticker = filtered_detailed.iloc[0]
                 
-                if selected_intervals:
-                    filtered_detailed = filtered_detailed[filtered_detailed['interval'].isin(selected_intervals)]
+                # Create figure
+                fig = go.Figure()
                 
-                if not filtered_detailed.empty:
-                    # Get the first matching ticker's data
-                    selected_ticker = filtered_detailed.iloc[0]
-                    
-                    # Create figure
-                    fig = go.Figure()
-                    
-                    # Add selected stock's returns for all periods as light gray dots and lines
-                    periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-                    stock_returns = []
-                    for period in periods:
-                        if f'avg_return_{period}' in selected_ticker:
-                            stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
-                    
-                    if stock_returns:
-                        periods, returns = zip(*stock_returns)
+                # Add selected stock's returns for all periods as light gray dots and lines
+                periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                stock_returns = []
+                for period in periods:
+                    if f'avg_return_{period}' in selected_ticker:
+                        stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
+                
+                if stock_returns:
+                    periods, returns = zip(*stock_returns)
+                    fig.add_trace(go.Scatter(
+                        x=periods,
+                        y=returns,
+                        mode='lines+markers',
+                        line=dict(color='lightgray', width=1),
+                        marker=dict(color='lightgray', size=6),
+                        name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                        showlegend=True
+                    ))
+                
+                # Add current price at current period
+                if 'current_period' in selected_ticker and 'current_price' in selected_ticker and 'latest_signal_price' in selected_ticker:
+                    current_period = selected_ticker['current_period']
+                    if current_period > 0:
+                        price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
+                                     selected_ticker['latest_signal_price'] * 100)
                         fig.add_trace(go.Scatter(
-                            x=periods,
-                            y=returns,
-                            mode='lines+markers',
-                            line=dict(color='lightgray', width=1),
-                            marker=dict(color='lightgray', size=6),
-                            name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                            x=[current_period],
+                            y=[100 + price_change],
+                            mode='markers',
+                            marker=dict(color='red', size=10, symbol='star'),
+                            name='Current Price',
                             showlegend=True
                         ))
-                    
-                    # Add current price at current period
-                    if 'current_period' in selected_ticker and 'current_price' in selected_ticker and 'latest_signal_price' in selected_ticker:
-                        current_period = selected_ticker['current_period']
-                        if current_period > 0:
-                            price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
-                                         selected_ticker['latest_signal_price'] * 100)
-                            fig.add_trace(go.Scatter(
-                                x=[current_period],
-                                y=[100 + price_change],
-                                mode='markers',
-                                marker=dict(color='red', size=10, symbol='star'),
-                                name='Current Price',
-                                showlegend=True
-                            ))
-                    
-                    # Update layout
-                    fig.update_layout(
-                        title="Returns by Period",
-                        xaxis_title="Period",
-                        yaxis_title="Relative Price (Baseline = 100)",
-                        showlegend=True,
-                        height=400
-                    )
-                    
-                    # Display the plot
-                    st.plotly_chart(fig, use_container_width=True)
-                    
-                    # Display additional information
-                    st.write(f"**Selected Stock:** {selected_ticker['ticker']}")
-                    st.write(f"**Interval:** {selected_ticker['interval']}")
                 
-                    # Find the period with maximum return
-                    max_return = -float('inf')
-                    best_period = None
-                    for period in periods:
-                        if f'avg_return_{period}' in selected_ticker:
-                            if selected_ticker[f'avg_return_{period}'] > max_return:
-                                max_return = selected_ticker[f'avg_return_{period}']
-                                best_period = period
-                    
-                    if best_period is not None:
-                        st.write(f"**Best Period:** {best_period}")
-                        st.write(f"**Best Return:** {max_return:.2f}%")
-                        st.write(f"**Success Rate:** {selected_ticker[f'success_rate_{best_period}']:.2f}%")
-                    
-                    # Display period-specific information
-                    st.write("**Period Returns:**")
-                    period_data = []
-                    for period in periods:
-                        if f'avg_return_{period}' in selected_ticker:
-                            period_data.append({
-                                'Period': period,
-                                'Return': f"{selected_ticker[f'avg_return_{period}']:.2f}%",
-                                'Success Rate': f"{selected_ticker[f'success_rate_{period}']:.2f}%",
-                                'Test Count': selected_ticker[f'test_count_{period}']
-                            })
-                    if period_data:
-                        st.table(pd.DataFrame(period_data))
-                else:
-                    st.info("No matching stocks found.")
+                # Update layout
+                fig.update_layout(
+                    title="Returns by Period",
+                    xaxis_title="Period",
+                    yaxis_title="Relative Price (Baseline = 100)",
+                    showlegend=True,
+                    height=400
+                )
+                
+                # Display the plot
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Display additional information
+                st.write(f"**Selected Stock:** {selected_ticker['ticker']}")
+                st.write(f"**Interval:** {selected_ticker['interval']}")
+            
+                # Find the period with maximum return
+                max_return = -float('inf')
+                best_period = None
+                for period in periods:
+                    if f'avg_return_{period}' in selected_ticker:
+                        if selected_ticker[f'avg_return_{period}'] > max_return:
+                            max_return = selected_ticker[f'avg_return_{period}']
+                            best_period = period
+                
+                if best_period is not None:
+                    st.write(f"**Best Period:** {best_period}")
+                    st.write(f"**Best Return:** {max_return:.2f}%")
+                    st.write(f"**Success Rate:** {selected_ticker[f'success_rate_{best_period}']:.2f}%")
+                
+                # Display period-specific information
+                st.write("**Period Returns:**")
+                period_data = []
+                for period in periods:
+                    if f'avg_return_{period}' in selected_ticker:
+                        period_data.append({
+                            'Period': period,
+                            'Return': f"{selected_ticker[f'avg_return_{period}']:.2f}%",
+                            'Success Rate': f"{selected_ticker[f'success_rate_{period}']:.2f}%",
+                            'Test Count': selected_ticker[f'test_count_{period}']
+                        })
+                if period_data:
+                    st.table(pd.DataFrame(period_data))
+            else:
+                st.info("No matching stocks found or no stock selected.")
         else:
             st.info("Please run an analysis first to view stock visualizations.")
 else:
