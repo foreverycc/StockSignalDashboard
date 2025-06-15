@@ -858,14 +858,27 @@ if selected_file:
                             showlegend=True
                         ))
                 
+                
+                # Display additional information
+                # Find the period with maximum return
+                max_return = -float('inf')
+                best_period = None
+                for period in periods:
+                    if f'avg_return_{period}' in selected_ticker:
+                        if selected_ticker[f'avg_return_{period}'] > max_return:
+                            max_return = selected_ticker[f'avg_return_{period}']
+                            best_period = period
+                
                 # Update layout
                 fig.update_layout(
                     
                     legend=dict(font=dict(color='black')),
                     title=dict(
-                        text=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
-                        x=0.35,
-                        font=dict(size=24, color='black')
+                        text=f"{selected_ticker['ticker']} ({selected_ticker['interval']}) <br><sub>best period: {best_period}\t best return: {max_return:.2f}% \t success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t test count: {selected_ticker[f'test_count_{best_period}']}</sub>",
+                        x=0.5,
+                        font=dict(size=24, color='black'),
+                        xanchor='center',
+                        yanchor='top'
                     ),
                     xaxis_title="Period",
                     yaxis_title="Relative Price (Baseline = 100)", 
@@ -898,23 +911,6 @@ if selected_file:
                 # Display the plot
                 st.plotly_chart(fig, use_container_width=True)
                 
-                # Display additional information
-                # Find the period with maximum return
-                max_return = -float('inf')
-                best_period = None
-                for period in periods:
-                    if f'avg_return_{period}' in selected_ticker:
-                        if selected_ticker[f'avg_return_{period}'] > max_return:
-                            max_return = selected_ticker[f'avg_return_{period}']
-                            best_period = period
-                
-                if best_period is not None:
-                    st.write(f"**Current Period:** {selected_ticker['current_period']}")
-                    st.write(f"**Best Period:** {best_period}")
-                    st.write(f"**Best Return:** {max_return:.2f}%")
-                    st.write(f"**Success Rate:** {selected_ticker[f'success_rate_{best_period}']:.2f}%")
-                    st.write(f"**Test Count:** {selected_ticker[f'test_count_{best_period}']}")
-
                 # Display period-specific information
                 st.write("**Period Returns:**")
                 period_data = []
