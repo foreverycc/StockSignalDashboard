@@ -561,11 +561,15 @@ if chinese_stock_mapping and selected_file:
 
 # Create two columns for the two table views
 if selected_file:
-    col_left, col_right = st.columns([2, 1])     
+    col_left, col_center, col_right = st.columns([2, 0.05, 1])     
 
     # First table view with Waikiki Model and Resonance Model (left column)
     with col_left:
         st.subheader("Waikiki Model")
+        
+        # Add shared ticker filter for Waikiki model
+        waikiki_ticker_filter = st.text_input("Filter by ticker symbol:", key="waikiki_ticker_filter")
+        
         tabs = st.tabs([
             "Best Intervals (50)", 
             "Best Intervals (20)", 
@@ -623,6 +627,9 @@ if selected_file:
         with tabs[0]:
             df, message = load_results('cd_eval_best_intervals_50_', selected_file, 'avg_return_10')
             if df is not None:
+                if waikiki_ticker_filter:
+                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_50")
@@ -636,6 +643,9 @@ if selected_file:
         with tabs[1]:
             df, message = load_results('cd_eval_best_intervals_20_', selected_file, 'avg_return_10')
             if df is not None:
+                if waikiki_ticker_filter:
+                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_20")
@@ -649,6 +659,9 @@ if selected_file:
         with tabs[2]:
             df, message = load_results('cd_eval_best_intervals_100_', selected_file, 'avg_return_10')
             if df is not None:
+                if waikiki_ticker_filter:
+                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_100")
@@ -662,6 +675,9 @@ if selected_file:
         with tabs[3]:
             df, message = load_results('cd_eval_good_signals_', selected_file, 'latest_signal')
             if df is not None:
+                if waikiki_ticker_filter:
+                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                
                 if 'latest_signal' in df.columns:
                     df = df[df['latest_signal'].notna()]
                     df = df.sort_values(by='latest_signal', ascending=False)
@@ -680,6 +696,9 @@ if selected_file:
         with tabs[4]:
             df, message = load_results('cd_eval_custom_detailed_', selected_file, 'avg_return_10')
             if df is not None:
+                if waikiki_ticker_filter:
+                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_details")
@@ -691,6 +710,10 @@ if selected_file:
 
         # Resonance Model section
         st.subheader("Resonance Model")
+        
+        # Add shared ticker filter for Resonance model
+        resonance_ticker_filter = st.text_input("Filter by ticker symbol:", key="resonance_ticker_filter")
+        
         tab1, tab2, tab3, tab4 = st.tabs([
             "1234 Candidates", 
             "5230 Candidates", 
@@ -703,6 +726,9 @@ if selected_file:
             df, message = load_results('breakout_candidates_summary_1234_', selected_file, 'score')
             
             if df is not None and '1234' in message:
+                if resonance_ticker_filter:
+                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
+                
                 # Add NX filtering if available
                 if 'nx_1d' in df.columns:
                     nx_values = sorted(df['nx_1d'].unique())
@@ -722,6 +748,9 @@ if selected_file:
             df, message = load_results('breakout_candidates_summary_5230_', selected_file, 'score')
             
             if df is not None and '5230' in message:
+                if resonance_ticker_filter:
+                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
+                
                 # Add NX filtering if available
                 if 'nx_1h' in df.columns:
                     nx_values = sorted(df['nx_1h'].unique())
@@ -741,6 +770,9 @@ if selected_file:
             df, message = load_results('breakout_candidates_details_1234_', selected_file, 'signal_date')
             
             if df is not None and '1234' in message:
+                if resonance_ticker_filter:
+                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
+                
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, 
@@ -769,6 +801,9 @@ if selected_file:
             df, message = load_results('breakout_candidates_details_5230_', selected_file, 'signal_date')
             
             if df is not None and '5230' in message:
+                if resonance_ticker_filter:
+                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
+                
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, 
