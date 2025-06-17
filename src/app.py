@@ -5,6 +5,7 @@ import time
 from stock_analyzer import analyze_stocks
 import re
 import plotly.graph_objects as go
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 
 # Set page configuration
 st.set_page_config(
@@ -575,7 +576,7 @@ if selected_file:
 
         # Visualization panel (left column)
         with viz_col:
-            st.subheader("Visualization")
+            # st.subheader("Visualization")
             
             # Load the detailed results for period information
             detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
@@ -584,6 +585,10 @@ if selected_file:
                 # Use selected ticker and interval from session state
                 ticker_filter = st.session_state.selected_ticker if st.session_state.selected_ticker else ""
                 selected_interval = st.session_state.selected_interval if st.session_state.selected_interval else '1d'
+                
+                # Show selection status
+                # if not ticker_filter:
+                #     st.info("👆 Select a row from the tables below to view the chart")
                 
                 # Filter the detailed DataFrame with exact match for ticker and interval
                 filtered_detailed = detailed_df[
@@ -698,10 +703,16 @@ if selected_file:
 
         # Period Returns panel (right column)
         with period_col:
-            st.subheader("Period Returns")
+            # st.subheader("Period Returns")
             if detailed_df is not None and 'ticker' in detailed_df.columns:
                 ticker_filter = st.session_state.selected_ticker if st.session_state.selected_ticker else ""
                 selected_interval = st.session_state.selected_interval if st.session_state.selected_interval else '1d'
+                
+                # Show current selection
+                # if ticker_filter and selected_interval:
+                #     st.info(f"📊 **Selected:** {ticker_filter} ({selected_interval})")
+                # else:
+                #     st.info("👆 Select a row from the tables below to view details")
                 
                 filtered_detailed = detailed_df[
                     (detailed_df['ticker'] == ticker_filter) &
@@ -721,8 +732,10 @@ if selected_file:
                             })
                     if period_data:
                         st.table(pd.DataFrame(period_data))
+                elif ticker_filter:
+                    st.info("No matching stocks found for the selected criteria.")
                 else:
-                    st.info("No matching stocks found or no stock selected.")
+                    st.info("Please select a stock from the tables below.")
             else:
                 st.info("Please run an analysis first to view period returns.")
 
@@ -734,47 +747,62 @@ if selected_file:
             "Interval Details"
         ])
 
-        # Helper for single-select tick column
-        def waikiki_tick_editor(df, tab_key):
+        # Helper for single-select AgGrid
+        def waikiki_aggrid_editor(df, tab_key):
             if df is not None and not df.empty:
                 df = df.copy()
-                df['selected'] = (df['ticker'] == st.session_state.selected_ticker) & (df['interval'] == st.session_state.selected_interval)
-                # Move 'selected' column to the left
-                cols = ['selected'] + [c for c in df.columns if c != 'selected']
-                df = df[cols]
-                edited_df = st.data_editor(
+                
+                # Configure AgGrid options
+                gb = GridOptionsBuilder.from_dataframe(df)
+                gb.configure_selection('single', use_checkbox=True, groupSelectsChildren=False, groupSelectsFiltered=False)
+                gb.configure_grid_options(domLayout='normal', rowSelection='single')
+                gb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True)
+                
+                # Configure specific columns for better display
+                if 'ticker' in df.columns:
+                    gb.configure_column('ticker', pinned='left', width=100)
+                if 'interval' in df.columns:
+                    gb.configure_column('interval', width=80)
+                if 'avg_return_10' in df.columns:
+                    gb.configure_column('avg_return_10', type=['numericColumn', 'numberColumnFilter'], precision=2)
+                if 'success_rate_10' in df.columns:
+                    gb.configure_column('success_rate_10', type=['numericColumn', 'numberColumnFilter'], precision=2)
+                
+                # Enable pagination for large datasets
+                gb.configure_pagination(paginationAutoPageSize=True)
+                
+                grid_options = gb.build()
+                
+                # Display AgGrid
+                grid_response = AgGrid(
                     df,
-                    column_config={
-                        "selected": st.column_config.CheckboxColumn(
-                            "Select",
-                            help="Tick to select this row for visualization",
-                            default=False
-                        )
-                    },
-                    disabled=[col for col in df.columns if col != 'selected'],
-                    hide_index=True,
-                    key=f"waikiki_editor_{tab_key}"
+                    gridOptions=grid_options,
+                    data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                    update_mode=GridUpdateMode.SELECTION_CHANGED,
+                    fit_columns_on_grid_load=True,
+                    theme='streamlit',
+                    height=400,
+                    width='100%',
+                    key=f"waikiki_aggrid_{tab_key}",
+                    reload_data=False,
+                    allow_unsafe_jscode=True
                 )
-                # Enforce true single selection: only one row can be selected
-                selected_rows = edited_df[edited_df['selected']]
-                if len(selected_rows) > 1:
-                    # If multiple are selected, keep only the last one ticked
-                    last_selected_idx = selected_rows.index[-1]
-                    # Untick all except the last selected
-                    for idx in edited_df.index:
-                        edited_df.at[idx, 'selected'] = (idx == last_selected_idx)
-                    selected_row = edited_df.loc[last_selected_idx]
-                    st.session_state.selected_ticker = selected_row['ticker']
-                    st.session_state.selected_interval = selected_row['interval']
-                    # Rerun to update UI
-                    st.rerun()
-                elif len(selected_rows) == 1:
-                    selected_row = selected_rows.iloc[0]
-                    if (st.session_state.selected_ticker != selected_row['ticker'] or
-                        st.session_state.selected_interval != selected_row['interval']):
-                        st.session_state.selected_ticker = selected_row['ticker']
-                        st.session_state.selected_interval = selected_row['interval']
-                return edited_df
+                
+                # Handle selection
+                selected_rows = grid_response['selected_rows']
+                if selected_rows is not None and len(selected_rows) > 0:
+                    selected_row = selected_rows.iloc[0]  # Take first selected row
+                    new_ticker = selected_row['ticker']
+                    new_interval = selected_row['interval']
+                    
+                    # Update session state if selection changed
+                    if (st.session_state.selected_ticker != new_ticker or
+                        st.session_state.selected_interval != new_interval):
+                        st.session_state.selected_ticker = new_ticker
+                        st.session_state.selected_interval = new_interval
+                        st.rerun()
+                
+                return grid_response['data']
             else:
                 st.info("No data available for this table. Please run analysis first.")
                 return None
@@ -791,7 +819,7 @@ if selected_file:
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_50")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
-                waikiki_tick_editor(df, '50')
+                waikiki_aggrid_editor(df, '50')
             else:
                 st.info("No best intervals data available for 50-period analysis. Please run CD Signal Evaluation first.")
 
@@ -807,7 +835,7 @@ if selected_file:
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_20")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
-                waikiki_tick_editor(df, '20')
+                waikiki_aggrid_editor(df, '20')
             else:
                 st.info("No best intervals data available for 20-period analysis. Please run CD Signal Evaluation first.")
 
@@ -823,7 +851,7 @@ if selected_file:
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_100")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
-                waikiki_tick_editor(df, '100')
+                waikiki_aggrid_editor(df, '100')
             else:
                 st.info("No best intervals data available for 100-period analysis. Please run CD Signal Evaluation first.")
 
@@ -842,7 +870,7 @@ if selected_file:
                         selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_recent")
                         if selected_intervals:
                             df = df[df['interval'].isin(selected_intervals)]
-                    waikiki_tick_editor(df, 'good')
+                    waikiki_aggrid_editor(df, 'good')
                 else:
                     st.info("No signal date information available in the results.")
             else:
@@ -860,7 +888,7 @@ if selected_file:
                     selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_details")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
-                waikiki_tick_editor(df, 'details')
+                waikiki_aggrid_editor(df, 'details')
             else:
                 st.info("No interval summary data available. Please run CD Signal Evaluation first.")
 
