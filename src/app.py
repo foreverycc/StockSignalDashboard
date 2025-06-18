@@ -569,7 +569,7 @@ if selected_file:
         st.subheader("Waikiki Model")
         
         # Add shared ticker filter for Waikiki model
-        waikiki_ticker_filter = st.text_input("Filter by ticker symbol:", key="waikiki_ticker_filter")
+        waikiki_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"waikiki_ticker_filter_{selected_file}")
 
         # Create two columns for Visualization and Period Returns
         viz_col, period_col = st.columns([2, 1])
@@ -752,26 +752,71 @@ if selected_file:
             if df is not None and not df.empty:
                 df = df.copy()
                 
+                # Round all numeric columns to 2 decimal places
+                for col in df.columns:
+                    if df[col].dtype in ['float64', 'float32']:
+                        # Skip certain columns that should remain as integers or have special formatting
+                        if col.lower() not in ['test_count', 'signal_count', 'current_period', 'best_period']:
+                            df[col] = df[col].round(2)
+                
                 # Configure AgGrid options
                 gb = GridOptionsBuilder.from_dataframe(df)
                 gb.configure_selection('single', use_checkbox=True, groupSelectsChildren=False, groupSelectsFiltered=False)
                 gb.configure_grid_options(domLayout='normal', rowSelection='single')
                 gb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True)
                 
-                # Configure specific columns for better display
+                # Configure specific columns - only minWidth for ticker, latest_signal, current_time
+                # All others use fixed width based on header length
+                
+                # Only these 3 columns get minWidth (variable content needs flexibility)
                 if 'ticker' in df.columns:
-                    gb.configure_column('ticker', pinned='left', width=100)
-                if 'interval' in df.columns:
-                    gb.configure_column('interval', width=80)
-                if 'avg_return_10' in df.columns:
-                    gb.configure_column('avg_return_10', type=['numericColumn', 'numberColumnFilter'], precision=2)
-                if 'success_rate_10' in df.columns:
-                    gb.configure_column('success_rate_10', type=['numericColumn', 'numberColumnFilter'], precision=2)
+                    gb.configure_column('ticker', pinned='left', minWidth=90)
+                if 'latest_signal' in df.columns:
+                    gb.configure_column('latest_signal', minWidth=120)
+                if 'current_time' in df.columns:
+                    gb.configure_column('current_time', minWidth=100)
+                
+                # All other columns get fixed width based on header length
+                column_widths = {
+                    'interval': 80,           # 8 chars: "interval"
+                    'hold_time': 90,          # 9 chars: "hold_time"
+                    'exp_return': 100,         # 10 chars: "exp_return"
+                    'signal_count': 120,       # 12 chars: "signal_count"
+                    'latest_signal_price': 150, # 18 chars: "latest_signal_price"
+                    'current_price': 120,      # 13 chars: "current_price"
+                    'current_period': 120,    # 14 chars: "current_period"
+                    'test_count': 100,         # 10 chars: "test_count"
+                    'success_rate': 110,       # 12 chars: "success_rate"
+                    'best_period': 110,        # 11 chars: "best_period"
+                    'max_return': 100,         # 10 chars: "max_return"
+                    'min_return': 100,         # 10 chars: "min_return"
+                    'avg_return': 100,         # 10 chars: "avg_return"
+                }
+                
+                # Configure columns with specific widths
+                for col_name, width in column_widths.items():
+                    if col_name in df.columns:
+                        if col_name in ['exp_return', 'latest_signal_price', 'current_price', 'success_rate', 'max_return', 'min_return', 'avg_return']:
+                            gb.configure_column(col_name, type=['numericColumn', 'numberColumnFilter'], precision=2, width=width)
+                        else:
+                            gb.configure_column(col_name, width=width)
+                
+                # Handle dynamic columns (test_count_X, success_rate_X, avg_return_X where X is a number)
+                for col in df.columns:
+                    if col.startswith('test_count_'):
+                        gb.configure_column(col, width=85)  # 10-14 chars: "test_count_XX"
+                    elif col.startswith('success_rate_'):
+                        gb.configure_column(col, type=['numericColumn', 'numberColumnFilter'], precision=2, width=110)  # 14-18 chars: "success_rate_XXX"
+                    elif col.startswith('avg_return_'):
+                        gb.configure_column(col, type=['numericColumn', 'numberColumnFilter'], precision=2, width=100)  # 12-16 chars: "avg_return_XXX"
                 
                 # Enable pagination for large datasets
                 gb.configure_pagination(paginationAutoPageSize=True)
                 
                 grid_options = gb.build()
+                
+                # Suppress the grid's auto-sizing to enforce our fixed-width columns
+                grid_options['suppressSizeToFit'] = True
                 
                 # Display AgGrid
                 grid_response = AgGrid(
@@ -779,7 +824,7 @@ if selected_file:
                     gridOptions=grid_options,
                     data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
                     update_mode=GridUpdateMode.SELECTION_CHANGED,
-                    fit_columns_on_grid_load=True,
+                    fit_columns_on_grid_load=False,  # Use custom sizing
                     theme='streamlit',
                     height=400,
                     width='100%',
@@ -816,7 +861,7 @@ if selected_file:
                 
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_50")
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"interval_filter_best_50_{selected_file}")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
                 waikiki_aggrid_editor(df, '50')
@@ -832,7 +877,7 @@ if selected_file:
                 
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_20")
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"interval_filter_best_20_{selected_file}")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
                 waikiki_aggrid_editor(df, '20')
@@ -848,7 +893,7 @@ if selected_file:
                 
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_100")
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"interval_filter_best_100_{selected_file}")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
                 waikiki_aggrid_editor(df, '100')
@@ -867,7 +912,7 @@ if selected_file:
                     df = df.sort_values(by='latest_signal', ascending=False)
                     if 'interval' in df.columns:
                         intervals = sorted(df['interval'].unique())
-                        selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_recent")
+                        selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"interval_filter_recent_{selected_file}")
                         if selected_intervals:
                             df = df[df['interval'].isin(selected_intervals)]
                     waikiki_aggrid_editor(df, 'good')
@@ -885,7 +930,7 @@ if selected_file:
                 
                 if 'interval' in df.columns:
                     intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_details")
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"interval_filter_details_{selected_file}")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
                 waikiki_aggrid_editor(df, 'details')
@@ -897,7 +942,7 @@ if selected_file:
         st.subheader("Resonance Model")
         
         # Add shared ticker filter for Resonance model
-        resonance_ticker_filter = st.text_input("Filter by ticker symbol:", key="resonance_ticker_filter")
+        resonance_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"resonance_ticker_filter_{selected_file}")
         
         tab1, tab2, tab3, tab4 = st.tabs([
             "1234 Candidates", 
@@ -919,7 +964,7 @@ if selected_file:
                     nx_values = sorted(df['nx_1d'].unique())
                     selected_nx = st.multiselect("Filter by NX:", nx_values, 
                                                default=[True] if True in nx_values else nx_values,
-                                               key="nx_filter_1234")
+                                               key=f"nx_filter_1234_{selected_file}")
                     if selected_nx:
                         df = df[df['nx_1d'].isin(selected_nx)]
                 
@@ -941,7 +986,7 @@ if selected_file:
                     nx_values = sorted(df['nx_1h'].unique())
                     selected_nx = st.multiselect("Filter by NX:", nx_values, 
                                                default=[True] if True in nx_values else nx_values,
-                                               key="nx_filter_5230")
+                                               key=f"nx_filter_5230_{selected_file}")
                     if selected_nx:
                         df = df[df['nx_1h'].isin(selected_nx)]
                 
@@ -962,7 +1007,7 @@ if selected_file:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, 
                                                        default=intervals,
-                                                       key="interval_filter_1234")
+                                                       key=f"interval_filter_1234_{selected_file}")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
                 
@@ -993,7 +1038,7 @@ if selected_file:
                     intervals = sorted(df['interval'].unique())
                     selected_intervals = st.multiselect("Filter by interval:", intervals, 
                                                        default=intervals,
-                                                       key="interval_filter_5230")
+                                                       key=f"interval_filter_5230_{selected_file}")
                     if selected_intervals:
                         df = df[df['interval'].isin(selected_intervals)]
                 
