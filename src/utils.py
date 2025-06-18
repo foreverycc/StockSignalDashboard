@@ -120,8 +120,8 @@ def identify_1234(file_path):
         # print("window_end:", window_end)
         # if window_end > date + pd.Timedelta(days=5):
         #     raise Exception(f"window_end is greater than date + 5 days: {window_end} > {date + pd.Timedelta(days=5)}")
-        window_data = df[(df['date'] >= pd.to_datetime(date)) & 
-                        (df['date'] <= pd.to_datetime(window_end))]
+        window_data = df[(df['date'] >= date) & 
+                        (df['date'] <= window_end)]
         # if date == '2025-05-22':
         # print("window_data:", window_data)
         # Check each ticker in this window
@@ -255,8 +255,8 @@ def identify_5230(file_path):
         # print("date:", date)
         # Get data within 3-day window starting from current date
         window_end = unique_dates[min(i+2, (len(unique_dates) - 1))]
-        window_data = df[(df['date'] >= pd.to_datetime(date)) & 
-                        (df['date'] <= pd.to_datetime(window_end))]
+        window_data = df[(df['date'] >= date) & 
+                        (df['date'] <= window_end)]
         # print("window_data:", window_data)
         # Check each ticker in this window
         for ticker in window_data['ticker'].unique():
