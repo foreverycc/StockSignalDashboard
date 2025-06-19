@@ -152,25 +152,26 @@ def update_output_files_with_chinese_names(chinese_mapping):
     else:
         st.info("No output files required Chinese stock name updates")
 
-# App title and description
-# st.title("Stock Analysis Dashboard")
-# st.markdown("""
-# This app allows you to analyze stocks using various technical indicators and timeframes.
-# Select a stock list and run the desired analysis to view results.
-# """)
-
 # Top configuration section (replaces sidebar)
 # st.header("Configuration")
 
+# Create a 2-column layout for the top section
+top_col1, top_col2 = st.columns(2)
+
 # Stock list selection (moved outside columns to make it globally available)
 stock_list_files = [f for f in os.listdir('./data') if f.endswith('.tab') or f.endswith('.txt')]
-selected_file = st.selectbox(
-    "Select Stock List",
-    stock_list_files,
-    index=0 if stock_list_files else None
-)
+with top_col1:
+    selected_file = st.selectbox(
+        "Select Stock List",
+        stock_list_files,
+        index=0 if stock_list_files else None
+    )
 
-# Create a 2-column layout for the top section
+# Reset selection when the file changes
+if 'current_selected_file' not in st.session_state:
+    st.session_state.current_selected_file = selected_file
+
+# Create a 2-column layout for the main controls
 col1, col2 = st.columns(2)
 
 with col1:
@@ -182,12 +183,12 @@ with col1:
             with open(file_path, 'r') as f:
                 original_stocks = f.read().strip()
             
-            # Show basic info about the selected stock list
+            # Show basic info about the selected stock list in the top column
             current_stocks_list = original_stocks.strip().splitlines() if original_stocks.strip() else []
-            # st.write(f"**Selected: {selected_file}**")
-            st.write(f"📊 {len(current_stocks_list)} stocks")
-            if current_stocks_list:
-                st.write(f"Preview: {', '.join(current_stocks_list[:3])}{'...' if len(current_stocks_list) > 3 else ''}")
+            with top_col2:
+                st.write(f"📊 {len(current_stocks_list)} stocks")
+                if current_stocks_list:
+                    st.write(f"Preview: {', '.join(current_stocks_list[:5])}{'...' if len(current_stocks_list) > 5 else ''}")
             
             # Expandable stock list management section
             with st.expander("📋 Manage Stock List", expanded=False):
@@ -344,17 +345,6 @@ with col1:
 
 with col2:
     # Analysis selection
-    st.write("**Analysis Algorithms:**")
-    
-    # Keep the analysis type radio button for UI consistency
-    # But we'll run all analyses regardless of selection
-    # analysis_type = st.radio(       
-    #     "Select Analysis Type (all will run)",
-    #     ["1234, 5230, CD Signal Evaluation"],
-    #     horizontal=True
-    # )
-    st.write("1234, 5230, CD Signal Evaluation")
-    
     # Run analysis button
     if st.button("Run Analysis", use_container_width=True, type="primary"):
         if not selected_file:
