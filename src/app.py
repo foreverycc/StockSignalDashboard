@@ -541,7 +541,7 @@ if selected_file:
     # Add shared ticker filter for Waikiki model
     waikiki_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"waikiki_ticker_filter_{selected_file}")
 
-    waikiki_viz_col, waikiki_tables_col = st.columns([1, 1.5])
+    waikiki_viz_col, waikiki_tables_col = st.columns([1, 1])
 
     with waikiki_viz_col:
         # Load the detailed results for period information
@@ -553,6 +553,17 @@ if selected_file:
             # Use selected ticker and interval from session state
             ticker_filter = st.session_state.selected_ticker if st.session_state.selected_ticker else ""
             selected_interval = st.session_state.selected_interval if st.session_state.selected_interval else '1d'
+            
+            # If no ticker is selected, automatically select the first one from the best intervals (50) data
+            if not ticker_filter:
+                best_50_df, _ = load_results('cd_eval_best_intervals_50_', selected_file, 'avg_return_10')
+                if best_50_df is not None and not best_50_df.empty:
+                    first_row = best_50_df.iloc[0]
+                    ticker_filter = first_row['ticker']
+                    selected_interval = first_row['interval']
+                    # Update session state
+                    st.session_state.selected_ticker = ticker_filter
+                    st.session_state.selected_interval = selected_interval
 
             # Filter the detailed DataFrame with exact match for ticker and interval
             filtered_detailed = detailed_df[
@@ -922,7 +933,7 @@ if selected_file:
                 allow_unsafe_jscode=True
             )
 
-    res_viz_col, res_tables_col = st.columns([1, 1.5])
+    res_viz_col, res_tables_col = st.columns([1, 1])
 
     with res_viz_col:
         st.info("Visualization for the Resonance Model is not yet implemented.")
