@@ -552,191 +552,151 @@ if chinese_stock_mapping and selected_file:
 
 # Create two columns for the two table views
 if selected_file:
-    col_left, col_center, col_right = st.columns([2, 0.05, 1])     
+    st.subheader("Waikiki Model")
+    
+    # Add shared ticker filter for Waikiki model
+    waikiki_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"waikiki_ticker_filter_{selected_file}")
 
-    # First table view with Waikiki Model and Resonance Model (left column)
-    with col_left:
-        st.subheader("Waikiki Model")
+    waikiki_viz_col, waikiki_tables_col = st.columns([1, 1.5])
+
+    with waikiki_viz_col:
+        # Load the detailed results for period information
+        detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
         
-        # Add shared ticker filter for Waikiki model
-        waikiki_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"waikiki_ticker_filter_{selected_file}")
+        if detailed_df is None or 'ticker' not in detailed_df.columns:
+            st.info("Please run an analysis first to view visualizations and period returns.")
+        else:
+            # Use selected ticker and interval from session state
+            ticker_filter = st.session_state.selected_ticker if st.session_state.selected_ticker else ""
+            selected_interval = st.session_state.selected_interval if st.session_state.selected_interval else '1d'
 
-        # Create two columns for Visualization and Period Returns
-        viz_col, period_col = st.columns([2, 1])
+            # Filter the detailed DataFrame with exact match for ticker and interval
+            filtered_detailed = detailed_df[
+                (detailed_df['ticker'] == ticker_filter) &
+                (detailed_df['interval'] == selected_interval)
+            ]
+            
+            if not filtered_detailed.empty:
+                selected_ticker = filtered_detailed.iloc[0]
 
-        # Visualization panel (left column)
-        with viz_col:
-            # st.subheader("Visualization")
-            
-            # Load the detailed results for period information
-            detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
-            
-            if detailed_df is not None and 'ticker' in detailed_df.columns:
-                # Use selected ticker and interval from session state
-                ticker_filter = st.session_state.selected_ticker if st.session_state.selected_ticker else ""
-                selected_interval = st.session_state.selected_interval if st.session_state.selected_interval else '1d'
+                # Period Returns Panel
+                period_data = []
+                for period in [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]:
+                    if f'avg_return_{period}' in selected_ticker:
+                        period_data.append({
+                            'Period': period,
+                            'Return': f"{selected_ticker[f'avg_return_{period}']:.2f}%",
+                            'Success Rate': f"{selected_ticker[f'success_rate_{period}']:.2f}%",
+                            'Test Count': selected_ticker[f'test_count_{period}']
+                        })
+                if period_data:
+                    df = pd.DataFrame(period_data).set_index('Period').T
+                    st.dataframe(df)
+
+                # Visualization Panel
+                # Create figure
+                fig = go.Figure(layout=dict(
+                    font=dict(color='black')
+                ))
                 
-                # Show selection status
-                # if not ticker_filter:
-                #     st.info("👆 Select a row from the tables below to view the chart")
+                # Add selected stock's returns for all periods as light gray dots and lines
+                periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]  # Added 0 to periods
+                stock_returns = [(0, 100)]  # Start with (0, 100)
+                for period in periods[1:]:  # Skip 0 as we already added it
+                    if f'avg_return_{period}' in selected_ticker:
+                        stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
                 
-                # Filter the detailed DataFrame with exact match for ticker and interval
-                filtered_detailed = detailed_df[
-                    (detailed_df['ticker'] == ticker_filter) &
-                    (detailed_df['interval'] == selected_interval)
-                ]
-                
-                if not filtered_detailed.empty:
-                    # Get the first matching ticker's data
-                    selected_ticker = filtered_detailed.iloc[0]
-                    
-                    # Create figure
-                    fig = go.Figure(layout=dict(
-                        font=dict(color='black')
+                if stock_returns:
+                    periods_x, returns_y = zip(*stock_returns)
+                    fig.add_trace(go.Scatter(
+                        x=periods_x,
+                        y=returns_y,
+                        mode='lines+markers',
+                        line=dict(color='lightgray', width=1),
+                        marker=dict(color='gray', size=6),
+                        name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                        showlegend=True
                     ))
-                    
-                    # Add selected stock's returns for all periods as light gray dots and lines
-                    periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]  # Added 0 to periods
-                    stock_returns = [(0, 100)]  # Start with (0, 100)
-                    for period in periods[1:]:  # Skip 0 as we already added it
-                        if f'avg_return_{period}' in selected_ticker:
-                            stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
-                    
-                    if stock_returns:
-                        periods, returns = zip(*stock_returns)
+                
+                # Add current price at current period
+                if 'current_period' in selected_ticker and 'current_price' in selected_ticker and 'latest_signal_price' in selected_ticker:
+                    current_period = selected_ticker['current_period']
+                    price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
+                                     selected_ticker['latest_signal_price'] * 100)
+                    if current_period >= 0:
                         fig.add_trace(go.Scatter(
-                            x=periods,
-                            y=returns,
-                            mode='lines+markers',
-                            line=dict(color='lightgray', width=1),
-                            marker=dict(color='gray', size=6),
-                            name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                            x=[current_period],
+                            y=[100 + price_change],
+                            mode='markers',
+                            marker=dict(color='red', size=10, symbol='star'),
+                            name='Current Price',
                             showlegend=True
                         ))
-                    
-                    # Add current price at current period
-                    if 'current_period' in selected_ticker and 'current_price' in selected_ticker and 'latest_signal_price' in selected_ticker:
-                        current_period = selected_ticker['current_period']
-                        price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
-                                     selected_ticker['latest_signal_price'] * 100)
-                        if current_period >= 0:
-                            fig.add_trace(go.Scatter(
-                                x=[current_period],
-                                y=[100 + price_change],
-                                mode='markers',
-                                marker=dict(color='red', size=10, symbol='star'),
-                                name='Current Price',
-                                showlegend=True
-                            ))
-                    
-                    # Find the period with maximum return
-                    max_return = -float('inf')
-                    best_period = None
-                    for period in periods:
-                        if f'avg_return_{period}' in selected_ticker:
-                            if selected_ticker[f'avg_return_{period}'] > max_return:
-                                max_return = selected_ticker[f'avg_return_{period}']
-                                best_period = period
-                    
-                    # Update layout
-                    title_html = (
-                        f"<span style='font-size:24px'><b>{selected_ticker['ticker']} ({selected_ticker['interval']})</b></span><br>"
-                        f"<span style='font-size:12px'>best period: {best_period}\t  "
-                        f"best return: {max_return:.2f}%  "
-                        f"success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t  "
-                        f"test count: {selected_ticker[f'test_count_{best_period}']}</span>"
+                
+                # Find the period with maximum return
+                max_return = -float('inf')
+                best_period = None
+                for period in periods:
+                    if f'avg_return_{period}' in selected_ticker:
+                        if selected_ticker[f'avg_return_{period}'] > max_return:
+                            max_return = selected_ticker[f'avg_return_{period}']
+                            best_period = period
+                
+                # Update layout
+                title_html = (
+                    f"<span style='font-size:24px'><b>{selected_ticker['ticker']} ({selected_ticker['interval']})</b></span><br>"
+                    f"<span style='font-size:12px'>best period: {best_period}\t  "
+                    f"best return: {max_return:.2f}%  "
+                    f"success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t  "
+                    f"test count: {selected_ticker[f'test_count_{best_period}']}</span>"
+                )
+                                
+                fig.update_layout(
+                    legend=dict(font=dict(color='black')),
+                    title=dict(
+                        text=title_html,
+                        x=0.5,
+                        font=dict(size=24, color='black'),
+                        xanchor='center',
+                        yanchor='top'
+                    ),
+                    xaxis_title="Period",
+                    yaxis_title="Relative Price (Baseline = 100)", 
+                    showlegend=True,
+                    height=398,
+                    plot_bgcolor='white',
+                    paper_bgcolor='white',
+                    xaxis=dict(
+                        showgrid=True,
+                        gridwidth=1,
+                        gridcolor='lightgray',
+                        showline=True,
+                        linewidth=1,
+                        linecolor='black', 
+                        tickfont=dict(color='black'),
+                        title=dict(text="Period", font=dict(color='black'))
+                    ),
+                    yaxis=dict(
+                        showgrid=True,
+                        gridwidth=1,
+                        gridcolor='lightgray',
+                        showline=True,
+                        linewidth=1,
+                        linecolor='black',
+                        tickfont=dict(color='black'),
+                        title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
                     )
-                                    
-                    fig.update_layout(
-                        legend=dict(font=dict(color='black')),
-                        title=dict(
-                            text=title_html,
-                            x=0.5,
-                            font=dict(size=24, color='black'),
-                            xanchor='center',
-                            yanchor='top'
-                        ),
-                        xaxis_title="Period",
-                        yaxis_title="Relative Price (Baseline = 100)", 
-                        showlegend=True,
-                        height=428,
-                        plot_bgcolor='white',
-                        paper_bgcolor='white',
-                        xaxis=dict(
-                            showgrid=True,
-                            gridwidth=1,
-                            gridcolor='lightgray',
-                            showline=True,
-                            linewidth=1,
-                            linecolor='black', 
-                            tickfont=dict(color='black'),
-                            title=dict(text="Period", font=dict(color='black'))
-                        ),
-                        yaxis=dict(
-                            showgrid=True,
-                            gridwidth=1,
-                            gridcolor='lightgray',
-                            showline=True,
-                            linewidth=1,
-                            linecolor='black',
-                            tickfont=dict(color='black'),
-                            title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
-                        )
-                    )
-                    
-                    # Display the plot
-                    st.plotly_chart(fig, use_container_width=True)
-                else:
-                    st.info("No matching stocks found or no stock selected.")
+                )
+                
+                # Display the plot
+                st.plotly_chart(fig, use_container_width=True)
+
+            elif ticker_filter:
+                st.info("No matching stocks found for the selected criteria.")
             else:
-                st.info("Please run an analysis first to view stock visualizations.")
+                st.info("Please select a stock from the tables below to view details.")
 
-        # Period Returns panel (right column)
-        with period_col:
-            # st.subheader("Period Returns")
-            if detailed_df is not None and 'ticker' in detailed_df.columns:
-                ticker_filter = st.session_state.selected_ticker if st.session_state.selected_ticker else ""
-                selected_interval = st.session_state.selected_interval if st.session_state.selected_interval else '1d'
-                
-                # Show current selection
-                # if ticker_filter and selected_interval:
-                #     st.info(f"📊 **Selected:** {ticker_filter} ({selected_interval})")
-                # else:
-                #     st.info("👆 Select a row from the tables below to view details")
-                
-                filtered_detailed = detailed_df[
-                    (detailed_df['ticker'] == ticker_filter) &
-                    (detailed_df['interval'] == selected_interval)
-                ]
-                
-                if not filtered_detailed.empty:
-                    selected_ticker = filtered_detailed.iloc[0]
-                    period_data = []
-                    for period in [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]:
-                        if f'avg_return_{period}' in selected_ticker:
-                            period_data.append({
-                                'Period': period,
-                                'Return': f"{selected_ticker[f'avg_return_{period}']:.2f}%",
-                                'Success Rate': f"{selected_ticker[f'success_rate_{period}']:.2f}%",
-                                'Test Count': selected_ticker[f'test_count_{period}']
-                            })
-                    if period_data:
-                        st.table(pd.DataFrame(period_data))
-                elif ticker_filter:
-                    st.info("No matching stocks found for the selected criteria.")
-                else:
-                    st.info("Please select a stock from the tables below.")
-            else:
-                st.info("Please run an analysis first to view period returns.")
-
-        tabs = st.tabs([
-            "Best Intervals (50)", 
-            "Best Intervals (20)", 
-            "Best Intervals (100)", 
-            "High Return Intervals",
-            "Interval Details"
-        ])
-
+    with waikiki_tables_col:
         # Helper for single-select AgGrid
         def waikiki_aggrid_editor(df, tab_key):
             if df is not None and not df.empty:
@@ -816,9 +776,9 @@ if selected_file:
                     update_mode=GridUpdateMode.SELECTION_CHANGED,
                     fit_columns_on_grid_load=False,  # Use custom sizing
                     theme='streamlit',
-                    height=400,
+                    height=425,
                     width='100%',
-                    key=f"waikiki_aggrid_{tab_key}",
+                    key=f"waikiki_aggrid_{tab_key}_{selected_file}",
                     reload_data=False,
                     allow_unsafe_jscode=True
                 )
@@ -841,6 +801,14 @@ if selected_file:
             else:
                 st.info("No data available for this table. Please run analysis first.")
                 return None
+
+        tabs = st.tabs([
+            "Best Intervals (50)", 
+            "Best Intervals (20)", 
+            "Best Intervals (100)", 
+            "High Return Intervals",
+            "Interval Details"
+        ])
 
         # Display best intervals (50)
         with tabs[0]:
@@ -927,13 +895,46 @@ if selected_file:
             else:
                 st.info("No interval summary data available. Please run CD Signal Evaluation first.")
 
-    # Resonance Model section (right column)
-    with col_right:
-        st.subheader("Resonance Model")
-        
-        # Add shared ticker filter for Resonance model
-        resonance_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"resonance_ticker_filter_{selected_file}")
-        
+    # Resonance Model section
+    st.subheader("Resonance Model")
+    
+    # Add shared ticker filter for Resonance model
+    resonance_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"resonance_ticker_filter_{selected_file}")
+    
+    # Helper for AgGrid in Resonance model
+    def resonance_aggrid_editor(df, tab_key):
+        if df is not None and not df.empty:
+            gb = GridOptionsBuilder.from_dataframe(df)
+            gb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True)
+            gb.configure_pagination(paginationAutoPageSize=True)
+            
+            if 'ticker' in df.columns:
+                gb.configure_column('ticker', pinned='left', minWidth=90)
+            if 'date' in df.columns:
+                gb.configure_column('date', minWidth=120)
+            if 'signal_date' in df.columns:
+                gb.configure_column('signal_date', minWidth=120)
+
+            grid_options = gb.build()
+            
+            AgGrid(
+                df,
+                gridOptions=grid_options,
+                fit_columns_on_grid_load=True,
+                theme='streamlit',
+                height=425,
+                width='100%',
+                key=f"resonance_aggrid_{tab_key}_{selected_file}",
+                reload_data=False,
+                allow_unsafe_jscode=True
+            )
+
+    res_viz_col, res_tables_col = st.columns([1, 1.5])
+
+    with res_viz_col:
+        st.info("Visualization for the Resonance Model is not yet implemented.")
+
+    with res_tables_col:
         tab1, tab2, tab3, tab4 = st.tabs([
             "1234 Candidates", 
             "5230 Candidates", 
@@ -959,7 +960,7 @@ if selected_file:
                         df = df[df['nx_1d'].isin(selected_nx)]
                 
                 # Display the dataframe
-                st.dataframe(df.sort_values(by='date', ascending=False), use_container_width=True)
+                resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_1234')
             else:
                 st.info("No 1234 breakout candidates found. Please run analysis first.")
 
@@ -981,7 +982,7 @@ if selected_file:
                         df = df[df['nx_1h'].isin(selected_nx)]
                 
                 # Display the dataframe
-                st.dataframe(df.sort_values(by='date', ascending=False), use_container_width=True)
+                resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_5230')
             else:
                 st.info("No 5230 breakout candidates found. Please run analysis first.")
 
@@ -1002,7 +1003,7 @@ if selected_file:
                         df = df[df['interval'].isin(selected_intervals)]
                 
                 # Display the dataframe
-                st.dataframe(df.sort_values(by='signal_date', ascending=False), use_container_width=True)
+                resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_1234')
                 
                 # Add download button
                 csv = df.to_csv(index=False).encode('utf-8')
@@ -1033,7 +1034,7 @@ if selected_file:
                         df = df[df['interval'].isin(selected_intervals)]
                 
                 # Display the dataframe
-                st.dataframe(df.sort_values(by='signal_date', ascending=False), use_container_width=True)
+                resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_5230')
                 
                 # Add download button
                 csv = df.to_csv(index=False).encode('utf-8')
