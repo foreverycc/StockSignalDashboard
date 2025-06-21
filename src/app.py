@@ -586,6 +586,10 @@ if selected_file:
                         })
                 if period_data:
                     df = pd.DataFrame(period_data).set_index('Period').T
+                    # To prevent ArrowTypeError from mixed types, convert object columns to string
+                    for col in df.columns:
+                        if df[col].dtype == 'object':
+                            df[col] = df[col].astype(str)
                     st.dataframe(df)
 
                 # Visualization Panel
