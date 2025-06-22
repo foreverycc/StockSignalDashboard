@@ -1,5 +1,4 @@
 import pandas as pd
-from data_loader import download_stock_data
 from indicators import compute_cd_indicator, compute_nx_break_through
     
 def calculate_score(data, interval, signal_date):
@@ -35,7 +34,7 @@ def process_ticker_1234(ticker, data_ticker=None):
     
     Args:
         ticker: Stock symbol
-        data_ticker: Optional pre-downloaded data dictionary
+        data_ticker: pre-downloaded data dictionary, key is interval, value is dataframe
     
     Returns:
         List of results
@@ -90,8 +89,7 @@ def process_ticker_5230(ticker, data_ticker=None):
     
     Args:
         ticker: Stock symbol
-        data_ticker: Optional pre-downloaded data dictionary
-    
+        data_ticker: pre-downloaded data dictionary, key is interval, value is dataframe
     Returns:
         List of results
     """
