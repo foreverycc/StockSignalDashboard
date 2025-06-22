@@ -952,7 +952,7 @@ if selected_file:
 
         # Display 1234 breakout candidates
         with tab1:
-            df, message = load_results('breakout_candidates_summary_1234_', selected_file, 'score')
+            df, message = load_results('breakout_candidates_summary_1234_', selected_file, 'date')
             
             if df is not None and '1234' in message:
                 if resonance_ticker_filter:
@@ -974,7 +974,7 @@ if selected_file:
 
         # Display 5230 breakout candidates
         with tab2:
-            df, message = load_results('breakout_candidates_summary_5230_', selected_file, 'score')
+            df, message = load_results('breakout_candidates_summary_5230_', selected_file, 'date')
             
             if df is not None and '5230' in message:
                 if resonance_ticker_filter:

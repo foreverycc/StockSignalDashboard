@@ -217,11 +217,13 @@ def identify_1234(file_path, all_ticker_data):
                     processed_combinations.add(combination)
                     # Get the latest signal price for this ticker/date combination (most recent signal)
                     latest_signal_price = ticker_data.loc[ticker_data['signal_date'].idxmax(), 'signal_price'] if 'signal_price' in ticker_data.columns and not ticker_data.empty else None
-                    breakout_candidates.append([ticker, most_recent_signal_date, len(unique_intervals.intersection(required_intervals)), latest_signal_price])
+                    resonating_intervals_set = unique_intervals.intersection(required_intervals)
+                    intervals_str = ",".join(map(str, sorted([int(s.replace('h', '')) for s in resonating_intervals_set])))
+                    breakout_candidates.append([ticker, most_recent_signal_date, intervals_str, latest_signal_price])
     
     # print("breakout_candidates:", breakout_candidates)
     # Include signal_price column if available
-    columns = ['ticker', 'date', 'score']
+    columns = ['ticker', 'date', 'intervals']
     if any(len(candidate) > 3 for candidate in breakout_candidates):
         columns.append('signal_price')
         
@@ -338,10 +340,12 @@ def identify_5230(file_path, all_ticker_data):
                     processed_combinations.add(combination)
                     # Get the latest signal price for this ticker/date combination (most recent signal)
                     latest_signal_price = ticker_data.loc[ticker_data['signal_date'].idxmax(), 'signal_price'] if 'signal_price' in ticker_data.columns and not ticker_data.empty else None
-                    breakout_candidates.append([ticker, most_recent_signal_date, len(unique_intervals.intersection(required_intervals)), latest_signal_price])
+                    resonating_intervals_set = unique_intervals.intersection(required_intervals)
+                    intervals_str = ",".join(map(str, sorted([int(s.replace('m', '')) for s in resonating_intervals_set])))
+                    breakout_candidates.append([ticker, most_recent_signal_date, intervals_str, latest_signal_price])
     
     # Include signal_price column if available
-    columns = ['ticker', 'date', 'score']
+    columns = ['ticker', 'date', 'intervals']
     if any(len(candidate) > 3 for candidate in breakout_candidates):
         columns.append('signal_price')
         
