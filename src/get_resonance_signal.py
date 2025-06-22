@@ -230,10 +230,12 @@ def identify_1234(file_path, all_ticker_data):
     df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=columns).sort_values(by=['date', 'ticker'], ascending=[False, True])
 
     dict_nx_1d = {}
+    dict_nx_30m = {}
 
     # print(df_breakout_candidates)
     for ticker in df_breakout_candidates['ticker'].unique():
         # print(ticker)
+        # Calculate nx_1d
         if ticker not in all_ticker_data or '1d' not in all_ticker_data[ticker] or all_ticker_data[ticker]['1d'].empty:
             print(f"No 1d data found for {ticker} in pre-downloaded data, skipping nx_1d calculation.")
             continue
@@ -252,10 +254,28 @@ def identify_1234(file_path, all_ticker_data):
 
         nx_1d.index = nx_1d.index.date
         dict_nx_1d[ticker] = nx_1d.to_dict()
+
+        # Calculate nx_30m
+        if '30m' not in all_ticker_data[ticker] or all_ticker_data[ticker]['30m'].empty:
+            print(f"No 30m data found for {ticker} in pre-downloaded data, skipping nx_30m calculation.")
+            continue
+            
+        df_stock_30m = all_ticker_data[ticker]['30m']
+        
+        close_30m = df_stock_30m['Close']
+        short_close_30m = close_30m.ewm(span = 24, adjust=False).mean()
+        long_close_30m = close_30m.ewm(span = 89, adjust=False).mean()
+        nx_30m = (short_close_30m > long_close_30m) 
+
+        # Convert to date and take the last value for each date (end of day value)
+        nx_30m_daily = nx_30m.groupby(nx_30m.index.date).last()
+        dict_nx_30m[ticker] = nx_30m_daily.to_dict()
     
     # print (dict_nx_1d)
-    # remove tickers that failed to get data
-    df_breakout_candidates = df_breakout_candidates[df_breakout_candidates['ticker'].isin(dict_nx_1d.keys())]
+    # print (dict_nx_30m)
+    # remove tickers that failed to get data (must have both nx_1d and nx_30m)
+    valid_tickers = set(dict_nx_1d.keys()).intersection(set(dict_nx_30m.keys()))
+    df_breakout_candidates = df_breakout_candidates[df_breakout_candidates['ticker'].isin(valid_tickers)]
     
     # Check if DataFrame is empty after filtering
     if df_breakout_candidates.empty:
@@ -263,7 +283,9 @@ def identify_1234(file_path, all_ticker_data):
         return df_breakout_candidates  # Return empty DataFrame
     
     # add nx_1d to df_breakout_candidates according to ticker and date
-    df_breakout_candidates['nx_1d'] = df_breakout_candidates.apply(lambda row: dict_nx_1d[row['ticker']][row['date']], axis=1)
+    df_breakout_candidates['nx_1d'] = df_breakout_candidates.apply(lambda row: dict_nx_1d[row['ticker']].get(row['date'], None), axis=1)
+    # add nx_30m to df_breakout_candidates according to ticker and date
+    df_breakout_candidates['nx_30m'] = df_breakout_candidates.apply(lambda row: dict_nx_30m[row['ticker']].get(row['date'], None), axis=1)
     # filter df_breakout_candidates to only include rows where nx_1d is True
     # df_breakout_candidates_sel = df_breakout_candidates[df_breakout_candidates['nx_1d'] == True]
     df_breakout_candidates_sel = df_breakout_candidates

@@ -959,13 +959,24 @@ if selected_file:
                     df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
                 
                 # Add NX filtering if available
+                nx_filters_applied = False
                 if 'nx_1d' in df.columns:
-                    nx_values = sorted(df['nx_1d'].unique())
-                    selected_nx = st.multiselect("Filter by NX:", nx_values, 
-                                               default=[True] if True in nx_values else nx_values,
-                                               key=f"nx_filter_1234_{selected_file}")
-                    if selected_nx:
-                        df = df[df['nx_1d'].isin(selected_nx)]
+                    nx_1d_values = sorted(df['nx_1d'].unique())
+                    selected_nx_1d = st.multiselect("Filter by NX 1d:", nx_1d_values, 
+                                                   default=[True] if True in nx_1d_values else nx_1d_values,
+                                                   key=f"nx_1d_filter_1234_{selected_file}")
+                    if selected_nx_1d:
+                        df = df[df['nx_1d'].isin(selected_nx_1d)]
+                        nx_filters_applied = True
+                
+                if 'nx_30m' in df.columns:
+                    nx_30m_values = sorted(df['nx_30m'].unique())
+                    selected_nx_30m = st.multiselect("Filter by NX 30m:", nx_30m_values, 
+                                                    default=[True] if True in nx_30m_values else nx_30m_values,
+                                                    key=f"nx_30m_filter_1234_{selected_file}")
+                    if selected_nx_30m:
+                        df = df[df['nx_30m'].isin(selected_nx_30m)]
+                        nx_filters_applied = True
                 
                 # Display the dataframe
                 resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_1234')

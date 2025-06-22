@@ -26,7 +26,7 @@ def save_breakout_candidates_1234(df, file_path):
     if df.empty:
         print("No 1234 breakout candidates to save")
         # Create empty file with headers
-        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'nx_1d'])
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'nx_1d', 'nx_30m'])
         empty_df.to_csv(output_path, sep='\t', index=False)
         return
     
@@ -36,6 +36,8 @@ def save_breakout_candidates_1234(df, file_path):
         available_columns.append('signal_price')
     if 'nx_1d' in df.columns:
         available_columns.append('nx_1d')
+    if 'nx_30m' in df.columns:
+        available_columns.append('nx_30m')
     
     df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
