@@ -63,7 +63,7 @@ def save_breakout_candidates_5230(df, file_path):
     
     df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
-def identify_1234(file_path):
+def identify_1234(file_path, all_ticker_data):
     """
     Identify potential breakout stocks based on breakout signals across the 1h, 2h, 3h, and 4h intervals.
     
@@ -79,6 +79,7 @@ def identify_1234(file_path):
     
     Parameters:
         file_path (str): Path to the file containing breakout signals.
+        all_ticker_data (dict): Dictionary with pre-downloaded ticker data.
 
     Returns:
         list: A list of ticker symbols that are potential breakout stocks.
@@ -153,23 +154,15 @@ def identify_1234(file_path):
     df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=columns).sort_values(by=['date', 'ticker'], ascending=[False, True])
 
     dict_nx_1d = {}
-    tickers_failed = []
 
     # print(df_breakout_candidates)
     for ticker in df_breakout_candidates['ticker'].unique():
         # print(ticker)
-
-        try:
-            stock = yf.Ticker(ticker)
-            df_stock = stock.history(interval='1d', period='6mo')
-        except Exception as e:
-            print(f"Failed to get data for {ticker}: {e}, wait 1 second and retry")
-            # time.sleep(1)
-            # df_stock = stock.history(interval='1d', period='6mo')
-        if df_stock.empty:
-            print(f"Failed to get data for {ticker} after 3 retries")
-            tickers_failed.append(ticker)
+        if ticker not in all_ticker_data or '1d' not in all_ticker_data[ticker] or all_ticker_data[ticker]['1d'].empty:
+            print(f"No 1d data found for {ticker} in pre-downloaded data, skipping nx_1d calculation.")
             continue
+            
+        df_stock = all_ticker_data[ticker]['1d']
         
         # low = df_stock['Low']
         # short_lower = low.ewm(span = 24, adjust=False).mean()
@@ -186,8 +179,7 @@ def identify_1234(file_path):
     
     # print (dict_nx_1d)
     # remove tickers that failed to get data
-    print ("tickers_failed:", tickers_failed)
-    df_breakout_candidates =df_breakout_candidates[~df_breakout_candidates['ticker'].isin(tickers_failed)]
+    df_breakout_candidates = df_breakout_candidates[df_breakout_candidates['ticker'].isin(dict_nx_1d.keys())]
     
     # Check if DataFrame is empty after filtering
     if df_breakout_candidates.empty:
@@ -203,7 +195,7 @@ def identify_1234(file_path):
     return df_breakout_candidates_sel
 
 
-def identify_5230(file_path):
+def identify_5230(file_path, all_ticker_data):
     """
     Identify potential breakout stocks based on breakout signals across the 5m, 10m, 15m, and 30m intervals.
     
@@ -219,6 +211,7 @@ def identify_5230(file_path):
     
     Parameters:
         file_path (str): Path to the file containing breakout signals.
+        all_ticker_data (dict): Dictionary with pre-downloaded ticker data.
 
     Returns:
         list: A list of ticker symbols that are potential breakout stocks.
@@ -281,23 +274,15 @@ def identify_5230(file_path):
     df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=columns).sort_values(by=['date', 'ticker'], ascending=[False, True])
 
     dict_nx_1h = {}
-    tickers_failed = []
 
     print(df_breakout_candidates)
     for ticker in df_breakout_candidates['ticker'].unique():
         print(ticker)
-
-        try:
-            stock = yf.Ticker(ticker)
-            df_stock = stock.history(interval='1h', period='3mo')
-        except Exception as e:
-            print(f"Failed to get data for {ticker}: {e}, wait 1 second and retry")
-            # time.sleep(1)
-            # df_stock = stock.history(interval='1d', period='6mo')
-        if df_stock.empty:
-            print(f"Failed to get data for {ticker} after 3 retries")
-            tickers_failed.append(ticker)
+        if ticker not in all_ticker_data or '1h' not in all_ticker_data[ticker] or all_ticker_data[ticker]['1h'].empty:
+            print(f"No 1h data found for {ticker} in pre-downloaded data, skipping nx_1h calculation.")
             continue
+        
+        df_stock = all_ticker_data[ticker]['1h']
         
         # low = df_stock['Low']
         # short_lower = low.ewm(span = 24, adjust=False).mean()
@@ -314,8 +299,7 @@ def identify_5230(file_path):
     
     print (dict_nx_1h)
     # remove tickers that failed to get data
-    print ("tickers_failed:", tickers_failed)
-    df_breakout_candidates =df_breakout_candidates[~df_breakout_candidates['ticker'].isin(tickers_failed)]
+    df_breakout_candidates = df_breakout_candidates[df_breakout_candidates['ticker'].isin(dict_nx_1h.keys())]
     
     # Check if DataFrame is empty after filtering
     if df_breakout_candidates.empty:
