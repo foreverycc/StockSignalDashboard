@@ -1,5 +1,5 @@
 import pandas as pd
-from data_loader import download_data_1234, download_data_5230
+from data_loader import download_stock_data
 from indicators import compute_cd_indicator, compute_nx_break_through
     
 def calculate_score(data, interval, signal_date):
@@ -45,7 +45,9 @@ def process_ticker_1234(ticker, data_ticker=None):
     results = []
     # Use provided data or download if not provided
     if data_ticker is None:
-        data_ticker = download_data_1234(ticker)
+        print (f"data not provided for {ticker}")
+        # throw an error
+        raise ValueError(f"data not provided for {ticker}") 
 
     for interval in intervals:
         print(f"ticker: {ticker} interval: {interval}")
@@ -98,7 +100,9 @@ def process_ticker_5230(ticker, data_ticker=None):
     results = []
     # Use provided data or download if not provided
     if data_ticker is None:
-        data_ticker = download_data_5230(ticker)
+        print (f"data not provided for {ticker}")
+        # throw an error
+        raise ValueError(f"data not provided for {ticker}") 
 
     for interval in intervals:
         print(f"ticker: {ticker} interval: {interval}")

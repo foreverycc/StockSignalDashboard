@@ -172,12 +172,3 @@ def transform_5m_data(df_5m, new_interval = '10m'):
     # 合并成完整的X小时数据表
     df_xh = pd.concat(df_xh_list).sort_index() if df_xh_list else pd.DataFrame()
     return df_xh
-
-# Keep these for backward compatibility
-def download_data_1234(ticker):
-    data = download_stock_data(ticker)
-    return {k: v for k, v in data.items() if k in ['1h', '2h', '3h', '4h']}
-
-def download_data_5230(ticker):
-    data = download_stock_data(ticker)
-    return {k: v for k, v in data.items() if k in ['5m', '10m', '15m', '30m']}
