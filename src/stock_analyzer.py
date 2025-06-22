@@ -1,8 +1,8 @@
 import pandas as pd
 import os
 from data_loader import load_stock_list, download_stock_data
-from processor import process_ticker_1234, process_ticker_5230
-from utils import save_results, identify_1234, save_breakout_candidates_1234, identify_5230, save_breakout_candidates_5230
+from get_resonance_signal import process_ticker_1234, process_ticker_5230, identify_1234, identify_5230
+from utils import save_results, save_breakout_candidates_1234, save_breakout_candidates_5230
 from get_best_CD_interval import evaluate_interval
 from multiprocessing import Pool, cpu_count
 
