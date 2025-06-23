@@ -26,7 +26,7 @@ def save_breakout_candidates_1234(df, file_path):
     if df.empty:
         print("No 1234 breakout candidates to save")
         # Create empty file with headers
-        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'nx_1d', 'nx_30m'])
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1d', 'nx_30m'])
         empty_df.to_csv(output_path, sep='\t', index=False)
         return
     
@@ -34,6 +34,10 @@ def save_breakout_candidates_1234(df, file_path):
     available_columns = ['ticker', 'date', 'intervals']
     if 'signal_price' in df.columns:
         available_columns.append('signal_price')
+    if 'current_price' in df.columns:
+        available_columns.append('current_price')
+    if 'current_time' in df.columns:
+        available_columns.append('current_time')
     if 'nx_1d' in df.columns:
         available_columns.append('nx_1d')
     if 'nx_30m' in df.columns:
@@ -51,7 +55,7 @@ def save_breakout_candidates_5230(df, file_path):
     if df.empty:
         print("No 5230 breakout candidates to save")
         # Create empty file with headers
-        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'nx_1h'])
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1h'])
         empty_df.to_csv(output_path, sep='\t', index=False)
         return
     
@@ -59,6 +63,10 @@ def save_breakout_candidates_5230(df, file_path):
     available_columns = ['ticker', 'date', 'intervals']
     if 'signal_price' in df.columns:
         available_columns.append('signal_price')
+    if 'current_price' in df.columns:
+        available_columns.append('current_price')
+    if 'current_time' in df.columns:
+        available_columns.append('current_time')
     if 'nx_1h' in df.columns:
         available_columns.append('nx_1h')
     

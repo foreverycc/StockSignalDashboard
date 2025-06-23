@@ -229,6 +229,14 @@ def identify_1234(file_path, all_ticker_data):
         
     df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=columns).sort_values(by=['date', 'ticker'], ascending=[False, True])
 
+    current_data = df_breakout_candidates['ticker'].apply(lambda ticker: 
+        (
+            round(all_ticker_data[ticker]['1d'].iloc[-1]['Close'], 2),
+            all_ticker_data[ticker]['1d'].iloc[-1].name.strftime('%Y-%m-%d %H:%M:%S')
+        ) if ticker in all_ticker_data and '1d' in all_ticker_data[ticker] and not all_ticker_data[ticker]['1d'].empty else (None, None)
+    )
+    df_breakout_candidates[['current_price', 'current_time']] = pd.DataFrame(current_data.tolist(), index=df_breakout_candidates.index)
+
     dict_nx_1d = {}
     dict_nx_30m = {}
 
@@ -372,6 +380,14 @@ def identify_5230(file_path, all_ticker_data):
         columns.append('signal_price')
         
     df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=columns).sort_values(by=['date', 'ticker'], ascending=[False, True])
+
+    current_data = df_breakout_candidates['ticker'].apply(lambda ticker: 
+        (
+            round(all_ticker_data[ticker]['1d'].iloc[-1]['Close'], 2),
+            all_ticker_data[ticker]['1d'].iloc[-1].name.strftime('%Y-%m-%d %H:%M:%S')
+        ) if ticker in all_ticker_data and '1d' in all_ticker_data[ticker] and not all_ticker_data[ticker]['1d'].empty else (None, None)
+    )
+    df_breakout_candidates[['current_price', 'current_time']] = pd.DataFrame(current_data.tolist(), index=df_breakout_candidates.index)
 
     dict_nx_1h = {}
 
