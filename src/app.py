@@ -930,28 +930,23 @@ if selected_file:
                 gridOptions=grid_options,
                 fit_columns_on_grid_load=True,
                 theme='streamlit',
-                height=425,
+                height=350,
                 width='100%',
                 key=f"resonance_aggrid_{tab_key}_{selected_file}",
                 reload_data=False,
                 allow_unsafe_jscode=True
             )
 
-    res_viz_col, res_tables_col = st.columns([1, 1])
+    # Create two columns for 1234 and 5230 data
+    col_1234, col_5230 = st.columns([1, 1])
 
-    with res_viz_col:
-        st.info("Visualization for the Resonance Model is not yet implemented.")
-
-    with res_tables_col:
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "1234 Candidates", 
-            "5230 Candidates", 
-            "1234 Details", 
-            "5230 Details"
-        ])
+    # Left column: 1234 data
+    with col_1234:
+        st.markdown("### 1234 Model")
+        tab_1234_candidates, tab_1234_details = st.tabs(["Candidates", "Details"])
 
         # Display 1234 breakout candidates
-        with tab1:
+        with tab_1234_candidates:
             df, message = load_results('breakout_candidates_summary_1234_', selected_file, 'date')
             
             if df is not None and '1234' in message:
@@ -969,44 +964,12 @@ if selected_file:
                         df = df[df['nx_1d'].isin(selected_nx_1d)]
                         nx_filters_applied = True
                 
-                if 'nx_30m' in df.columns:
-                    nx_30m_values = sorted(df['nx_30m'].unique())
-                    selected_nx_30m = st.multiselect("Filter by NX 30m:", nx_30m_values, 
-                                                    default=[True] if True in nx_30m_values else nx_30m_values,
-                                                    key=f"nx_30m_filter_1234_{selected_file}")
-                    if selected_nx_30m:
-                        df = df[df['nx_30m'].isin(selected_nx_30m)]
-                        nx_filters_applied = True
-                
-                # Display the dataframe
                 resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_1234')
             else:
                 st.info("No 1234 breakout candidates found. Please run analysis first.")
 
-        # Display 5230 breakout candidates
-        with tab2:
-            df, message = load_results('breakout_candidates_summary_5230_', selected_file, 'date')
-            
-            if df is not None and '5230' in message:
-                if resonance_ticker_filter:
-                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
-                
-                # Add NX filtering if available
-                if 'nx_1h' in df.columns:
-                    nx_values = sorted(df['nx_1h'].unique())
-                    selected_nx = st.multiselect("Filter by NX:", nx_values, 
-                                               default=[True] if True in nx_values else nx_values,
-                                               key=f"nx_filter_5230_{selected_file}")
-                    if selected_nx:
-                        df = df[df['nx_1h'].isin(selected_nx)]
-                
-                # Display the dataframe
-                resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_5230')
-            else:
-                st.info("No 5230 breakout candidates found. Please run analysis first.")
-
         # Display 1234 detailed results
-        with tab3:
+        with tab_1234_details:
             df, message = load_results('breakout_candidates_details_1234_', selected_file, 'signal_date')
             
             if df is not None and '1234' in message:
@@ -1036,8 +999,35 @@ if selected_file:
             else:
                 st.info("No 1234 detailed results found. Please run analysis first.")
 
+    # Right column: 5230 data
+    with col_5230:
+        st.markdown("### 5230 Model")
+        tab_5230_candidates, tab_5230_details = st.tabs(["Candidates", "Details"])
+
+        # Display 5230 breakout candidates
+        with tab_5230_candidates:
+            df, message = load_results('breakout_candidates_summary_5230_', selected_file, 'date')
+            
+            if df is not None and '5230' in message:
+                if resonance_ticker_filter:
+                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
+                
+                # Add NX filtering if available
+                if 'nx_1h' in df.columns:
+                    nx_values = sorted(df['nx_1h'].unique())
+                    selected_nx = st.multiselect("Filter by NX 1h:", nx_values, 
+                                               default=[True] if True in nx_values else nx_values,
+                                               key=f"nx_filter_5230_{selected_file}")
+                    if selected_nx:
+                        df = df[df['nx_1h'].isin(selected_nx)]
+                
+                # Display the dataframe
+                resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_5230')
+            else:
+                st.info("No 5230 breakout candidates found. Please run analysis first.")
+
         # Display 5230 detailed results
-        with tab4:
+        with tab_5230_details:
             df, message = load_results('breakout_candidates_details_5230_', selected_file, 'signal_date')
             
             if df is not None and '5230' in message:
