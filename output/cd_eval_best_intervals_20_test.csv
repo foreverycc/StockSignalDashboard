@@ -1,0 +1,2 @@
+ticker,interval,hold_time,avg_return,latest_signal,latest_signal_price,current_time,current_price,current_period,test_count,success_rate,best_period,signal_count
+JD,1d,15days,12.43637634796874,2025-06-04 00:00:00,33.33,2025-06-20 00:00:00,31.44,11,2,100.0,15,5

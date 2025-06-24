@@ -1,0 +1,4 @@
+ticker,interval,hold_time,avg_return,latest_signal,latest_signal_price,test_count,success_rate,best_period,signal_count
+META,1h,12days4hr,23.15634480130539,2025-05-22 11:30:00,638.23,3,100.0,100,5
+SOL,2h,25days,25.584576487680167,2025-04-17 09:30:00,1.22,2,100.0,100,2
+ETH-USD,3h,37days4hr,20.101110954190993,2025-04-05 15:30:00,1784.09,2,100.0,100,2

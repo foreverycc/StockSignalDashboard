@@ -1,0 +1,2 @@
+ticker,interval,hold_time,avg_return,latest_signal,latest_signal_price,current_time,current_price,current_period,test_count,success_rate,best_period,signal_count
+海光信息 (688041.SS),1h,2days4hr,7.217500283576305,2025-06-13 10:30:00,136.02,2025-06-13 14:30:00,137.01,3,2,100.0,20,5
