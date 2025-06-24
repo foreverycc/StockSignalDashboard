@@ -904,7 +904,7 @@ if selected_file:
     resonance_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"resonance_ticker_filter_{selected_file}")
     
     # Helper for AgGrid in Resonance model
-    def resonance_aggrid_editor(df, tab_key):
+    def resonance_aggrid_editor(df, tab_key, selection_mode='single'):
         if df is not None and not df.empty:
             df = df.copy()
             # To prevent ArrowTypeError from mixed types, convert object columns to string
@@ -915,6 +915,7 @@ if selected_file:
             gb = GridOptionsBuilder.from_dataframe(df)
             gb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True)
             gb.configure_pagination(paginationAutoPageSize=True)
+            gb.configure_selection(selection_mode, use_checkbox=True, groupSelectsChildren=False, groupSelectsFiltered=False)
             
             if 'ticker' in df.columns:
                 gb.configure_column('ticker', pinned='left', minWidth=90)
@@ -925,9 +926,11 @@ if selected_file:
 
             grid_options = gb.build()
             
-            AgGrid(
+            grid_response = AgGrid(
                 df,
                 gridOptions=grid_options,
+                data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                update_mode=GridUpdateMode.SELECTION_CHANGED,
                 fit_columns_on_grid_load=True,
                 theme='streamlit',
                 height=350,
@@ -936,6 +939,7 @@ if selected_file:
                 reload_data=False,
                 allow_unsafe_jscode=True
             )
+            return grid_response
 
     # Create two columns for 1234 and 5230 data
     col_1234, col_5230 = st.columns([1, 1])
@@ -964,7 +968,12 @@ if selected_file:
                         df = df[df['nx_1d'].isin(selected_nx_1d)]
                         nx_filters_applied = True
                 
-                resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_1234')
+                grid_response = resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_1234')
+                if 'resonance_1234_selected' not in st.session_state:
+                    st.session_state.resonance_1234_selected = pd.DataFrame()
+
+                if grid_response['selected_rows'] is not None:
+                    st.session_state.resonance_1234_selected = pd.DataFrame(grid_response['selected_rows'])
             else:
                 st.info("No 1234 breakout candidates found. Please run analysis first.")
 
@@ -1056,6 +1065,127 @@ if selected_file:
                 )
             else:
                 st.info("No 5230 detailed results found. Please run analysis first.")
+
+    st.subheader("Resonance Model Visualization")
+
+    if 'resonance_1234_selected' in st.session_state and not st.session_state.resonance_1234_selected.empty:
+        selected_candidates = st.session_state.resonance_1234_selected
+        
+        # Load detailed data from waikiki model
+        detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
+
+        if detailed_df is None or detailed_df.empty:
+            st.warning("Could not load detailed data for Waikiki model. Please run analysis to generate `cd_eval_custom_detailed` file.")
+        else:
+            for index, row in selected_candidates.iterrows():
+                ticker = row['ticker']
+                # The intervals are like "1,2,4". These are hours. I need to convert them to "1h", "2h", "4h".
+                intervals_to_plot_str = row.get('intervals', '')
+                if not intervals_to_plot_str:
+                    continue
+
+                st.markdown(f"#### Plots for {ticker}")
+                
+                intervals_to_plot = [f"{i}h" for i in intervals_to_plot_str.split(',')]
+                
+                # Create columns for plots
+                plot_cols = st.columns(len(intervals_to_plot))
+
+                for i, interval in enumerate(intervals_to_plot):
+                    with plot_cols[i]:
+                        # Filter data for this ticker and interval
+                        plot_data = detailed_df[(detailed_df['ticker'] == ticker) & (detailed_df['interval'] == interval)]
+
+                        if plot_data.empty:
+                            st.write(f"No detailed data for {ticker} ({interval})")
+                            continue
+                        
+                        selected_ticker_data = plot_data.iloc[0]
+
+                        # Create figure
+                        fig = go.Figure()
+                        
+                        periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                        stock_returns = [(0, 100)]
+                        for period in periods[1:]:
+                            if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                stock_returns.append((period, 100 + selected_ticker_data[f'avg_return_{period}']))
+                        
+                        if stock_returns:
+                            periods_x, returns_y = zip(*stock_returns)
+                            fig.add_trace(go.Scatter(
+                                x=periods_x,
+                                y=returns_y,
+                                mode='lines+markers',
+                                line=dict(color='lightgray', width=1),
+                                marker=dict(color='gray', size=6),
+                                name=f"{ticker} ({interval})",
+                            ))
+
+                        # Highlight best period
+                        max_return = -float('inf')
+                        best_period = None
+                        for period in periods:
+                            if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                if selected_ticker_data[f'avg_return_{period}'] > max_return:
+                                    max_return = selected_ticker_data[f'avg_return_{period}']
+                                    best_period = period
+                        
+                        title_html = (
+                            f"<span style='font-size:16px'><b>{ticker} ({interval})</b></span><br>"
+                        )
+                        if best_period is not None:
+                             title_html += (f"<span style='font-size:10px'>best period: {best_period} | "
+                            f"return: {max_return:.2f}% | "
+                            f"success: {selected_ticker_data.get(f'success_rate_{best_period}', 0):.2f}\t  "
+                            f"test count: {selected_ticker_data.get(f'test_count_{best_period}', 0)}</span>")
+
+                        # # Update layout
+                        # title_html = (
+                        #     f"<span style='font-size:24px'><b>{selected_ticker['ticker']} ({selected_ticker['interval']})</b></span><br>"
+                        #     f"<span style='font-size:12px'>best period: {best_period}\t  "
+                        #     f"best return: {max_return:.2f}%  "
+                        #     f"success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t  "
+                        #     f"test count: {selected_ticker[f'test_count_{best_period}']}</span>"
+                        # )
+                        fig.update_layout(
+                            title=dict(text=title_html, 
+                                       x=0.5, 
+                                       font=dict(color='black'),
+                                       xanchor='center',
+                                       yanchor='top'),
+                            xaxis_title="Period",
+                            yaxis_title="Relative Price (Baseline = 100)",
+                            showlegend=False,
+                            height=300,
+                            plot_bgcolor='white',
+                            paper_bgcolor='white',
+                            xaxis=dict(
+                                showgrid=True,
+                                gridwidth=1,
+                                gridcolor='lightgray',
+                                showline=True,
+                                linewidth=1,
+                                linecolor='black',
+                                tickfont=dict(color='black'),
+                                title=dict(text="Period", 
+                                           font=dict(color='black'))
+                            ),
+                            yaxis=dict(
+                                showgrid=True,
+                                gridwidth=1,
+                                gridcolor='lightgray',
+                                showline=True,
+                                linewidth=1,
+                                linecolor='black',
+                                tickfont=dict(color='black'),
+                                title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
+                            )
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Select a ticker from the '1234 Candidates' table to display visualizations.")
 else:
     st.info("👆 Please select a stock list above to view results.")
 
