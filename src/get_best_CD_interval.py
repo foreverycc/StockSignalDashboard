@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from data_loader import download_data_1234, download_data_5230
+from data_loader import download_stock_data
 from indicators import compute_cd_indicator
 import yfinance as yf
 
@@ -83,11 +83,8 @@ def evaluate_interval(ticker, interval, data=None):
                     'Volume': 'sum'
                 })
             # Get data based on interval type
-            elif interval in ['5m', '10m', '15m', '30m']:
-                data_ticker = download_data_5230(ticker)
-                data_frame = data_ticker[interval]
-            elif interval in ['1h', '2h', '3h', '4h']:
-                data_ticker = download_data_1234(ticker)
+            elif interval in ['5m', '10m', '15m', '30m', '1h', '2h', '3h', '4h']:
+                data_ticker = download_stock_data(ticker)
                 data_frame = data_ticker[interval]
             elif interval == '1d':
                 stock = yf.Ticker(ticker)

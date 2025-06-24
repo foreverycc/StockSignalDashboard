@@ -92,7 +92,7 @@ def transform_1h_data(df_1h, new_interval = '2h'):
         # 使得日内区间从 当日00:00+9h30 => 当日09:30 开始切分
         # 结果区间: 9:30~11:30, 11:30~13:30, 13:30~15:30, 15:30~17:30(只到16:00)
         return daily_df.resample(
-            rule=new_interval.replace('h', 'H'),
+            rule=new_interval,
             closed="left",   # 区间左闭右开
             label="left",    # 用区间左端做时间戳
             origin="start_day", 
@@ -145,7 +145,7 @@ def transform_5m_data(df_5m, new_interval = '10m'):
         # 注意这里 origin="start_day", offset="9h30min" 是关键
         # 使得日内区间从 当日00:00+9h30 => 当日09:30 开始切分
         return daily_df.resample(
-            rule=new_interval.replace('m', 'T'),
+            rule=new_interval.replace('m', 'min'),
             closed="left",   # 区间左闭右开
             label="left",    # 用区间左端做时间戳
             origin="start_day", 
@@ -172,12 +172,3 @@ def transform_5m_data(df_5m, new_interval = '10m'):
     # 合并成完整的X小时数据表
     df_xh = pd.concat(df_xh_list).sort_index() if df_xh_list else pd.DataFrame()
     return df_xh
-
-# Keep these for backward compatibility
-def download_data_1234(ticker):
-    data = download_stock_data(ticker)
-    return {k: v for k, v in data.items() if k in ['1h', '2h', '3h', '4h']}
-
-def download_data_5230(ticker):
-    data = download_stock_data(ticker)
-    return {k: v for k, v in data.items() if k in ['5m', '10m', '15m', '30m']}
