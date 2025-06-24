@@ -37,7 +37,7 @@ def compute_cd_indicator(data):
     bbb = (cc1 < cc3) & (difl1 < difl2) & (difl1 > difl3) & (mcd.shift(1) < 0) & (diff < 0)
     ccc = aaa | bbb
     jjj = ccc.shift(1) & (abs(diff.shift(1)) >= abs(diff) * 1.01)
-    dxdx = jjj & ~jjj.shift(1).fillna(False)
+    dxdx = jjj & ~jjj.shift(1, fill_value=False).fillna(False)
 
     return dxdx
 

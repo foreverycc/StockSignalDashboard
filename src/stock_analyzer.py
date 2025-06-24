@@ -1,8 +1,8 @@
 import pandas as pd
 import os
 from data_loader import load_stock_list, download_stock_data
-from processor import process_ticker_1234, process_ticker_5230
-from utils import save_results, identify_1234, save_breakout_candidates_1234, identify_5230, save_breakout_candidates_5230
+from get_resonance_signal import process_ticker_1234, process_ticker_5230, identify_1234, identify_5230
+from utils import save_results, save_breakout_candidates_1234, save_breakout_candidates_5230
 from get_best_CD_interval import evaluate_interval
 from multiprocessing import Pool, cpu_count
 
@@ -59,7 +59,7 @@ def process_ticker_all(ticker):
         # Skip if no data available
         if all(df.empty for df in data.values()):
             print(f"No data available for {ticker}")
-            return None, None, []
+            return None, None, [], None
         
         # Process for 1234 breakout
         results_1234 = process_ticker_1234(ticker, data)
@@ -75,11 +75,11 @@ def process_ticker_all(ticker):
             if result:
                 cd_results.append(result)
         
-        return results_1234, results_5230, cd_results
+        return results_1234, results_5230, cd_results, data
         
     except Exception as e:
         print(f"Error processing {ticker}: {e}")
-        return None, None, []
+        return None, None, [], None
 
 def analyze_stocks(file_path):
     """
@@ -114,6 +114,8 @@ def analyze_stocks(file_path):
     results_1234 = []
     results_5230 = []
     cd_eval_results = []
+    all_ticker_data = {}
+    failed_tickers = []
     best_intervals_columns = ['ticker', 'interval', 'hold_time',  
                               'avg_return', 'latest_signal', 'latest_signal_price', 
                               'current_time', 'current_price', 'current_period',
@@ -149,26 +151,31 @@ def analyze_stocks(file_path):
             batch_results = pool.map(process_ticker_all, batch)
         
         # Collect results from batch
-        for r1234, r5230, cd_eval in batch_results:
+        for i, (r1234, r5230, cd_eval, data) in enumerate(batch_results):
+            ticker = batch[i]
             if r1234:
                 results_1234.extend(r1234)
             if r5230:
                 results_5230.extend(r5230)
             if cd_eval:
                 cd_eval_results.extend(cd_eval)
+            if data:
+                all_ticker_data[ticker] = data
+            else:
+                failed_tickers.append(ticker)
     
     # 1. Save 1234 results and identify breakout candidates
     print("Saving 1234 breakout results...")
     output_file_1234 = os.path.join(output_dir, f'breakout_candidates_details_1234_{output_base}.tab')
     save_results(results_1234, output_file_1234)
-    df_breakout_1234 = identify_1234(output_file_1234)
+    df_breakout_1234 = identify_1234(output_file_1234, all_ticker_data)
     save_breakout_candidates_1234(df_breakout_1234, output_file_1234)
     
     # 2. Save 5230 results and identify breakout candidates
     print("Saving 5230 breakout results...")
     output_file_5230 = os.path.join(output_dir, f'breakout_candidates_details_5230_{output_base}.tab')
     save_results(results_5230, output_file_5230)
-    df_breakout_5230 = identify_5230(output_file_5230)
+    df_breakout_5230 = identify_5230(output_file_5230, all_ticker_data)
     save_breakout_candidates_5230(df_breakout_5230, output_file_5230)
     
     # 3. Save CD evaluation results
@@ -308,3 +315,10 @@ def analyze_stocks(file_path):
         empty_good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
         
     print("All analyses completed successfully!")
+
+    # Report failed tickers
+    if failed_tickers:
+        print("\n----------------------")
+        print("Failed to process the following tickers:")
+        print(", ".join(failed_tickers))
+        print("----------------------\n")

@@ -5,6 +5,7 @@ import time
 from stock_analyzer import analyze_stocks
 import re
 import plotly.graph_objects as go
+from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 
 # Set page configuration
 st.set_page_config(
@@ -151,303 +152,277 @@ def update_output_files_with_chinese_names(chinese_mapping):
     else:
         st.info("No output files required Chinese stock name updates")
 
-# App title and description
-# st.title("Stock Analysis Dashboard")
-# st.markdown("""
-# This app allows you to analyze stocks using various technical indicators and timeframes.
-# Select a stock list and run the desired analysis to view results.
-# """)
+# SIDEBAR CONFIGURATION
+st.sidebar.header("Configuration")
 
-# Top configuration section (replaces sidebar)
-# st.header("Configuration")
-
-# Stock list selection (moved outside columns to make it globally available)
+# Stock list selection
 stock_list_files = [f for f in os.listdir('./data') if f.endswith('.tab') or f.endswith('.txt')]
-selected_file = st.selectbox(
+selected_file = st.sidebar.selectbox(
     "Select Stock List",
     stock_list_files,
-    index=0 if stock_list_files else None
+    index=2 if stock_list_files else None
 )
 
-# Create a 2-column layout for the top section
-col1, col2 = st.columns(2)
+# Reset selection when the file changes
+if 'current_selected_file' not in st.session_state:
+    st.session_state.current_selected_file = selected_file
 
-with col1:
-    # Display and edit stock list
-    if selected_file:
-        file_path = os.path.join('./data', selected_file)
+# Display stock list info in sidebar
+if selected_file:
+    file_path = os.path.join('./data', selected_file)
+    
+    try:
+        with open(file_path, 'r') as f:
+            original_stocks = f.read().strip()
         
-        try:
-            with open(file_path, 'r') as f:
-                original_stocks = f.read().strip()
+        # Show basic info about the selected stock list
+        current_stocks_list = original_stocks.strip().splitlines() if original_stocks.strip() else []
+        st.sidebar.write(f"📊 {len(current_stocks_list)} stocks")
+        if current_stocks_list:
+            st.sidebar.write(f"Preview: {', '.join(current_stocks_list[:3])}{'...' if len(current_stocks_list) > 3 else ''}")
+        
+        # Expandable stock list management section
+        with st.sidebar.expander("📋 Manage Stock List", expanded=False):
+            # Create tabs for stock list management
+            tab_edit, tab_delete, tab_create = st.tabs(["✏️ Edit", "🗑️ Delete", "➕ Create New"])
             
-            # Show basic info about the selected stock list
-            current_stocks_list = original_stocks.strip().splitlines() if original_stocks.strip() else []
-            # st.write(f"**Selected: {selected_file}**")
-            st.write(f"📊 {len(current_stocks_list)} stocks")
-            if current_stocks_list:
-                st.write(f"Preview: {', '.join(current_stocks_list[:3])}{'...' if len(current_stocks_list) > 3 else ''}")
-            
-            # Expandable stock list management section
-            with st.expander("📋 Manage Stock List", expanded=False):
-                # Create tabs for stock list management
-                tab_edit, tab_delete, tab_create = st.tabs(["✏️ Edit", "🗑️ Delete", "➕ Create New"])
+            # Edit tab
+            with tab_edit:
+                st.write(f"**Editing: {selected_file}**")
                 
-                # Edit tab
-                with tab_edit:
-                    st.write(f"**Editing: {selected_file}**")
-                    
-                    # Handle temporary stocks from utility functions
-                    if 'temp_stocks' in st.session_state:
-                        display_stocks = st.session_state.temp_stocks
-                        del st.session_state.temp_stocks
-                    else:
-                        display_stocks = original_stocks
-                    
-                    # Editable text area for stock list
-                    edited_stocks = st.text_area(
-                        "Stock symbols (one per line):",
-                        value=display_stocks,
-                        height=200,
-                        help="Enter stock symbols, one per line. Changes will be saved when you click 'Save Changes'."
-                    )
-                    
-                    # Save button and status
-                    col_save, col_status = st.columns([1, 2])
-                    
-                    with col_save:
-                        if st.button("Save Changes", type="primary"):
-                            try:
-                                # Save the edited content back to the file
-                                with open(file_path, 'w') as f:
-                                    f.write(edited_stocks.strip())
-                                st.success("✅ Saved!")
-                                # Force a rerun to refresh the preview
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error saving file: {e}")
-                    
-                    with col_status:
-                        # Show if there are unsaved changes
-                        if edited_stocks.strip() != original_stocks:
-                            st.warning("⚠️ Unsaved changes")
-                        else:
-                            st.info("📄 No changes")
-                    
-                    # Utility buttons
-                    col_util1, col_util2, col_util3 = st.columns(3)
-                    
-                    with col_util1:
-                        if st.button("Remove Duplicates", help="Remove duplicate stock symbols"):
-                            lines = edited_stocks.strip().splitlines()
-                            unique_lines = list(dict.fromkeys([line.strip().upper() for line in lines if line.strip()]))
-                            st.session_state.temp_stocks = '\n'.join(unique_lines)
-                            st.rerun()
-                    
-                    with col_util2:
-                        if st.button("Sort A-Z", help="Sort stock symbols alphabetically"):
-                            lines = edited_stocks.strip().splitlines()
-                            sorted_lines = sorted([line.strip().upper() for line in lines if line.strip()])
-                            st.session_state.temp_stocks = '\n'.join(sorted_lines)
-                            st.rerun()
-                    
-                    with col_util3:
-                        if st.button("Validate Symbols", help="Check for invalid stock symbols"):
-                            lines = edited_stocks.strip().splitlines()
-                            invalid_symbols = []
-                            valid_symbols = []
-                            
-                            for line in lines:
-                                symbol = line.strip().upper()
-                                if symbol:
-                                    # Basic validation: should be 1-5 characters, letters only
-                                    if len(symbol) >= 1 and len(symbol) <= 5 and symbol.isalpha():
-                                        valid_symbols.append(symbol)
-                                    else:
-                                        invalid_symbols.append(symbol)
-                            
-                            if invalid_symbols:
-                                st.warning(f"⚠️ Potentially invalid symbols: {', '.join(invalid_symbols)}")
-                            else:
-                                st.success("✅ All symbols appear valid")
-                    
-                    # Show preview of current stocks in editor
-                    current_stocks = edited_stocks.strip().splitlines() if edited_stocks.strip() else []
-                    if current_stocks:
-                        st.write(f"**Preview ({len(current_stocks)} stocks):**")
-                        st.write(", ".join(current_stocks[:5]) + ("..." if len(current_stocks) > 5 else ""))
-                    else:
-                        st.write("**Preview:** No stocks in list")
+                # Handle temporary stocks from utility functions
+                if 'temp_stocks' in st.session_state:
+                    display_stocks = st.session_state.temp_stocks
+                    del st.session_state.temp_stocks
+                else:
+                    display_stocks = original_stocks
                 
-                # Delete tab
-                with tab_delete:
-                    st.warning(f"⚠️ This will permanently delete '{selected_file}'")
-                    
-                    # Confirmation checkbox
-                    confirm_delete = st.checkbox(f"I confirm I want to delete '{selected_file}'")
-                    
-                    if st.button("Delete Stock List", type="secondary", disabled=not confirm_delete):
+                # Editable text area for stock list
+                edited_stocks = st.text_area(
+                    "Stock symbols (one per line):",
+                    value=display_stocks,
+                    height=200,
+                    help="Enter stock symbols, one per line. Changes will be saved when you click 'Save Changes'."
+                )
+                
+                # Save button and status
+                col_save, col_status = st.columns([1, 2])
+                
+                with col_save:
+                    if st.button("Save Changes", type="primary"):
                         try:
-                            os.remove(file_path)
-                            st.success(f"✅ Deleted '{selected_file}' successfully!")
-                            st.info("Please refresh the page to update the dropdown.")
-                            # Clear the selection by rerunning
+                            # Save the edited content back to the file
+                            with open(file_path, 'w') as f:
+                                f.write(edited_stocks.strip())
+                            st.success("✅ Saved!")
+                            # Force a rerun to refresh the preview
                             st.rerun()
                         except Exception as e:
-                            st.error(f"Error deleting file: {e}")
+                            st.error(f"Error saving file: {e}")
                 
-                # Create new tab
-                with tab_create:
-                    new_file_name = st.text_input(
-                        "New file name (without extension):",
-                        placeholder="e.g., my_custom_stocks"
-                    )
-                    
-                    new_file_extension = st.selectbox(
-                        "File extension:",
-                        [".tab", ".txt"],
-                        index=0
-                    )
-                    
-                    new_stocks_content = st.text_area(
-                        "Stock symbols (one per line):",
-                        placeholder="AAPL\nMSFT\nGOOGL\nTSLA",
-                        height=150
-                    )
-                    
-                    if st.button("Create Stock List", type="primary"):
-                        if new_file_name and new_stocks_content:
-                            try:
-                                new_file_path = os.path.join('./data', f"{new_file_name}{new_file_extension}")
-                                
-                                # Check if file already exists
-                                if os.path.exists(new_file_path):
-                                    st.error(f"File '{new_file_name}{new_file_extension}' already exists!")
+                with col_status:
+                    # Show if there are unsaved changes
+                    if edited_stocks.strip() != original_stocks:
+                        st.warning("⚠️ Unsaved changes")
+                    else:
+                        st.info("📄 No changes")
+                
+                # Utility buttons
+                col_util1, col_util2, col_util3 = st.columns(3)
+                
+                with col_util1:
+                    if st.button("Remove Duplicates", help="Remove duplicate stock symbols"):
+                        lines = edited_stocks.strip().splitlines()
+                        unique_lines = list(dict.fromkeys([line.strip().upper() for line in lines if line.strip()]))
+                        st.session_state.temp_stocks = '\n'.join(unique_lines)
+                        st.rerun()
+                
+                with col_util2:
+                    if st.button("Sort A-Z", help="Sort stock symbols alphabetically"):
+                        lines = edited_stocks.strip().splitlines()
+                        sorted_lines = sorted([line.strip().upper() for line in lines if line.strip()])
+                        st.session_state.temp_stocks = '\n'.join(sorted_lines)
+                        st.rerun()
+                
+                with col_util3:
+                    if st.button("Validate Symbols", help="Check for invalid stock symbols"):
+                        lines = edited_stocks.strip().splitlines()
+                        invalid_symbols = []
+                        valid_symbols = []
+                        
+                        for line in lines:
+                            symbol = line.strip().upper()
+                            if symbol:
+                                # Basic validation: should be 1-5 characters, letters only
+                                if len(symbol) >= 1 and len(symbol) <= 5 and symbol.isalpha():
+                                    valid_symbols.append(symbol)
                                 else:
-                                    # Create the new file
-                                    with open(new_file_path, 'w') as f:
-                                        f.write(new_stocks_content.strip())
+                                    invalid_symbols.append(symbol)
+                        
+                        if invalid_symbols:
+                            st.warning(f"⚠️ Potentially invalid symbols: {', '.join(invalid_symbols)}")
+                        else:
+                            st.success("✅ All symbols appear valid")
+                
+                # Show preview of current stocks in editor
+                current_stocks = edited_stocks.strip().splitlines() if edited_stocks.strip() else []
+                if current_stocks:
+                    st.write(f"**Preview ({len(current_stocks)} stocks):**")
+                    st.write(", ".join(current_stocks[:5]) + ("..." if len(current_stocks) > 5 else ""))
+                else:
+                    st.write("**Preview:** No stocks in list")
+            
+            # Delete tab
+            with tab_delete:
+                st.warning(f"⚠️ This will permanently delete '{selected_file}'")
+                
+                # Confirmation checkbox
+                confirm_delete = st.checkbox(f"I confirm I want to delete '{selected_file}'")
+                
+                if st.button("Delete Stock List", type="secondary", disabled=not confirm_delete):
+                    try:
+                        os.remove(file_path)
+                        st.success(f"✅ Deleted '{selected_file}' successfully!")
+                        st.info("Please refresh the page to update the dropdown.")
+                        # Clear the selection by rerunning
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Error deleting file: {e}")
+            
+            # Create new tab
+            with tab_create:
+                new_file_name = st.text_input(
+                    "New file name (without extension):",
+                    placeholder="e.g., my_custom_stocks"
+                )
+                
+                new_file_extension = st.selectbox(
+                    "File extension:",
+                    [".tab", ".txt"],
+                    index=0
+                )
+                
+                new_stocks_content = st.text_area(
+                    "Stock symbols (one per line):",
+                    placeholder="AAPL\nMSFT\nGOOGL\nTSLA",
+                    height=150
+                )
+                
+                if st.button("Create Stock List", type="primary"):
+                    if new_file_name and new_stocks_content:
+                        try:
+                            new_file_path = os.path.join('./data', f"{new_file_name}{new_file_extension}")
+                            
+                            # Check if file already exists
+                            if os.path.exists(new_file_path):
+                                st.error(f"File '{new_file_name}{new_file_extension}' already exists!")
+                            else:
+                                # Create the new file
+                                with open(new_file_path, 'w') as f:
+                                    f.write(new_stocks_content.strip())
                                     
                                     st.success(f"✅ Created '{new_file_name}{new_file_extension}' successfully!")
                                     st.info("Please refresh the page to see the new file in the dropdown.")
                                     
-                            except Exception as e:
-                                st.error(f"Error creating file: {e}")
-                        else:
-                            st.error("Please provide both a file name and stock symbols.")
-                
-        except Exception as e:
-            st.error(f"Error reading file: {e}")
-    else:
-        st.info("Select a stock list to edit")
+                        except Exception as e:
+                            st.error(f"Error creating file: {e}")
+                    else:
+                        st.error("Please provide both a file name and stock symbols.")
+            
+    except Exception as e:
+        st.sidebar.error(f"Error reading file: {e}")
 
-with col2:
-    # Analysis selection
-    st.write("**Analysis Algorithms:**")
-    
-    # Keep the analysis type radio button for UI consistency
-    # But we'll run all analyses regardless of selection
-    # analysis_type = st.radio(       
-    #     "Select Analysis Type (all will run)",
-    #     ["1234, 5230, CD Signal Evaluation"],
-    #     horizontal=True
-    # )
-    st.write("1234, 5230, CD Signal Evaluation")
-    
-    # Run analysis button
-    if st.button("Run Analysis", use_container_width=True, type="primary"):
-        if not selected_file:
-            st.error("Please select a stock list file first.")
-        else:
-            file_path = os.path.join('./data', selected_file)
+# Run analysis button in sidebar
+st.sidebar.markdown("---")
+if st.sidebar.button("Run Analysis", use_container_width=True, type="primary"):
+    if not selected_file:
+        st.sidebar.error("Please select a stock list file first.")
+    else:
+        file_path = os.path.join('./data', selected_file)
+        
+        # Show progress
+        progress_bar = st.sidebar.progress(0)
+        status_text = st.sidebar.empty()
+        
+        try:
+            status_text.text("Starting comprehensive analysis...")
+            progress_bar.progress(25)
             
-            # Show progress
-            progress_bar = st.progress(0)
-            status_text = st.empty()
-            
-            try:
-                status_text.text("Starting comprehensive analysis...")
-                progress_bar.progress(25)
-                
-                # Check if the stock list file exists and is readable
-                if not os.path.exists(file_path):
-                    st.error(f"Stock list file not found: {file_path}")
-                    progress_bar.empty()
-                    status_text.empty()
-                elif True:  # Continue with analysis
-                    # Check if the file has content
-                    with open(file_path, 'r') as f:
-                        content = f.read().strip()
-                        if not content:
-                            st.error("Stock list file is empty.")
+            # Check if the stock list file exists and is readable
+            if not os.path.exists(file_path):
+                st.sidebar.error(f"Stock list file not found: {file_path}")
+                progress_bar.empty()
+                status_text.empty()
+            elif True:  # Continue with analysis
+                # Check if the file has content
+                with open(file_path, 'r') as f:
+                    content = f.read().strip()
+                    if not content:
+                        st.sidebar.error("Stock list file is empty.")
+                        progress_bar.empty()
+                        status_text.empty()
+                    else:
+                        stock_symbols = content.splitlines()
+                        stock_symbols = [s.strip() for s in stock_symbols if s.strip()]
+                        
+                        if not stock_symbols:
+                            st.sidebar.error("No valid stock symbols found in the file.")
                             progress_bar.empty()
                             status_text.empty()
                         else:
-                            stock_symbols = content.splitlines()
-                            stock_symbols = [s.strip() for s in stock_symbols if s.strip()]
+                            status_text.text(f"Analyzing {len(stock_symbols)} stocks...")
+                            progress_bar.progress(50)
                             
-                            if not stock_symbols:
-                                st.error("No valid stock symbols found in the file.")
-                                progress_bar.empty()
-                                status_text.empty()
-                            else:
-                                status_text.text(f"Analyzing {len(stock_symbols)} stocks...")
-                                progress_bar.progress(50)
-                                
-                                # Run the consolidated analysis function
-                                analyze_stocks(file_path)
-                                
-                                progress_bar.progress(100)
-                                status_text.text("Analysis complete!")
-                                time.sleep(1)
-                                status_text.empty()
-                                progress_bar.empty()
-                                
-                                st.success(f"Analysis completed successfully for {len(stock_symbols)} stocks!")
+                            # Run the consolidated analysis function
+                            analyze_stocks(file_path)
+                            
+                            progress_bar.progress(100)
+                            status_text.text("Analysis complete!")
+                            time.sleep(1)
+                            status_text.empty()
+                            progress_bar.empty()
+                            
+                            st.sidebar.success(f"Analysis completed successfully for {len(stock_symbols)} stocks!")
+            
+        except Exception as e:
+            progress_bar.empty()
+            status_text.empty()
+            
+            # More detailed error reporting
+            import traceback
+            error_details = traceback.format_exc()
+            
+            st.sidebar.error(f"Error during analysis: {str(e)}")
+            
+            # Show detailed error in an expander for debugging
+            with st.sidebar.expander("🔍 Error Details (for debugging)", expanded=False):
+                st.code(error_details, language="python")
                 
-            except Exception as e:
-                progress_bar.empty()
-                status_text.empty()
+                # Additional debugging info
+                st.write("**Debugging Information:**")
+                st.write(f"- Selected file: {selected_file}")
+                st.write(f"- File path: {file_path}")
+                st.write(f"- File exists: {os.path.exists(file_path)}")
                 
-                # More detailed error reporting
-                import traceback
-                error_details = traceback.format_exc()
-                
-                st.error(f"Error during analysis: {str(e)}")
-                
-                # Show detailed error in an expander for debugging
-                with st.expander("🔍 Error Details (for debugging)", expanded=False):
-                    st.code(error_details, language="python")
-                    
-                    # Additional debugging info
-                    st.write("**Debugging Information:**")
-                    st.write(f"- Selected file: {selected_file}")
-                    st.write(f"- File path: {file_path}")
-                    st.write(f"- File exists: {os.path.exists(file_path)}")
-                    
-                    if os.path.exists(file_path):
-                        try:
-                            with open(file_path, 'r') as f:
-                                content = f.read().strip()
-                                lines = content.splitlines()
-                                st.write(f"- File size: {len(content)} characters")
-                                st.write(f"- Number of lines: {len(lines)}")
-                                st.write(f"- First few symbols: {lines[:5] if lines else 'None'}")
-                        except Exception as read_error:
-                            st.write(f"- Error reading file: {read_error}")
-                
-                # Suggest solutions
-                st.info("""
-                **Possible solutions:**
-                1. Check if the stock symbols in your list are valid
-                2. Ensure you have internet connection for data download
-                3. Try with a smaller stock list first
-                4. Check if the stock symbols are properly formatted (one per line)
-                """)
-
-
-# Horizontal line to separate configuration from results
-st.markdown("---")
+                if os.path.exists(file_path):
+                    try:
+                        with open(file_path, 'r') as f:
+                            content = f.read().strip()
+                            lines = content.splitlines()
+                            st.write(f"- File size: {len(content)} characters")
+                            st.write(f"- Number of lines: {len(lines)}")
+                            st.write(f"- First few symbols: {lines[:5] if lines else 'None'}")
+                    except Exception as read_error:
+                        st.write(f"- Error reading file: {read_error}")
+            
+            # Suggest solutions
+            st.sidebar.info("""
+            **Possible solutions:**
+            1. Check if the stock symbols in your list are valid
+            2. Ensure you have internet connection for data download
+            3. Try with a smaller stock list first
+            4. Check if the stock symbols are properly formatted (one per line)
+            """)
 
 # Function to get the latest update time for a stock list
 def get_latest_update_time(stock_list_file):
@@ -561,289 +536,35 @@ if chinese_stock_mapping and selected_file:
 
 # Create two columns for the two table views
 if selected_file:
-    col_left, col_center, col_right = st.columns([2, 0.05, 1])     
+    st.subheader("Waikiki Model")
+    
+    # Add shared ticker filter for Waikiki model
+    waikiki_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"waikiki_ticker_filter_{selected_file}")
 
-    # First table view with Waikiki Model and Resonance Model (left column)
-    with col_left:
-        st.subheader("Waikiki Model")
-        
-        # Add shared ticker filter for Waikiki model
-        waikiki_ticker_filter = st.text_input("Filter by ticker symbol:", key="waikiki_ticker_filter")
-        
-        tabs = st.tabs([
-            "Best Intervals (50)", 
-            "Best Intervals (20)", 
-            "Best Intervals (100)", 
-            "High Return Intervals",
-            "Interval Details"
-        ])
+    waikiki_viz_col, waikiki_tables_col = st.columns([1, 1])
 
-        # Helper for single-select tick column
-        def waikiki_tick_editor(df, tab_key):
-            if df is not None and not df.empty:
-                df = df.copy()
-                df['selected'] = (df['ticker'] == st.session_state.selected_ticker) & (df['interval'] == st.session_state.selected_interval)
-                # Move 'selected' column to the left
-                cols = ['selected'] + [c for c in df.columns if c != 'selected']
-                df = df[cols]
-                edited_df = st.data_editor(
-                    df,
-                    column_config={
-                        "selected": st.column_config.CheckboxColumn(
-                            "Select",
-                            help="Tick to select this row for visualization",
-                            default=False
-                        )
-                    },
-                    disabled=[col for col in df.columns if col != 'selected'],
-                    hide_index=True,
-                    key=f"waikiki_editor_{tab_key}"
-                )
-                # Enforce true single selection: only one row can be selected
-                selected_rows = edited_df[edited_df['selected']]
-                if len(selected_rows) > 1:
-                    # If multiple are selected, keep only the last one ticked
-                    last_selected_idx = selected_rows.index[-1]
-                    # Untick all except the last selected
-                    for idx in edited_df.index:
-                        edited_df.at[idx, 'selected'] = (idx == last_selected_idx)
-                    selected_row = edited_df.loc[last_selected_idx]
-                    st.session_state.selected_ticker = selected_row['ticker']
-                    st.session_state.selected_interval = selected_row['interval']
-                    # Rerun to update UI
-                    st.rerun()
-                elif len(selected_rows) == 1:
-                    selected_row = selected_rows.iloc[0]
-                    if (st.session_state.selected_ticker != selected_row['ticker'] or
-                        st.session_state.selected_interval != selected_row['interval']):
-                        st.session_state.selected_ticker = selected_row['ticker']
-                        st.session_state.selected_interval = selected_row['interval']
-                return edited_df
-            else:
-                st.info("No data available for this table. Please run analysis first.")
-                return None
-
-        # Display best intervals (50)
-        with tabs[0]:
-            df, message = load_results('cd_eval_best_intervals_50_', selected_file, 'avg_return_10')
-            if df is not None:
-                if waikiki_ticker_filter:
-                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
-                
-                if 'interval' in df.columns:
-                    intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_50")
-                    if selected_intervals:
-                        df = df[df['interval'].isin(selected_intervals)]
-                waikiki_tick_editor(df, '50')
-            else:
-                st.info("No best intervals data available for 50-period analysis. Please run CD Signal Evaluation first.")
-
-        # Display best intervals (20)
-        with tabs[1]:
-            df, message = load_results('cd_eval_best_intervals_20_', selected_file, 'avg_return_10')
-            if df is not None:
-                if waikiki_ticker_filter:
-                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
-                
-                if 'interval' in df.columns:
-                    intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_20")
-                    if selected_intervals:
-                        df = df[df['interval'].isin(selected_intervals)]
-                waikiki_tick_editor(df, '20')
-            else:
-                st.info("No best intervals data available for 20-period analysis. Please run CD Signal Evaluation first.")
-
-        # Display best intervals (100)
-        with tabs[2]:
-            df, message = load_results('cd_eval_best_intervals_100_', selected_file, 'avg_return_10')
-            if df is not None:
-                if waikiki_ticker_filter:
-                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
-                
-                if 'interval' in df.columns:
-                    intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_best_100")
-                    if selected_intervals:
-                        df = df[df['interval'].isin(selected_intervals)]
-                waikiki_tick_editor(df, '100')
-            else:
-                st.info("No best intervals data available for 100-period analysis. Please run CD Signal Evaluation first.")
-
-        # Display high return intervals
-        with tabs[3]:
-            df, message = load_results('cd_eval_good_signals_', selected_file, 'latest_signal')
-            if df is not None:
-                if waikiki_ticker_filter:
-                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
-                
-                if 'latest_signal' in df.columns:
-                    df = df[df['latest_signal'].notna()]
-                    df = df.sort_values(by='latest_signal', ascending=False)
-                    if 'interval' in df.columns:
-                        intervals = sorted(df['interval'].unique())
-                        selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_recent")
-                        if selected_intervals:
-                            df = df[df['interval'].isin(selected_intervals)]
-                    waikiki_tick_editor(df, 'good')
-                else:
-                    st.info("No signal date information available in the results.")
-            else:
-                st.info("No recent signals data available. Please run an analysis first.")
-
-        # Display interval details
-        with tabs[4]:
-            df, message = load_results('cd_eval_custom_detailed_', selected_file, 'avg_return_10')
-            if df is not None:
-                if waikiki_ticker_filter:
-                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
-                
-                if 'interval' in df.columns:
-                    intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key="interval_filter_details")
-                    if selected_intervals:
-                        df = df[df['interval'].isin(selected_intervals)]
-                waikiki_tick_editor(df, 'details')
-            else:
-                st.info("No interval summary data available. Please run CD Signal Evaluation first.")
-
-        # Resonance Model section
-        st.subheader("Resonance Model")
-        
-        # Add shared ticker filter for Resonance model
-        resonance_ticker_filter = st.text_input("Filter by ticker symbol:", key="resonance_ticker_filter")
-        
-        tab1, tab2, tab3, tab4 = st.tabs([
-            "1234 Candidates", 
-            "5230 Candidates", 
-            "1234 Details", 
-            "5230 Details"
-        ])
-
-        # Display 1234 breakout candidates
-        with tab1:
-            df, message = load_results('breakout_candidates_summary_1234_', selected_file, 'score')
-            
-            if df is not None and '1234' in message:
-                if resonance_ticker_filter:
-                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
-                
-                # Add NX filtering if available
-                if 'nx_1d' in df.columns:
-                    nx_values = sorted(df['nx_1d'].unique())
-                    selected_nx = st.multiselect("Filter by NX:", nx_values, 
-                                               default=[True] if True in nx_values else nx_values,
-                                               key="nx_filter_1234")
-                    if selected_nx:
-                        df = df[df['nx_1d'].isin(selected_nx)]
-                
-                # Display the dataframe
-                st.dataframe(df.sort_values(by='date', ascending=False), use_container_width=True)
-            else:
-                st.info("No 1234 breakout candidates found. Please run analysis first.")
-
-        # Display 5230 breakout candidates
-        with tab2:
-            df, message = load_results('breakout_candidates_summary_5230_', selected_file, 'score')
-            
-            if df is not None and '5230' in message:
-                if resonance_ticker_filter:
-                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
-                
-                # Add NX filtering if available
-                if 'nx_1h' in df.columns:
-                    nx_values = sorted(df['nx_1h'].unique())
-                    selected_nx = st.multiselect("Filter by NX:", nx_values, 
-                                               default=[True] if True in nx_values else nx_values,
-                                               key="nx_filter_5230")
-                    if selected_nx:
-                        df = df[df['nx_1h'].isin(selected_nx)]
-                
-                # Display the dataframe
-                st.dataframe(df.sort_values(by='date', ascending=False), use_container_width=True)
-            else:
-                st.info("No 5230 breakout candidates found. Please run analysis first.")
-
-        # Display 1234 detailed results
-        with tab3:
-            df, message = load_results('breakout_candidates_details_1234_', selected_file, 'signal_date')
-            
-            if df is not None and '1234' in message:
-                if resonance_ticker_filter:
-                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
-                
-                if 'interval' in df.columns:
-                    intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, 
-                                                       default=intervals,
-                                                       key="interval_filter_1234")
-                    if selected_intervals:
-                        df = df[df['interval'].isin(selected_intervals)]
-                
-                # Display the dataframe
-                st.dataframe(df.sort_values(by='signal_date', ascending=False), use_container_width=True)
-                
-                # Add download button
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    "Download filtered 1234 details as CSV",
-                    csv,
-                    "filtered_1234_details.csv",
-                    "text/csv",
-                    key='download-1234-csv'
-                )
-            else:
-                st.info("No 1234 detailed results found. Please run analysis first.")
-
-        # Display 5230 detailed results
-        with tab4:
-            df, message = load_results('breakout_candidates_details_5230_', selected_file, 'signal_date')
-            
-            if df is not None and '5230' in message:
-                if resonance_ticker_filter:
-                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
-                
-                if 'interval' in df.columns:
-                    intervals = sorted(df['interval'].unique())
-                    selected_intervals = st.multiselect("Filter by interval:", intervals, 
-                                                       default=intervals,
-                                                       key="interval_filter_5230")
-                    if selected_intervals:
-                        df = df[df['interval'].isin(selected_intervals)]
-                
-                # Display the dataframe
-                st.dataframe(df.sort_values(by='signal_date', ascending=False), use_container_width=True)
-                
-                # Add download button
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    "Download filtered 5230 details as CSV",
-                    csv,
-                    "filtered_5230_details.csv",
-                    "text/csv",
-                    key='download-5230-csv'
-                )
-            else:
-                st.info("No 5230 detailed results found. Please run analysis first.")
-
-    # Visualization panel (right column)
-    with col_right:
-        st.subheader("Visualization")
-        
+    with waikiki_viz_col:
         # Load the detailed results for period information
         detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
         
-        if detailed_df is not None and 'ticker' in detailed_df.columns:
+        if detailed_df is None or 'ticker' not in detailed_df.columns:
+            st.info("Please run an analysis first to view visualizations and period returns.")
+        else:
             # Use selected ticker and interval from session state
             ticker_filter = st.session_state.selected_ticker if st.session_state.selected_ticker else ""
             selected_interval = st.session_state.selected_interval if st.session_state.selected_interval else '1d'
             
-            # Display selected ticker info
-            # if ticker_filter:
-            #     st.write(f"**Selected Stock:** {ticker_filter}")
-            #     st.write(f"**Selected Interval:** {selected_interval}")
-            
+            # If no ticker is selected, automatically select the first one from the best intervals (50) data
+            if not ticker_filter:
+                best_50_df, _ = load_results('cd_eval_best_intervals_50_', selected_file, 'avg_return_10')
+                if best_50_df is not None and not best_50_df.empty:
+                    first_row = best_50_df.iloc[0]
+                    ticker_filter = first_row['ticker']
+                    selected_interval = first_row['interval']
+                    # Update session state
+                    st.session_state.selected_ticker = ticker_filter
+                    st.session_state.selected_interval = selected_interval
+
             # Filter the detailed DataFrame with exact match for ticker and interval
             filtered_detailed = detailed_df[
                 (detailed_df['ticker'] == ticker_filter) &
@@ -851,9 +572,27 @@ if selected_file:
             ]
             
             if not filtered_detailed.empty:
-                # Get the first matching ticker's data
                 selected_ticker = filtered_detailed.iloc[0]
-                
+
+                # Period Returns Panel
+                period_data = []
+                for period in [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]:
+                    if f'avg_return_{period}' in selected_ticker:
+                        period_data.append({
+                            'Period': period,
+                            'Return': f"{selected_ticker[f'avg_return_{period}']:.2f}%",
+                            'Success Rate': f"{selected_ticker[f'success_rate_{period}']:.2f}%",
+                            'Test Count': selected_ticker[f'test_count_{period}']
+                        })
+                if period_data:
+                    df = pd.DataFrame(period_data).set_index('Period').T
+                    # To prevent ArrowTypeError from mixed types, convert object columns to string
+                    for col in df.columns:
+                        if df[col].dtype == 'object':
+                            df[col] = df[col].astype(str)
+                    st.dataframe(df)
+
+                # Visualization Panel
                 # Create figure
                 fig = go.Figure(layout=dict(
                     font=dict(color='black')
@@ -867,10 +606,10 @@ if selected_file:
                         stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
                 
                 if stock_returns:
-                    periods, returns = zip(*stock_returns)
+                    periods_x, returns_y = zip(*stock_returns)
                     fig.add_trace(go.Scatter(
-                        x=periods,
-                        y=returns,
+                        x=periods_x,
+                        y=returns_y,
                         mode='lines+markers',
                         line=dict(color='lightgray', width=1),
                         marker=dict(color='gray', size=6),
@@ -882,7 +621,7 @@ if selected_file:
                 if 'current_period' in selected_ticker and 'current_price' in selected_ticker and 'latest_signal_price' in selected_ticker:
                     current_period = selected_ticker['current_period']
                     price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
-                                 selected_ticker['latest_signal_price'] * 100)
+                                     selected_ticker['latest_signal_price'] * 100)
                     if current_period >= 0:
                         fig.add_trace(go.Scatter(
                             x=[current_period],
@@ -893,8 +632,6 @@ if selected_file:
                             showlegend=True
                         ))
                 
-                
-                # Display additional information
                 # Find the period with maximum return
                 max_return = -float('inf')
                 best_period = None
@@ -914,11 +651,9 @@ if selected_file:
                 )
                                 
                 fig.update_layout(
-                    
                     legend=dict(font=dict(color='black')),
                     title=dict(
-                        # text=f"{selected_ticker['ticker']} ({selected_ticker['interval']}) <br><sub>best period: {best_period}\t best return: {max_return:.2f}% \t <br>success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t test count: {selected_ticker[f'test_count_{best_period}']}</sub>",
-                        text = title_html,
+                        text=title_html,
                         x=0.5,
                         font=dict(size=24, color='black'),
                         xanchor='center',
@@ -927,7 +662,7 @@ if selected_file:
                     xaxis_title="Period",
                     yaxis_title="Relative Price (Baseline = 100)", 
                     showlegend=True,
-                    height=300,
+                    height=398,
                     plot_bgcolor='white',
                     paper_bgcolor='white',
                     xaxis=dict(
@@ -954,24 +689,524 @@ if selected_file:
                 
                 # Display the plot
                 st.plotly_chart(fig, use_container_width=True)
-                
-                # Display period-specific information
-                st.write("**Period Returns:**")
-                period_data = []
-                for period in periods:
-                    if f'avg_return_{period}' in selected_ticker:
-                        period_data.append({
-                            'Period': period,
-                            'Return': f"{selected_ticker[f'avg_return_{period}']:.2f}%",
-                            'Success Rate': f"{selected_ticker[f'success_rate_{period}']:.2f}%",
-                            'Test Count': selected_ticker[f'test_count_{period}']
-                        })
-                if period_data:
-                    st.table(pd.DataFrame(period_data))
+
+            elif ticker_filter:
+                st.info("No matching stocks found for the selected criteria.")
             else:
-                st.info("No matching stocks found or no stock selected.")
+                st.info("Please select a stock from the tables below to view details.")
+
+    with waikiki_tables_col:
+        # Helper for single-select AgGrid
+        def waikiki_aggrid_editor(df, tab_key):
+            if df is not None and not df.empty:
+                df = df.copy()
+                
+                # To prevent ArrowTypeError from mixed types, convert object columns to string
+                for col in df.columns:
+                    if df[col].dtype == 'object':
+                        df[col] = df[col].astype(str)
+
+                # Round all numeric columns to 2 decimal places
+                for col in df.columns:
+                    if df[col].dtype in ['float64', 'float32']:
+                        df[col] = df[col].round(2)
+                
+                # Configure AgGrid options
+                gb = GridOptionsBuilder.from_dataframe(df)
+                gb.configure_selection('single', use_checkbox=True, groupSelectsChildren=False, groupSelectsFiltered=False)
+                gb.configure_grid_options(domLayout='normal', rowSelection='single')
+                gb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True)
+                
+                # Configure specific columns - only minWidth for ticker, latest_signal, current_time
+                # All others use fixed width based on header length
+                
+                # Only these 3 columns get minWidth (variable content needs flexibility)
+                if 'ticker' in df.columns:
+                    gb.configure_column('ticker', pinned='left', minWidth=90)
+                if 'latest_signal' in df.columns:
+                    gb.configure_column('latest_signal', minWidth=120)
+                if 'current_time' in df.columns:
+                    gb.configure_column('current_time', minWidth=100)
+                
+                # All other columns get fixed width based on header length
+                column_widths = {
+                    'interval': 80,           # 8 chars: "interval"
+                    'hold_time': 90,          # 9 chars: "hold_time"
+                    'exp_return': 100,         # 10 chars: "exp_return"
+                    'signal_count': 120,       # 12 chars: "signal_count"
+                    'latest_signal_price': 150, # 18 chars: "latest_signal_price"
+                    'current_price': 120,      # 13 chars: "current_price"
+                    'current_period': 120,    # 14 chars: "current_period"
+                    'test_count': 100,         # 10 chars: "test_count"
+                    'success_rate': 110,       # 12 chars: "success_rate"
+                    'best_period': 110,        # 11 chars: "best_period"
+                    'max_return': 100,         # 10 chars: "max_return"
+                    'min_return': 100,         # 10 chars: "min_return"
+                    'avg_return': 100,         # 10 chars: "avg_return"
+                }
+                
+                # Configure columns with specific widths
+                for col_name, width in column_widths.items():
+                    if col_name in df.columns:
+                        if col_name in ['exp_return', 'latest_signal_price', 'current_price', 'success_rate', 'max_return', 'min_return', 'avg_return']:
+                            gb.configure_column(col_name, type=['numericColumn', 'numberColumnFilter'], precision=2, width=width)
+                        else:
+                            gb.configure_column(col_name, width=width)
+                
+                # Handle dynamic columns (test_count_X, success_rate_X, avg_return_X where X is a number)
+                for col in df.columns:
+                    if col.startswith('test_count_'):
+                        gb.configure_column(col, width=85)  # 10-14 chars: "test_count_XX"
+                    elif col.startswith('success_rate_'):
+                        gb.configure_column(col, type=['numericColumn', 'numberColumnFilter'], precision=2, width=110)  # 14-18 chars: "success_rate_XXX"
+                    elif col.startswith('avg_return_'):
+                        gb.configure_column(col, type=['numericColumn', 'numberColumnFilter'], precision=2, width=100)  # 12-16 chars: "avg_return_XXX"
+                
+                # Enable pagination for large datasets
+                gb.configure_pagination(paginationAutoPageSize=True)
+                
+                grid_options = gb.build()
+                
+                # Suppress the grid's auto-sizing to enforce our fixed-width columns
+                grid_options['suppressSizeToFit'] = True
+                
+                # Display AgGrid
+                grid_response = AgGrid(
+                    df,
+                    gridOptions=grid_options,
+                    data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                    update_mode=GridUpdateMode.SELECTION_CHANGED,
+                    fit_columns_on_grid_load=False,  # Use custom sizing
+                    theme='streamlit',
+                    height=425,
+                    width='100%',
+                    key=f"waikiki_aggrid_{tab_key}_{selected_file}",
+                    reload_data=False,
+                    allow_unsafe_jscode=True
+                )
+                
+                # Handle selection
+                selected_rows = grid_response['selected_rows']
+                if selected_rows is not None and len(selected_rows) > 0:
+                    selected_row = selected_rows.iloc[0]  # Take first selected row
+                    new_ticker = selected_row['ticker']
+                    new_interval = selected_row['interval']
+                    
+                    # Update session state if selection changed
+                    if (st.session_state.selected_ticker != new_ticker or
+                        st.session_state.selected_interval != new_interval):
+                        st.session_state.selected_ticker = new_ticker
+                        st.session_state.selected_interval = new_interval
+                        st.rerun()
+                
+                return grid_response['data']
+            else:
+                st.info("No data available for this table. Please run analysis first.")
+                return None
+
+        tabs = st.tabs([
+            "Best Intervals (50)", 
+            "Best Intervals (20)", 
+            "Best Intervals (100)", 
+            "High Return Intervals",
+            "Interval Details"
+        ])
+
+        # Display best intervals (50)
+        with tabs[0]:
+            df, message = load_results('cd_eval_best_intervals_50_', selected_file, 'avg_return_10')
+            if df is not None:
+                if waikiki_ticker_filter:
+                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                
+                if 'interval' in df.columns:
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"interval_filter_best_50_{selected_file}")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
+                waikiki_aggrid_editor(df, '50')
+            else:
+                st.info("No best intervals data available for 50-period analysis. Please run CD Signal Evaluation first.")
+
+        # Display best intervals (20)
+        with tabs[1]:
+            df, message = load_results('cd_eval_best_intervals_20_', selected_file, 'avg_return_10')
+            if df is not None:
+                if waikiki_ticker_filter:
+                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                
+                if 'interval' in df.columns:
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"interval_filter_best_20_{selected_file}")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
+                waikiki_aggrid_editor(df, '20')
+            else:
+                st.info("No best intervals data available for 20-period analysis. Please run CD Signal Evaluation first.")
+
+        # Display best intervals (100)
+        with tabs[2]:
+            df, message = load_results('cd_eval_best_intervals_100_', selected_file, 'avg_return_10')
+            if df is not None:
+                if waikiki_ticker_filter:
+                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                
+                if 'interval' in df.columns:
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"interval_filter_best_100_{selected_file}")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
+                waikiki_aggrid_editor(df, '100')
+            else:
+                st.info("No best intervals data available for 100-period analysis. Please run CD Signal Evaluation first.")
+
+        # Display high return intervals
+        with tabs[3]:
+            df, message = load_results('cd_eval_good_signals_', selected_file, 'latest_signal')
+            if df is not None:
+                if waikiki_ticker_filter:
+                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                
+                if 'latest_signal' in df.columns:
+                    df = df[df['latest_signal'].notna()]
+                    df = df.sort_values(by='latest_signal', ascending=False)
+                    if 'interval' in df.columns:
+                        intervals = sorted(df['interval'].unique())
+                        selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"interval_filter_recent_{selected_file}")
+                        if selected_intervals:
+                            df = df[df['interval'].isin(selected_intervals)]
+                    waikiki_aggrid_editor(df, 'good')
+                else:
+                    st.info("No signal date information available in the results.")
+            else:
+                st.info("No recent signals data available. Please run an analysis first.")
+
+        # Display interval details
+        with tabs[4]:
+            df, message = load_results('cd_eval_custom_detailed_', selected_file, 'avg_return_10')
+            if df is not None:
+                if waikiki_ticker_filter:
+                    df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                
+                if 'interval' in df.columns:
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"interval_filter_details_{selected_file}")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
+                waikiki_aggrid_editor(df, 'details')
+            else:
+                st.info("No interval summary data available. Please run CD Signal Evaluation first.")
+
+    # Resonance Model section
+    st.subheader("Resonance Model")
+    
+    # Add shared ticker filter for Resonance model
+    resonance_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"resonance_ticker_filter_{selected_file}")
+    
+    # Helper for AgGrid in Resonance model
+    def resonance_aggrid_editor(df, tab_key, selection_enabled=True):
+        if df is not None and not df.empty:
+            df = df.copy()
+            # To prevent ArrowTypeError from mixed types, convert object columns to string
+            for col in df.columns:
+                if df[col].dtype == 'object':
+                    df[col] = df[col].astype(str)
+
+            gb = GridOptionsBuilder.from_dataframe(df)
+            gb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True)
+            gb.configure_pagination(paginationAutoPageSize=True)
+            
+            if selection_enabled:
+                gb.configure_selection('single', use_checkbox=True, groupSelectsChildren=False, groupSelectsFiltered=False)
+
+            if 'ticker' in df.columns:
+                gb.configure_column('ticker', pinned='left', minWidth=90)
+            if 'date' in df.columns:
+                gb.configure_column('date', minWidth=120)
+            if 'signal_date' in df.columns:
+                gb.configure_column('signal_date', minWidth=120)
+
+            grid_options = gb.build()
+            
+            ag_grid_params = {
+                'gridOptions': grid_options,
+                'fit_columns_on_grid_load': True,
+                'theme': 'streamlit',
+                'height': 350,
+                'width': '100%',
+                'key': f"resonance_aggrid_{tab_key}_{selected_file}",
+                'reload_data': False,
+                'allow_unsafe_jscode': True
+            }
+
+            if selection_enabled:
+                grid_response = AgGrid(
+                    df,
+                    data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                    update_mode=GridUpdateMode.SELECTION_CHANGED,
+                    **ag_grid_params
+                )
+                return grid_response
+            else:
+                AgGrid(df, **ag_grid_params)
+                return None
+
+    # Create two columns for 1234 and 5230 data
+    col_1234, col_5230 = st.columns([1, 1])
+
+    # Left column: 1234 data
+    with col_1234:
+        st.markdown("### 1234 Model")
+        tab_1234_candidates, tab_1234_details = st.tabs(["Candidates", "Details"])
+
+        # Display 1234 breakout candidates
+        with tab_1234_candidates:
+            df, message = load_results('breakout_candidates_summary_1234_', selected_file, 'date')
+            
+            if df is not None and '1234' in message:
+                if resonance_ticker_filter:
+                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
+                
+                # Add NX filtering if available
+                nx_filters_applied = False
+                if 'nx_1d' in df.columns:
+                    nx_1d_values = sorted(df['nx_1d'].unique())
+                    selected_nx_1d = st.multiselect("Filter by NX 1d:", nx_1d_values, 
+                                                   default=[True] if True in nx_1d_values else nx_1d_values,
+                                                   key=f"nx_1d_filter_1234_{selected_file}")
+                    if selected_nx_1d:
+                        df = df[df['nx_1d'].isin(selected_nx_1d)]
+                        nx_filters_applied = True
+                
+                df_sorted = df.sort_values(by='date', ascending=False)
+                grid_response = resonance_aggrid_editor(df_sorted, 'summary_1234')
+
+                # Initialize session state for both selections
+                if 'resonance_1234_selected' not in st.session_state:
+                    st.session_state.resonance_1234_selected = pd.DataFrame()
+                if 'resonance_5230_selected' not in st.session_state:
+                    st.session_state.resonance_5230_selected = pd.DataFrame()
+
+                # Default selection to the first candidate if none are selected
+                if not df_sorted.empty and st.session_state.resonance_1234_selected.empty and st.session_state.resonance_5230_selected.empty:
+                    st.session_state.resonance_1234_selected = df_sorted.head(1)
+
+                # If new selection is made in this grid
+                if grid_response and grid_response['selected_rows'] is not None and not pd.DataFrame(grid_response['selected_rows']).empty:
+                    selected_df = pd.DataFrame(grid_response['selected_rows'])
+                    # Avoid rerun if selection hasn't changed
+                    if not selected_df.equals(st.session_state.resonance_1234_selected):
+                        st.session_state.resonance_1234_selected = selected_df
+                        st.session_state.resonance_5230_selected = pd.DataFrame()  # Clear other selection
+                        st.rerun()
+            else:
+                st.info("No 1234 breakout candidates found. Please run analysis first.")
+
+        # Display 1234 detailed results
+        with tab_1234_details:
+            df, message = load_results('breakout_candidates_details_1234_', selected_file, 'signal_date')
+            
+            if df is not None and '1234' in message:
+                if resonance_ticker_filter:
+                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
+                
+                if 'interval' in df.columns:
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, 
+                                                       default=intervals,
+                                                       key=f"interval_filter_1234_{selected_file}")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
+                
+                # Display the dataframe
+                resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_1234', selection_enabled=False)
+                
+            else:
+                st.info("No 1234 detailed results found. Please run analysis first.")
+
+    # Right column: 5230 data
+    with col_5230:
+        st.markdown("### 5230 Model")
+        tab_5230_candidates, tab_5230_details = st.tabs(["Candidates", "Details"])
+
+        # Display 5230 breakout candidates
+        with tab_5230_candidates:
+            df, message = load_results('breakout_candidates_summary_5230_', selected_file, 'date')
+            
+            if df is not None and '5230' in message:
+                if resonance_ticker_filter:
+                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
+                
+                # Add NX filtering if available
+                if 'nx_1h' in df.columns:
+                    nx_values = sorted(df['nx_1h'].unique())
+                    selected_nx = st.multiselect("Filter by NX 1h:", nx_values, 
+                                               default=[True] if True in nx_values else nx_values,
+                                               key=f"nx_filter_5230_{selected_file}")
+                    if selected_nx:
+                        df = df[df['nx_1h'].isin(selected_nx)]
+                
+                # Display the dataframe
+                grid_response = resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_5230')
+
+                # If new selection is made in this grid
+                if grid_response['selected_rows'] is not None and not pd.DataFrame(grid_response['selected_rows']).empty:
+                    selected_df = pd.DataFrame(grid_response['selected_rows'])
+                    # Avoid rerun if selection hasn't changed
+                    if not selected_df.equals(st.session_state.resonance_5230_selected):
+                        st.session_state.resonance_5230_selected = selected_df
+                        st.session_state.resonance_1234_selected = pd.DataFrame()  # Clear other selection
+                        st.rerun()
+            else:
+                st.info("No 5230 breakout candidates found. Please run analysis first.")
+
+        # Display 5230 detailed results
+        with tab_5230_details:
+            df, message = load_results('breakout_candidates_details_5230_', selected_file, 'signal_date')
+            
+            if df is not None and '5230' in message:
+                if resonance_ticker_filter:
+                    df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
+                
+                if 'interval' in df.columns:
+                    intervals = sorted(df['interval'].unique())
+                    selected_intervals = st.multiselect("Filter by interval:", intervals, 
+                                                       default=intervals,
+                                                       key=f"interval_filter_5230_{selected_file}")
+                    if selected_intervals:
+                        df = df[df['interval'].isin(selected_intervals)]
+                
+                # Display the dataframe
+                resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_5230', selection_enabled=False)
+                
+            else:
+                st.info("No 5230 detailed results found. Please run analysis first.")
+
+
+    # Determine which selection to use
+    selected_candidates = pd.DataFrame()
+    source_model = None
+    if 'resonance_1234_selected' in st.session_state and not st.session_state.resonance_1234_selected.empty:
+        selected_candidates = st.session_state.resonance_1234_selected
+        source_model = '1234'
+    elif 'resonance_5230_selected' in st.session_state and not st.session_state.resonance_5230_selected.empty:
+        selected_candidates = st.session_state.resonance_5230_selected
+        source_model = '5230'
+
+    if not selected_candidates.empty:
+        # Load detailed data from waikiki model
+        detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
+
+        if detailed_df is None or detailed_df.empty:
+            st.warning("Could not load detailed data for Waikiki model. Please run analysis to generate `cd_eval_custom_detailed` file.")
         else:
-            st.info("Please run an analysis first to view stock visualizations.")
+            for index, row in selected_candidates.iterrows():
+                ticker = row['ticker']
+                # The intervals are like "1,2,4". These are hours. I need to convert them to "1h", "2h", "4h".
+                intervals_to_plot_str = row.get('intervals', '')
+                if not intervals_to_plot_str:
+                    continue
+
+                st.markdown(f"#### Plots for {ticker} ({source_model} Model)")
+                
+                # Logic to parse intervals based on source_model
+                if source_model == '1234':
+                    intervals_to_plot = [f"{i}h" for i in intervals_to_plot_str.split(',')]
+                elif source_model == '5230':
+                    intervals_to_plot = [f"{i}m" for i in intervals_to_plot_str.split(',')]
+                else:
+                    intervals_to_plot = []
+
+                # Create columns for plots
+                plot_cols = st.columns(len(intervals_to_plot))
+
+                for i, interval in enumerate(intervals_to_plot):
+                    with plot_cols[i]:
+                        # Filter data for this ticker and interval
+                        plot_data = detailed_df[(detailed_df['ticker'] == ticker) & (detailed_df['interval'] == interval)]
+
+                        if plot_data.empty:
+                            st.write(f"No detailed data for {ticker} ({interval})")
+                            continue
+                        
+                        selected_ticker_data = plot_data.iloc[0]
+
+                        # Create figure
+                        fig = go.Figure()
+                        
+                        periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                        stock_returns = [(0, 100)]
+                        for period in periods[1:]:
+                            if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                stock_returns.append((period, 100 + selected_ticker_data[f'avg_return_{period}']))
+                        
+                        if len(stock_returns) > 1:
+                            periods_x, returns_y = zip(*stock_returns)
+                            fig.add_trace(go.Scatter(
+                                x=periods_x,
+                                y=returns_y,
+                                mode='lines+markers',
+                                line=dict(color='lightgray', width=1),
+                                marker=dict(color='gray', size=6),
+                                name=f"{ticker} ({interval})",
+                            ))
+
+                        # Highlight best period
+                        max_return = -float('inf')
+                        best_period = None
+                        for period in periods:
+                            if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                if selected_ticker_data[f'avg_return_{period}'] > max_return:
+                                    max_return = selected_ticker_data[f'avg_return_{period}']
+                                    best_period = period
+                        
+                        title_html = (
+                            f"<span style='font-size:16px'><b>{ticker} ({interval})</b></span><br>"
+                        )
+                        if best_period is not None:
+                             title_html += (f"<span style='font-size:10px'>best period: {best_period} | "
+                            f"return: {max_return:.2f}% | "
+                            f"success: {selected_ticker_data.get(f'success_rate_{best_period}', 0):.2f}  "
+                            f"test count: {selected_ticker_data.get(f'test_count_{best_period}', 0)}</span>")
+                        
+                        fig.update_layout(
+                            title=dict(text=title_html, 
+                                        x=0.5, 
+                                        font=dict(color='black'),
+                                        xanchor='center',
+                                        yanchor='top'),
+                            xaxis_title="Period",
+                            yaxis_title="Relative Price (Baseline = 100)",
+                            showlegend=False,
+                            height=300,
+                            plot_bgcolor='white',
+                            paper_bgcolor='white',
+                            xaxis=dict(
+                                showgrid=True,
+                                gridwidth=1,
+                                gridcolor='lightgray',
+                                showline=True,
+                                linewidth=1,
+                                linecolor='black',
+                                tickfont=dict(color='black'),
+                                title=dict(text="Period", 
+                                            font=dict(color='black'))
+                            ),
+                            yaxis=dict(
+                                showgrid=True,
+                                gridwidth=1,
+                                gridcolor='lightgray',
+                                showline=True,
+                                linewidth=1,
+                                linecolor='black',
+                                tickfont=dict(color='black'),
+                                title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
+                            )
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Select a ticker from the '1234 Candidates' or '5230 Candidates' table to display visualizations.")
 else:
     st.info("👆 Please select a stock list above to view results.")
 
