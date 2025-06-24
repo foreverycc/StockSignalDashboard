@@ -969,11 +969,21 @@ if selected_file:
                         nx_filters_applied = True
                 
                 grid_response = resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_1234')
+
+                # Initialize session state for both selections
                 if 'resonance_1234_selected' not in st.session_state:
                     st.session_state.resonance_1234_selected = pd.DataFrame()
+                if 'resonance_5230_selected' not in st.session_state:
+                    st.session_state.resonance_5230_selected = pd.DataFrame()
 
-                if grid_response['selected_rows'] is not None:
-                    st.session_state.resonance_1234_selected = pd.DataFrame(grid_response['selected_rows'])
+                # If new selection is made in this grid
+                if grid_response['selected_rows'] is not None and not pd.DataFrame(grid_response['selected_rows']).empty:
+                    selected_df = pd.DataFrame(grid_response['selected_rows'])
+                    # Avoid rerun if selection hasn't changed
+                    if not selected_df.equals(st.session_state.resonance_1234_selected):
+                        st.session_state.resonance_1234_selected = selected_df
+                        st.session_state.resonance_5230_selected = pd.DataFrame()  # Clear other selection
+                        st.rerun()
             else:
                 st.info("No 1234 breakout candidates found. Please run analysis first.")
 
@@ -994,7 +1004,7 @@ if selected_file:
                         df = df[df['interval'].isin(selected_intervals)]
                 
                 # Display the dataframe
-                resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_1234')
+                grid_response = resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_1234')
                 
                 # Add download button
                 csv = df.to_csv(index=False).encode('utf-8')
@@ -1031,7 +1041,16 @@ if selected_file:
                         df = df[df['nx_1h'].isin(selected_nx)]
                 
                 # Display the dataframe
-                resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_5230')
+                grid_response = resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_5230')
+
+                # If new selection is made in this grid
+                if grid_response['selected_rows'] is not None and not pd.DataFrame(grid_response['selected_rows']).empty:
+                    selected_df = pd.DataFrame(grid_response['selected_rows'])
+                    # Avoid rerun if selection hasn't changed
+                    if not selected_df.equals(st.session_state.resonance_5230_selected):
+                        st.session_state.resonance_5230_selected = selected_df
+                        st.session_state.resonance_1234_selected = pd.DataFrame()  # Clear other selection
+                        st.rerun()
             else:
                 st.info("No 5230 breakout candidates found. Please run analysis first.")
 
@@ -1052,7 +1071,7 @@ if selected_file:
                         df = df[df['interval'].isin(selected_intervals)]
                 
                 # Display the dataframe
-                resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_5230')
+                grid_response = resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_5230')
                 
                 # Add download button
                 csv = df.to_csv(index=False).encode('utf-8')
@@ -1068,9 +1087,17 @@ if selected_file:
 
     st.subheader("Resonance Model Visualization")
 
+    # Determine which selection to use
+    selected_candidates = pd.DataFrame()
+    source_model = None
     if 'resonance_1234_selected' in st.session_state and not st.session_state.resonance_1234_selected.empty:
         selected_candidates = st.session_state.resonance_1234_selected
-        
+        source_model = '1234'
+    elif 'resonance_5230_selected' in st.session_state and not st.session_state.resonance_5230_selected.empty:
+        selected_candidates = st.session_state.resonance_5230_selected
+        source_model = '5230'
+
+    if not selected_candidates.empty:
         # Load detailed data from waikiki model
         detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
 
@@ -1084,10 +1111,16 @@ if selected_file:
                 if not intervals_to_plot_str:
                     continue
 
-                st.markdown(f"#### Plots for {ticker}")
+                st.markdown(f"#### Plots for {ticker} ({source_model} Model)")
                 
-                intervals_to_plot = [f"{i}h" for i in intervals_to_plot_str.split(',')]
-                
+                # Logic to parse intervals based on source_model
+                if source_model == '1234':
+                    intervals_to_plot = [f"{i}h" for i in intervals_to_plot_str.split(',')]
+                elif source_model == '5230':
+                    intervals_to_plot = [f"{i}m" for i in intervals_to_plot_str.split(',')]
+                else:
+                    intervals_to_plot = []
+
                 # Create columns for plots
                 plot_cols = st.columns(len(intervals_to_plot))
 
@@ -1111,7 +1144,7 @@ if selected_file:
                             if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
                                 stock_returns.append((period, 100 + selected_ticker_data[f'avg_return_{period}']))
                         
-                        if stock_returns:
+                        if len(stock_returns) > 1:
                             periods_x, returns_y = zip(*stock_returns)
                             fig.add_trace(go.Scatter(
                                 x=periods_x,
@@ -1137,23 +1170,15 @@ if selected_file:
                         if best_period is not None:
                              title_html += (f"<span style='font-size:10px'>best period: {best_period} | "
                             f"return: {max_return:.2f}% | "
-                            f"success: {selected_ticker_data.get(f'success_rate_{best_period}', 0):.2f}\t  "
+                            f"success: {selected_ticker_data.get(f'success_rate_{best_period}', 0):.2f}  "
                             f"test count: {selected_ticker_data.get(f'test_count_{best_period}', 0)}</span>")
-
-                        # # Update layout
-                        # title_html = (
-                        #     f"<span style='font-size:24px'><b>{selected_ticker['ticker']} ({selected_ticker['interval']})</b></span><br>"
-                        #     f"<span style='font-size:12px'>best period: {best_period}\t  "
-                        #     f"best return: {max_return:.2f}%  "
-                        #     f"success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t  "
-                        #     f"test count: {selected_ticker[f'test_count_{best_period}']}</span>"
-                        # )
+                        
                         fig.update_layout(
                             title=dict(text=title_html, 
-                                       x=0.5, 
-                                       font=dict(color='black'),
-                                       xanchor='center',
-                                       yanchor='top'),
+                                        x=0.5, 
+                                        font=dict(color='black'),
+                                        xanchor='center',
+                                        yanchor='top'),
                             xaxis_title="Period",
                             yaxis_title="Relative Price (Baseline = 100)",
                             showlegend=False,
@@ -1169,7 +1194,7 @@ if selected_file:
                                 linecolor='black',
                                 tickfont=dict(color='black'),
                                 title=dict(text="Period", 
-                                           font=dict(color='black'))
+                                            font=dict(color='black'))
                             ),
                             yaxis=dict(
                                 showgrid=True,
@@ -1185,7 +1210,7 @@ if selected_file:
                         
                         st.plotly_chart(fig, use_container_width=True)
     else:
-        st.info("Select a ticker from the '1234 Candidates' table to display visualizations.")
+        st.info("Select a ticker from the '1234 Candidates' or '5230 Candidates' table to display visualizations.")
 else:
     st.info("👆 Please select a stock list above to view results.")
 
