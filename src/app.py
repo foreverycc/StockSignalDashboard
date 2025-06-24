@@ -904,7 +904,7 @@ if selected_file:
     resonance_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"resonance_ticker_filter_{selected_file}")
     
     # Helper for AgGrid in Resonance model
-    def resonance_aggrid_editor(df, tab_key, selection_mode='single'):
+    def resonance_aggrid_editor(df, tab_key, selection_enabled=True):
         if df is not None and not df.empty:
             df = df.copy()
             # To prevent ArrowTypeError from mixed types, convert object columns to string
@@ -915,8 +915,10 @@ if selected_file:
             gb = GridOptionsBuilder.from_dataframe(df)
             gb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True)
             gb.configure_pagination(paginationAutoPageSize=True)
-            gb.configure_selection(selection_mode, use_checkbox=True, groupSelectsChildren=False, groupSelectsFiltered=False)
             
+            if selection_enabled:
+                gb.configure_selection('single', use_checkbox=True, groupSelectsChildren=False, groupSelectsFiltered=False)
+
             if 'ticker' in df.columns:
                 gb.configure_column('ticker', pinned='left', minWidth=90)
             if 'date' in df.columns:
@@ -926,20 +928,28 @@ if selected_file:
 
             grid_options = gb.build()
             
-            grid_response = AgGrid(
-                df,
-                gridOptions=grid_options,
-                data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-                update_mode=GridUpdateMode.SELECTION_CHANGED,
-                fit_columns_on_grid_load=True,
-                theme='streamlit',
-                height=350,
-                width='100%',
-                key=f"resonance_aggrid_{tab_key}_{selected_file}",
-                reload_data=False,
-                allow_unsafe_jscode=True
-            )
-            return grid_response
+            ag_grid_params = {
+                'gridOptions': grid_options,
+                'fit_columns_on_grid_load': True,
+                'theme': 'streamlit',
+                'height': 350,
+                'width': '100%',
+                'key': f"resonance_aggrid_{tab_key}_{selected_file}",
+                'reload_data': False,
+                'allow_unsafe_jscode': True
+            }
+
+            if selection_enabled:
+                grid_response = AgGrid(
+                    df,
+                    data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+                    update_mode=GridUpdateMode.SELECTION_CHANGED,
+                    **ag_grid_params
+                )
+                return grid_response
+            else:
+                AgGrid(df, **ag_grid_params)
+                return None
 
     # Create two columns for 1234 and 5230 data
     col_1234, col_5230 = st.columns([1, 1])
@@ -1004,17 +1014,8 @@ if selected_file:
                         df = df[df['interval'].isin(selected_intervals)]
                 
                 # Display the dataframe
-                grid_response = resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_1234')
+                resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_1234', selection_enabled=False)
                 
-                # Add download button
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    "Download filtered 1234 details as CSV",
-                    csv,
-                    "filtered_1234_details.csv",
-                    "text/csv",
-                    key='download-1234-csv'
-                )
             else:
                 st.info("No 1234 detailed results found. Please run analysis first.")
 
@@ -1071,17 +1072,8 @@ if selected_file:
                         df = df[df['interval'].isin(selected_intervals)]
                 
                 # Display the dataframe
-                grid_response = resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_5230')
+                resonance_aggrid_editor(df.sort_values(by='signal_date', ascending=False), 'details_5230', selection_enabled=False)
                 
-                # Add download button
-                csv = df.to_csv(index=False).encode('utf-8')
-                st.download_button(
-                    "Download filtered 5230 details as CSV",
-                    csv,
-                    "filtered_5230_details.csv",
-                    "text/csv",
-                    key='download-5230-csv'
-                )
             else:
                 st.info("No 5230 detailed results found. Please run analysis first.")
 
