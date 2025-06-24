@@ -978,7 +978,8 @@ if selected_file:
                         df = df[df['nx_1d'].isin(selected_nx_1d)]
                         nx_filters_applied = True
                 
-                grid_response = resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_1234')
+                df_sorted = df.sort_values(by='date', ascending=False)
+                grid_response = resonance_aggrid_editor(df_sorted, 'summary_1234')
 
                 # Initialize session state for both selections
                 if 'resonance_1234_selected' not in st.session_state:
@@ -986,8 +987,12 @@ if selected_file:
                 if 'resonance_5230_selected' not in st.session_state:
                     st.session_state.resonance_5230_selected = pd.DataFrame()
 
+                # Default selection to the first candidate if none are selected
+                if not df_sorted.empty and st.session_state.resonance_1234_selected.empty and st.session_state.resonance_5230_selected.empty:
+                    st.session_state.resonance_1234_selected = df_sorted.head(1)
+
                 # If new selection is made in this grid
-                if grid_response['selected_rows'] is not None and not pd.DataFrame(grid_response['selected_rows']).empty:
+                if grid_response and grid_response['selected_rows'] is not None and not pd.DataFrame(grid_response['selected_rows']).empty:
                     selected_df = pd.DataFrame(grid_response['selected_rows'])
                     # Avoid rerun if selection hasn't changed
                     if not selected_df.equals(st.session_state.resonance_1234_selected):
@@ -1077,7 +1082,6 @@ if selected_file:
             else:
                 st.info("No 5230 detailed results found. Please run analysis first.")
 
-    st.subheader("Resonance Model Visualization")
 
     # Determine which selection to use
     selected_candidates = pd.DataFrame()
