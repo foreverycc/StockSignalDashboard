@@ -186,6 +186,30 @@ def analyze_stocks(file_path):
         
         # Save detailed results with ticker information
         df_cd_eval.to_csv(os.path.join(output_dir, f'cd_eval_custom_detailed_{output_base}.csv'), index=False)
+        
+        # Create a separate file with individual returns for boxplot visualization
+        returns_data = []
+        for result in cd_eval_results:
+            ticker = result['ticker']
+            interval = result['interval']
+            for period in periods:
+                returns_key = f'returns_{period}'
+                if returns_key in result and result[returns_key]:
+                    for return_value in result[returns_key]:
+                        returns_data.append({
+                            'ticker': ticker,
+                            'interval': interval,
+                            'period': period,
+                            'return': return_value
+                        })
+        
+        if returns_data:
+            df_returns = pd.DataFrame(returns_data)
+            df_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
+        else:
+            # Create empty returns distribution file
+            empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return'])
+            empty_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
 
         # Find the best interval for each ticker based on success rate and returns
         # Only consider intervals with at least 2 tests for period 10
@@ -305,6 +329,10 @@ def analyze_stocks(file_path):
         empty_detailed_columns.extend(['max_return', 'min_return'])
         empty_detailed = pd.DataFrame(columns=empty_detailed_columns)
         empty_detailed.to_csv(os.path.join(output_dir, f'cd_eval_custom_detailed_{output_base}.csv'), index=False)
+        
+        # Create empty returns distribution file
+        empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return'])
+        empty_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
         
         # Create empty files with proper headers for each range
         for range_name in period_ranges.keys():
