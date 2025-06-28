@@ -688,12 +688,91 @@ if selected_file:
                             showlegend=True
                         ))
                 
-                # Add current price at current period
-                if 'current_period' in selected_ticker and 'current_price' in selected_ticker and 'latest_signal_price' in selected_ticker:
+                # Add actual price history if available
+                if 'price_history' in selected_ticker and selected_ticker['price_history']:
+                    price_history = selected_ticker['price_history']
+                    if isinstance(price_history, str):
+                        # Handle case where price_history might be stored as string
+                        try:
+                            import ast
+                            import re
+                            # Clean up numpy float64 references in the string
+                            cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                            price_history = ast.literal_eval(cleaned_str)
+                        except Exception as e:
+                            print(f"Error parsing price_history: {e}")
+                            price_history = {}
+                    
+                    if price_history and 0 in price_history and price_history[0] is not None:
+                        entry_price = float(price_history[0])
+                        price_periods = []
+                        price_values = []
+                        
+                        # Collect price history points
+                        for period in sorted(price_history.keys()):
+                            if price_history[period] is not None and period >= 0:
+                                try:
+                                    relative_price = (float(price_history[period]) / entry_price) * 100
+                                    price_periods.append(period)
+                                    price_values.append(relative_price)
+                                except (ValueError, TypeError):
+                                    continue
+                        
+                        # Add price history line and dots
+                        if len(price_periods) > 1:
+                            fig.add_trace(go.Scatter(
+                                x=price_periods,
+                                y=price_values,
+                                mode='lines+markers',
+                                line=dict(color='red', width=2),
+                                marker=dict(color='red', size=6),
+                                name='Price History',
+                                showlegend=True
+                            ))
+                        elif len(price_periods) == 1:
+                            # Single point case
+                            fig.add_trace(go.Scatter(
+                                x=price_periods,
+                                y=price_values,
+                                mode='markers',
+                                marker=dict(color='red', size=6),
+                                name='Price History',
+                                showlegend=True
+                            ))
+                
+                # Add current price at current period (updated to avoid duplicate)
+                if ('current_period' in selected_ticker and 'current_price' in selected_ticker and 
+                    'latest_signal_price' in selected_ticker and 'price_history' in selected_ticker):
                     current_period = selected_ticker['current_period']
-                    price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
-                                     selected_ticker['latest_signal_price'] * 100)
-                    if current_period >= 0:
+                    price_history = selected_ticker['price_history']
+                    
+                    # Parse price_history if it's a string
+                    if isinstance(price_history, str):
+                        try:
+                            import ast
+                            import re
+                            cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                            price_history = ast.literal_eval(cleaned_str)
+                        except:
+                            price_history = {}
+                    
+                    # Only add current price marker if it's not already in price_history
+                    if (isinstance(price_history, dict) and current_period not in price_history and 
+                        current_period > 0):
+                        price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
+                                         selected_ticker['latest_signal_price'] * 100)
+                        fig.add_trace(go.Scatter(
+                            x=[current_period],
+                            y=[100 + price_change],
+                            mode='markers',
+                            marker=dict(color='red', size=10, symbol='star'),
+                            name='Current Price',
+                            showlegend=True
+                        ))
+                    elif not price_history and current_period > 0:
+                        # If no price_history at all, still show current price
+                        price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
+                                         selected_ticker['latest_signal_price'] * 100)
                         fig.add_trace(go.Scatter(
                             x=[current_period],
                             y=[100 + price_change],
@@ -1292,7 +1371,59 @@ if selected_file:
                                     marker=dict(color='gray', size=6),
                                     name=f"{ticker} ({interval})",
                                 ))
-
+                        
+                        # Add actual price history if available
+                        if 'price_history' in selected_ticker_data and selected_ticker_data['price_history']:
+                            price_history = selected_ticker_data['price_history']
+                            if isinstance(price_history, str):
+                                # Handle case where price_history might be stored as string
+                                try:
+                                    import ast
+                                    import re
+                                    # Clean up numpy float64 references in the string
+                                    cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                                    price_history = ast.literal_eval(cleaned_str)
+                                except Exception as e:
+                                    print(f"Error parsing price_history: {e}")
+                                    price_history = {}
+                            
+                            if price_history and 0 in price_history and price_history[0] is not None:
+                                entry_price = float(price_history[0])
+                                price_periods = []
+                                price_values = []
+                                
+                                # Collect price history points
+                                for period in sorted(price_history.keys()):
+                                    if price_history[period] is not None and period >= 0:
+                                        try:
+                                            relative_price = (float(price_history[period]) / entry_price) * 100
+                                            price_periods.append(period)
+                                            price_values.append(relative_price)
+                                        except (ValueError, TypeError):
+                                            continue
+                        
+                                # Add price history line and dots
+                                if len(price_periods) > 1:
+                                    fig.add_trace(go.Scatter(
+                                        x=price_periods,
+                                        y=price_values,
+                                        mode='lines+markers',
+                                        line=dict(color='red', width=2),
+                                        marker=dict(color='red', size=6),
+                                        name='Price History',
+                                        showlegend=True
+                                    ))
+                                elif len(price_periods) == 1:
+                                    # Single point case
+                                    fig.add_trace(go.Scatter(
+                                        x=price_periods,
+                                        y=price_values,
+                                        mode='markers',
+                                        marker=dict(color='red', size=6),
+                                        name='Price History',
+                                        showlegend=True
+                                    ))
+                        
                         # Highlight best period
                         max_return = -float('inf')
                         best_period = None

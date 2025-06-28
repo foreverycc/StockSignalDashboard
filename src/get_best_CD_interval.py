@@ -120,7 +120,8 @@ def evaluate_interval(ticker, interval, data=None):
                 'current_price': current_price,
                 'current_period': 0,
                 'max_return': 0,
-                'min_return': 0
+                'min_return': 0,
+                'price_history': {}
             }
             # Add zero values for all periods
             periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
@@ -145,7 +146,8 @@ def evaluate_interval(ticker, interval, data=None):
                 'current_price': current_price,
                 'current_period': 0,
                 'max_return': 0,
-                'min_return': 0
+                'min_return': 0,
+                'price_history': {}
             }
             # Add zero values for all periods
             periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
@@ -177,10 +179,28 @@ def evaluate_interval(ticker, interval, data=None):
             current_idx = len(data_frame) - 1
             # Calculate current period as the number of data points between signal and current time
             current_period = current_idx - signal_idx
+            
+            # Calculate actual price history for the latest signal
+            price_history = {}
+            entry_price = data_frame.loc[latest_signal_date, 'Close']
+            price_history[0] = entry_price  # Entry price at period 0
+            
+            for period in periods:
+                if signal_idx + period < len(data_frame):
+                    actual_price = data_frame.iloc[signal_idx + period]['Close']
+                    price_history[period] = actual_price
+                else:
+                    price_history[period] = None
+                    
+            # Add current price if we're beyond the latest period
+            if current_period > max(periods):
+                price_history[current_period] = current_price
         else:
             current_period = 0
+            price_history = {}
             
         result['current_period'] = current_period
+        result['price_history'] = price_history
         
         # Calculate metrics for each period dynamically
         for period in periods:
