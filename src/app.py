@@ -644,7 +644,7 @@ if selected_file:
                                 x=median_periods,
                                 y=median_values,
                                 mode='lines+markers',
-                                line=dict(color='gray', width=2),
+                                line=dict(color='gray', width=1),
                                 marker=dict(color='gray', size=6),
                                 name='Median Returns',
                                 showlegend=True
@@ -728,7 +728,7 @@ if selected_file:
                                 x=price_periods,
                                 y=price_values,
                                 mode='lines+markers',
-                                line=dict(color='red', width=2),
+                                line=dict(color='red', width=1),
                                 marker=dict(color='red', size=6),
                                 name='Price History',
                                 showlegend=True
@@ -782,7 +782,7 @@ if selected_file:
                                 x=[last_price_period, current_period],
                                 y=[last_price_value, current_price_relative],
                                 mode='lines',
-                                line=dict(color='red', width=2, dash='dot'),
+                                line=dict(color='red', width=1, dash='dot'),
                                 name='Price Projection',
                                 showlegend=False
                             ))
@@ -808,7 +808,7 @@ if selected_file:
                         ))
                 
                 # Add baseline reference line at y=100 (add after all traces for visibility)
-                fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=2, 
+                fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
                              annotation_text="Entry Price (Baseline)", annotation_position="top right")
                 
                 # Add gray dot at [0, 100] and connect to first data point
@@ -855,7 +855,7 @@ if selected_file:
                         x=[0, first_period],
                         y=[100, first_value],
                         mode='lines',
-                        line=dict(color='gray', width=2),
+                        line=dict(color='gray', width=1),
                         name='Baseline Connection',
                         showlegend=False
                     ))
@@ -1416,7 +1416,7 @@ if selected_file:
                                         x=median_periods,
                                         y=median_values,
                                         mode='lines+markers',
-                                        line=dict(color='gray', width=2),
+                                        line=dict(color='gray', width=1),
                                         marker=dict(color='gray', size=4),
                                         name='Median Returns',
                                         showlegend=False
@@ -1494,7 +1494,7 @@ if selected_file:
                                         x=price_periods,
                                         y=price_values,
                                         mode='lines+markers',
-                                        line=dict(color='red', width=2),
+                                        line=dict(color='red', width=1),
                                         marker=dict(color='red', size=6),
                                         name='Price History',
                                         showlegend=True
@@ -1516,7 +1516,7 @@ if selected_file:
                                     last_price_value = price_values[-1]
                         
                         # Add baseline reference line at y=100 (add after all traces for visibility)
-                        fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=2, 
+                        fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
                                      annotation_text="Entry Price (Baseline)", annotation_position="top right")
                         
                         # Add gray dot at [0, 100] and connect to first data point
@@ -1563,7 +1563,7 @@ if selected_file:
                                 x=[0, first_period],
                                 y=[100, first_value],
                                 mode='lines',
-                                line=dict(color='gray', width=2),
+                                line=dict(color='gray', width=1),
                                 name='Baseline Connection',
                                 showlegend=False
                             ))
