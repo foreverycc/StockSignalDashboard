@@ -6,6 +6,7 @@ from stock_analyzer import analyze_stocks
 import re
 import plotly.graph_objects as go
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+import numpy as np
 
 # Set page configuration
 st.set_page_config(
@@ -547,6 +548,9 @@ if selected_file:
         # Load the detailed results for period information
         detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
         
+        # Load the returns distribution data for boxplots
+        returns_df, _ = load_results('cd_eval_returns_distribution_', selected_file)
+        
         if detailed_df is None or 'ticker' not in detailed_df.columns:
             st.info("Please run an analysis first to view visualizations and period returns.")
         else:
@@ -598,24 +602,91 @@ if selected_file:
                     font=dict(color='black')
                 ))
                 
-                # Add selected stock's returns for all periods as light gray dots and lines
-                periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]  # Added 0 to periods
-                stock_returns = [(0, 100)]  # Start with (0, 100)
-                for period in periods[1:]:  # Skip 0 as we already added it
-                    if f'avg_return_{period}' in selected_ticker:
-                        stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
-                
-                if stock_returns:
-                    periods_x, returns_y = zip(*stock_returns)
-                    fig.add_trace(go.Scatter(
-                        x=periods_x,
-                        y=returns_y,
-                        mode='lines+markers',
-                        line=dict(color='lightgray', width=1),
-                        marker=dict(color='gray', size=6),
-                        name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
-                        showlegend=True
-                    ))
+                # Filter returns distribution data for selected ticker and interval
+                if returns_df is not None and not returns_df.empty:
+                    filtered_returns = returns_df[
+                        (returns_df['ticker'] == ticker_filter) &
+                        (returns_df['interval'] == selected_interval)
+                    ]
+                    
+                    if not filtered_returns.empty:
+                        # Get periods that have data
+                        periods_with_data = sorted(filtered_returns['period'].unique())
+                        
+                        # Add boxplots for each period
+                        median_values = []
+                        median_periods = []
+                        
+                        for period in periods_with_data:
+                            period_returns = filtered_returns[filtered_returns['period'] == period]['return'].values
+                            if len(period_returns) > 0:
+                                # Convert returns to relative price (baseline = 100)
+                                relative_prices = 100 + period_returns
+                                
+                                # Add boxplot
+                                fig.add_trace(go.Box(
+                                    y=relative_prices,
+                                    x=[period] * len(relative_prices),
+                                    name=f'Period {period}',
+                                    boxpoints=False,  # Don't show individual points
+                                    showlegend=False,
+                                    marker=dict(color='lightgray'),
+                                    line=dict(color='gray')
+                                ))
+                                
+                                # Store median for connecting line
+                                median_values.append(100 + np.median(period_returns))
+                                median_periods.append(period)
+                        
+                        # Add line connecting medians
+                        if len(median_values) > 1:
+                            fig.add_trace(go.Scatter(
+                                x=median_periods,
+                                y=median_values,
+                                mode='lines+markers',
+                                line=dict(color='darkgray', width=2),
+                                marker=dict(color='darkgray', size=6),
+                                name='Median Returns',
+                                showlegend=True
+                            ))
+                    else:
+                        # Fallback to original scatter plot if no returns distribution data
+                        periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                        stock_returns = [(0, 100)]  # Start with (0, 100)
+                        for period in periods[1:]:  # Skip 0 as we already added it
+                            if f'avg_return_{period}' in selected_ticker:
+                                stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
+                        
+                        if stock_returns:
+                            periods_x, returns_y = zip(*stock_returns)
+                            fig.add_trace(go.Scatter(
+                                x=periods_x,
+                                y=returns_y,
+                                mode='lines+markers',
+                                line=dict(color='lightgray', width=1),
+                                marker=dict(color='gray', size=6),
+                                name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                                showlegend=True
+                            ))
+                else:
+                    # Fallback to original scatter plot if no returns distribution data available
+                    periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                    stock_returns = [(0, 100)]  # Start with (0, 100)
+                    for period in periods[1:]:  # Skip 0 as we already added it
+                        if f'avg_return_{period}' in selected_ticker:
+                            stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
+                    
+                    if stock_returns:
+                        periods_x, returns_y = zip(*stock_returns)
+                        fig.add_trace(go.Scatter(
+                            x=periods_x,
+                            y=returns_y,
+                            mode='lines+markers',
+                            line=dict(color='lightgray', width=1),
+                            marker=dict(color='gray', size=6),
+                            name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                            showlegend=True
+                        ))
                 
                 # Add current price at current period
                 if 'current_period' in selected_ticker and 'current_price' in selected_ticker and 'latest_signal_price' in selected_ticker:
@@ -635,6 +706,7 @@ if selected_file:
                 # Find the period with maximum return
                 max_return = -float('inf')
                 best_period = None
+                periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
                 for period in periods:
                     if f'avg_return_{period}' in selected_ticker:
                         if selected_ticker[f'avg_return_{period}'] > max_return:
@@ -1096,6 +1168,9 @@ if selected_file:
     if not selected_candidates.empty:
         # Load detailed data from waikiki model
         detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
+        
+        # Load returns distribution data for boxplots
+        returns_df, _ = load_results('cd_eval_returns_distribution_', selected_file)
 
         if detailed_df is None or detailed_df.empty:
             st.warning("Could not load detailed data for Waikiki model. Please run analysis to generate `cd_eval_custom_detailed` file.")
@@ -1134,26 +1209,94 @@ if selected_file:
                         # Create figure
                         fig = go.Figure()
                         
-                        periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-                        stock_returns = [(0, 100)]
-                        for period in periods[1:]:
-                            if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
-                                stock_returns.append((period, 100 + selected_ticker_data[f'avg_return_{period}']))
-                        
-                        if len(stock_returns) > 1:
-                            periods_x, returns_y = zip(*stock_returns)
-                            fig.add_trace(go.Scatter(
-                                x=periods_x,
-                                y=returns_y,
-                                mode='lines+markers',
-                                line=dict(color='lightgray', width=1),
-                                marker=dict(color='gray', size=6),
-                                name=f"{ticker} ({interval})",
-                            ))
+                        # Try to use boxplot data if available
+                        if returns_df is not None and not returns_df.empty:
+                            filtered_returns = returns_df[
+                                (returns_df['ticker'] == ticker) &
+                                (returns_df['interval'] == interval)
+                            ]
+                            
+                            if not filtered_returns.empty:
+                                # Get periods that have data
+                                periods_with_data = sorted(filtered_returns['period'].unique())
+                                
+                                # Add boxplots for each period
+                                median_values = []
+                                median_periods = []
+                                
+                                for period in periods_with_data:
+                                    period_returns = filtered_returns[filtered_returns['period'] == period]['return'].values
+                                    if len(period_returns) > 0:
+                                        # Convert returns to relative price (baseline = 100)
+                                        relative_prices = 100 + period_returns
+                                        
+                                        # Add boxplot
+                                        fig.add_trace(go.Box(
+                                            y=relative_prices,
+                                            x=[period] * len(relative_prices),
+                                            name=f'Period {period}',
+                                            boxpoints=False,  # Don't show individual points
+                                            showlegend=False,
+                                            marker=dict(color='lightgray'),
+                                            line=dict(color='gray')
+                                        ))
+                                        
+                                        # Store median for connecting line
+                                        median_values.append(100 + np.median(period_returns))
+                                        median_periods.append(period)
+                                
+                                # Add line connecting medians
+                                if len(median_values) > 1:
+                                    fig.add_trace(go.Scatter(
+                                        x=median_periods,
+                                        y=median_values,
+                                        mode='lines+markers',
+                                        line=dict(color='darkgray', width=2),
+                                        marker=dict(color='darkgray', size=4),
+                                        name='Median Returns',
+                                        showlegend=False
+                                    ))
+                            else:
+                                # Fallback to scatter plot
+                                periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                                stock_returns = [(0, 100)]
+                                for period in periods[1:]:
+                                    if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                        stock_returns.append((period, 100 + selected_ticker_data[f'avg_return_{period}']))
+                                
+                                if len(stock_returns) > 1:
+                                    periods_x, returns_y = zip(*stock_returns)
+                                    fig.add_trace(go.Scatter(
+                                        x=periods_x,
+                                        y=returns_y,
+                                        mode='lines+markers',
+                                        line=dict(color='lightgray', width=1),
+                                        marker=dict(color='gray', size=6),
+                                        name=f"{ticker} ({interval})",
+                                    ))
+                        else:
+                            # Fallback to scatter plot if no returns distribution data
+                            periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                            stock_returns = [(0, 100)]
+                            for period in periods[1:]:
+                                if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                    stock_returns.append((period, 100 + selected_ticker_data[f'avg_return_{period}']))
+                            
+                            if len(stock_returns) > 1:
+                                periods_x, returns_y = zip(*stock_returns)
+                                fig.add_trace(go.Scatter(
+                                    x=periods_x,
+                                    y=returns_y,
+                                    mode='lines+markers',
+                                    line=dict(color='lightgray', width=1),
+                                    marker=dict(color='gray', size=6),
+                                    name=f"{ticker} ({interval})",
+                                ))
 
                         # Highlight best period
                         max_return = -float('inf')
                         best_period = None
+                        periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
                         for period in periods:
                             if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
                                 if selected_ticker_data[f'avg_return_{period}'] > max_return:
