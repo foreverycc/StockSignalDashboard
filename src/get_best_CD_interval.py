@@ -53,7 +53,7 @@ def evaluate_interval(ticker, interval, data=None):
         data: Optional pre-downloaded data dictionary
     
     Returns:
-        Dictionary with evaluation metrics
+        Dictionary with evaluation metrics and individual returns
     """
     print(f"Evaluating {ticker} at {interval} interval")
     
@@ -120,7 +120,8 @@ def evaluate_interval(ticker, interval, data=None):
                 'current_price': current_price,
                 'current_period': 0,
                 'max_return': 0,
-                'min_return': 0
+                'min_return': 0,
+                'price_history': {}
             }
             # Add zero values for all periods
             periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
@@ -128,6 +129,7 @@ def evaluate_interval(ticker, interval, data=None):
                 result[f'test_count_{period}'] = 0
                 result[f'success_rate_{period}'] = 0
                 result[f'avg_return_{period}'] = 0
+                result[f'returns_{period}'] = []  # Store empty list for individual returns
             return result
             
         # Calculate returns for each signal
@@ -144,7 +146,8 @@ def evaluate_interval(ticker, interval, data=None):
                 'current_price': current_price,
                 'current_period': 0,
                 'max_return': 0,
-                'min_return': 0
+                'min_return': 0,
+                'price_history': {}
             }
             # Add zero values for all periods
             periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
@@ -152,6 +155,7 @@ def evaluate_interval(ticker, interval, data=None):
                 result[f'test_count_{period}'] = 0
                 result[f'success_rate_{period}'] = 0
                 result[f'avg_return_{period}'] = 0
+                result[f'returns_{period}'] = []  # Store empty list for individual returns
             return result
         
         # Define all periods
@@ -175,21 +179,48 @@ def evaluate_interval(ticker, interval, data=None):
             current_idx = len(data_frame) - 1
             # Calculate current period as the number of data points between signal and current time
             current_period = current_idx - signal_idx
+            
+            # Calculate actual price history for the latest signal
+            price_history = {}
+            entry_price = data_frame.loc[latest_signal_date, 'Close']
+            price_history[0] = entry_price  # Entry price at period 0
+            
+            for period in periods:
+                if signal_idx + period < len(data_frame):
+                    actual_price = data_frame.iloc[signal_idx + period]['Close']
+                    price_history[period] = actual_price
+                else:
+                    price_history[period] = None
+                    
+            # Add current price if we're beyond the latest period
+            if current_period > max(periods):
+                price_history[current_period] = current_price
         else:
             current_period = 0
+            price_history = {}
             
         result['current_period'] = current_period
+        result['price_history'] = price_history
         
         # Calculate metrics for each period dynamically
         for period in periods:
             return_col = f'return_{period}'
-            test_count = returns_df[return_col].count() if return_col in returns_df else 0
-            success_rate = (returns_df[return_col] > 0).mean() * 100 if return_col in returns_df and test_count > 0 else 0
-            avg_return = returns_df[return_col].mean() if return_col in returns_df and test_count > 0 else 0
+            if return_col in returns_df:
+                # Get individual returns (excluding NaN values)
+                individual_returns = returns_df[return_col].dropna().tolist()
+                test_count = len(individual_returns)
+                success_rate = (pd.Series(individual_returns) > 0).mean() * 100 if test_count > 0 else 0
+                avg_return = pd.Series(individual_returns).mean() if test_count > 0 else 0
+            else:
+                individual_returns = []
+                test_count = 0
+                success_rate = 0
+                avg_return = 0
             
             result[f'test_count_{period}'] = test_count
             result[f'success_rate_{period}'] = success_rate
             result[f'avg_return_{period}'] = avg_return
+            result[f'returns_{period}'] = individual_returns  # Store individual returns for boxplot
         
         # Calculate max and min returns across all periods
         all_returns = []

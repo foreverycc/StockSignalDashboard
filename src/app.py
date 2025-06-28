@@ -6,6 +6,7 @@ from stock_analyzer import analyze_stocks
 import re
 import plotly.graph_objects as go
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
+import numpy as np
 
 # Set page configuration
 st.set_page_config(
@@ -547,6 +548,9 @@ if selected_file:
         # Load the detailed results for period information
         detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
         
+        # Load the returns distribution data for boxplots
+        returns_df, _ = load_results('cd_eval_returns_distribution_', selected_file)
+        
         if detailed_df is None or 'ticker' not in detailed_df.columns:
             st.info("Please run an analysis first to view visualizations and period returns.")
         else:
@@ -598,43 +602,268 @@ if selected_file:
                     font=dict(color='black')
                 ))
                 
-                # Add selected stock's returns for all periods as light gray dots and lines
-                periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]  # Added 0 to periods
-                stock_returns = [(0, 100)]  # Start with (0, 100)
-                for period in periods[1:]:  # Skip 0 as we already added it
-                    if f'avg_return_{period}' in selected_ticker:
-                        stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
+                # Filter returns distribution data for selected ticker and interval
+                if returns_df is not None and not returns_df.empty:
+                    filtered_returns = returns_df[
+                        (returns_df['ticker'] == ticker_filter) &
+                        (returns_df['interval'] == selected_interval)
+                    ]
+                    
+                    if not filtered_returns.empty:
+                        # Get periods that have data
+                        periods_with_data = sorted(filtered_returns['period'].unique())
+                        
+                        # Add boxplots for each period
+                        median_values = []
+                        median_periods = []
+                        
+                        for period in periods_with_data:
+                            period_returns = filtered_returns[filtered_returns['period'] == period]['return'].values
+                            if len(period_returns) > 0:
+                                # Convert returns to relative price (baseline = 100)
+                                relative_prices = 100 + period_returns
+                                
+                                # Add boxplot
+                                fig.add_trace(go.Box(
+                                    y=relative_prices,
+                                    x=[period] * len(relative_prices),
+                                    name=f'Period {period}',
+                                    boxpoints=False,  # Don't show individual points
+                                    showlegend=False,
+                                    marker=dict(color='lightgray'),
+                                    line=dict(color='gray')
+                                ))
+                                
+                                # Store median for connecting line
+                                median_values.append(100 + np.median(period_returns))
+                                median_periods.append(period)
+                        
+                        # Add line connecting medians
+                        if len(median_values) > 1:
+                            fig.add_trace(go.Scatter(
+                                x=median_periods,
+                                y=median_values,
+                                mode='lines+markers',
+                                line=dict(color='gray', width=2),
+                                marker=dict(color='gray', size=6),
+                                name='Median Returns',
+                                showlegend=True
+                            ))
+                    else:
+                        # Fallback to original scatter plot if no returns distribution data
+                        periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                        stock_returns = [(0, 100)]  # Start with (0, 100)
+                        for period in periods[1:]:  # Skip 0 as we already added it
+                            if f'avg_return_{period}' in selected_ticker:
+                                stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
+                        
+                        if stock_returns:
+                            periods_x, returns_y = zip(*stock_returns)
+                            fig.add_trace(go.Scatter(
+                                x=periods_x,
+                                y=returns_y,
+                                mode='lines+markers',
+                                line=dict(color='lightgray', width=1),
+                                marker=dict(color='gray', size=6),
+                                name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                                showlegend=True
+                            ))
+                else:
+                    # Fallback to original scatter plot if no returns distribution data available
+                    periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                    stock_returns = [(0, 100)]  # Start with (0, 100)
+                    for period in periods[1:]:  # Skip 0 as we already added it
+                        if f'avg_return_{period}' in selected_ticker:
+                            stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
+                    
+                    if stock_returns:
+                        periods_x, returns_y = zip(*stock_returns)
+                        fig.add_trace(go.Scatter(
+                            x=periods_x,
+                            y=returns_y,
+                            mode='lines+markers',
+                            line=dict(color='lightgray', width=1),
+                            marker=dict(color='gray', size=6),
+                            name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                            showlegend=True
+                        ))
                 
-                if stock_returns:
-                    periods_x, returns_y = zip(*stock_returns)
-                    fig.add_trace(go.Scatter(
-                        x=periods_x,
-                        y=returns_y,
-                        mode='lines+markers',
-                        line=dict(color='lightgray', width=1),
-                        marker=dict(color='gray', size=6),
-                        name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
-                        showlegend=True
-                    ))
+                # Initialize variables for tracking last price point
+                last_price_period = None
+                last_price_value = None
                 
-                # Add current price at current period
-                if 'current_period' in selected_ticker and 'current_price' in selected_ticker and 'latest_signal_price' in selected_ticker:
+                # Add actual price history if available
+                if 'price_history' in selected_ticker and selected_ticker['price_history']:
+                    price_history = selected_ticker['price_history']
+                    if isinstance(price_history, str):
+                        # Handle case where price_history might be stored as string
+                        try:
+                            import ast
+                            import re
+                            # Clean up numpy float64 references in the string
+                            cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                            price_history = ast.literal_eval(cleaned_str)
+                        except Exception as e:
+                            print(f"Error parsing price_history: {e}")
+                            price_history = {}
+                    
+                    if price_history and 0 in price_history and price_history[0] is not None:
+                        entry_price = float(price_history[0])
+                        price_periods = []
+                        price_values = []
+                        
+                        # Collect price history points
+                        for period in sorted(price_history.keys()):
+                            if price_history[period] is not None and period >= 0:
+                                try:
+                                    relative_price = (float(price_history[period]) / entry_price) * 100
+                                    price_periods.append(period)
+                                    price_values.append(relative_price)
+                                except (ValueError, TypeError):
+                                    continue
+                        
+                        # Add price history line and dots
+                        if len(price_periods) > 1:
+                            fig.add_trace(go.Scatter(
+                                x=price_periods,
+                                y=price_values,
+                                mode='lines+markers',
+                                line=dict(color='red', width=2),
+                                marker=dict(color='red', size=6),
+                                name='Price History',
+                                showlegend=True
+                            ))
+                        elif len(price_periods) == 1:
+                            # Single point case
+                            fig.add_trace(go.Scatter(
+                                x=price_periods,
+                                y=price_values,
+                                mode='markers',
+                                marker=dict(color='red', size=6),
+                                name='Price History',
+                                showlegend=True
+                            ))
+                        
+                        # Store the last price history point for connecting to current price
+                        if price_periods:
+                            last_price_period = price_periods[-1]
+                            last_price_value = price_values[-1]
+                
+                # Add current price at current period (updated to avoid duplicate)
+                if ('current_period' in selected_ticker and 'current_price' in selected_ticker and 
+                    'latest_signal_price' in selected_ticker and 'price_history' in selected_ticker):
                     current_period = selected_ticker['current_period']
-                    price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
-                                     selected_ticker['latest_signal_price'] * 100)
-                    if current_period >= 0:
+                    price_history = selected_ticker['price_history']
+                    
+                    # Parse price_history if it's a string
+                    if isinstance(price_history, str):
+                        try:
+                            import ast
+                            import re
+                            cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                            price_history = ast.literal_eval(cleaned_str)
+                        except:
+                            price_history = {}
+                    
+                    # Calculate current price relative value
+                    current_price_relative = None
+                    if selected_ticker['latest_signal_price']:
+                        price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
+                                         selected_ticker['latest_signal_price'] * 100)
+                        current_price_relative = 100 + price_change
+                    
+                    # Only add current price marker if it's not already in price_history
+                    if (isinstance(price_history, dict) and current_period not in price_history and 
+                        current_period > 0 and current_price_relative is not None):
+                        
+                        # Add connecting line from last price history point to current price
+                        if last_price_period is not None and last_price_value is not None:
+                            fig.add_trace(go.Scatter(
+                                x=[last_price_period, current_period],
+                                y=[last_price_value, current_price_relative],
+                                mode='lines',
+                                line=dict(color='red', width=2, dash='dot'),
+                                name='Price Projection',
+                                showlegend=False
+                            ))
+                        
+                        # Add current price star
                         fig.add_trace(go.Scatter(
                             x=[current_period],
-                            y=[100 + price_change],
+                            y=[current_price_relative],
+                            mode='markers',
+                            marker=dict(color='red', size=10, symbol='star'),
+                            name='Current Price',
+                            showlegend=True
+                        ))
+                    elif not price_history and current_period > 0 and current_price_relative is not None:
+                        # If no price_history at all, still show current price
+                        fig.add_trace(go.Scatter(
+                            x=[current_period],
+                            y=[current_price_relative],
                             mode='markers',
                             marker=dict(color='red', size=10, symbol='star'),
                             name='Current Price',
                             showlegend=True
                         ))
                 
+                # Add baseline reference line at y=100 (add after all traces for visibility)
+                fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=2, 
+                             annotation_text="Entry Price (Baseline)", annotation_position="top right")
+                
+                # Add gray dot at [0, 100] and connect to first data point
+                fig.add_trace(go.Scatter(
+                    x=[0],
+                    y=[100],
+                    mode='markers',
+                    marker=dict(color='gray', size=8),
+                    name='Entry Point',
+                    showlegend=True
+                ))
+                
+                # Add gray line from [0, 100] to first available data point
+                # Find the first period with data (usually period 3)
+                first_period = None
+                first_value = None
+                
+                # Check if we have boxplot data
+                if returns_df is not None and not returns_df.empty:
+                    filtered_returns = returns_df[
+                        (returns_df['ticker'] == ticker_filter) &
+                        (returns_df['interval'] == selected_interval)
+                    ]
+                    if not filtered_returns.empty:
+                        periods_with_data = sorted(filtered_returns['period'].unique())
+                        if periods_with_data:
+                            first_period = periods_with_data[0]
+                            period_returns = filtered_returns[filtered_returns['period'] == first_period]['return'].values
+                            if len(period_returns) > 0:
+                                first_value = 100 + np.median(period_returns)
+                
+                # If no boxplot data, use scatter plot data
+                if first_period is None or first_value is None:
+                    periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                    for period in periods:
+                        if f'avg_return_{period}' in selected_ticker:
+                            first_period = period
+                            first_value = 100 + selected_ticker[f'avg_return_{period}']
+                            break
+                
+                # Add connecting line if we found a first data point
+                if first_period is not None and first_value is not None:
+                    fig.add_trace(go.Scatter(
+                        x=[0, first_period],
+                        y=[100, first_value],
+                        mode='lines',
+                        line=dict(color='gray', width=2),
+                        name='Baseline Connection',
+                        showlegend=False
+                    ))
+                
                 # Find the period with maximum return
                 max_return = -float('inf')
                 best_period = None
+                periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
                 for period in periods:
                     if f'avg_return_{period}' in selected_ticker:
                         if selected_ticker[f'avg_return_{period}'] > max_return:
@@ -1096,6 +1325,9 @@ if selected_file:
     if not selected_candidates.empty:
         # Load detailed data from waikiki model
         detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
+        
+        # Load returns distribution data for boxplots
+        returns_df, _ = load_results('cd_eval_returns_distribution_', selected_file)
 
         if detailed_df is None or detailed_df.empty:
             st.warning("Could not load detailed data for Waikiki model. Please run analysis to generate `cd_eval_custom_detailed` file.")
@@ -1134,26 +1366,212 @@ if selected_file:
                         # Create figure
                         fig = go.Figure()
                         
-                        periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-                        stock_returns = [(0, 100)]
-                        for period in periods[1:]:
-                            if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
-                                stock_returns.append((period, 100 + selected_ticker_data[f'avg_return_{period}']))
+                        # Add baseline reference line at y=100
+                        fig.add_hline(y=100, line_dash="dash", line_color="lightgray", line_width=1, 
+                                     annotation_text="Entry Price", annotation_position="top right")
                         
-                        if len(stock_returns) > 1:
-                            periods_x, returns_y = zip(*stock_returns)
+                        # Initialize variables for tracking last price point
+                        last_price_period = None
+                        last_price_value = None
+                        
+                        # Try to use boxplot data if available
+                        if returns_df is not None and not returns_df.empty:
+                            filtered_returns = returns_df[
+                                (returns_df['ticker'] == ticker) &
+                                (returns_df['interval'] == interval)
+                            ]
+                            
+                            if not filtered_returns.empty:
+                                # Get periods that have data
+                                periods_with_data = sorted(filtered_returns['period'].unique())
+                                
+                                # Add boxplots for each period
+                                median_values = []
+                                median_periods = []
+                                
+                                for period in periods_with_data:
+                                    period_returns = filtered_returns[filtered_returns['period'] == period]['return'].values
+                                    if len(period_returns) > 0:
+                                        # Convert returns to relative price (baseline = 100)
+                                        relative_prices = 100 + period_returns
+                                        
+                                        # Add boxplot
+                                        fig.add_trace(go.Box(
+                                            y=relative_prices,
+                                            x=[period] * len(relative_prices),
+                                            name=f'Period {period}',
+                                            boxpoints=False,  # Don't show individual points
+                                            showlegend=False,
+                                            marker=dict(color='lightgray'),
+                                            line=dict(color='gray')
+                                        ))
+                                        
+                                        # Store median for connecting line
+                                        median_values.append(100 + np.median(period_returns))
+                                        median_periods.append(period)
+                                
+                                # Add line connecting medians
+                                if len(median_values) > 1:
+                                    fig.add_trace(go.Scatter(
+                                        x=median_periods,
+                                        y=median_values,
+                                        mode='lines+markers',
+                                        line=dict(color='gray', width=2),
+                                        marker=dict(color='gray', size=4),
+                                        name='Median Returns',
+                                        showlegend=False
+                                    ))
+                            else:
+                                # Fallback to scatter plot
+                                periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                                stock_returns = [(0, 100)]
+                                for period in periods[1:]:
+                                    if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                        stock_returns.append((period, 100 + selected_ticker_data[f'avg_return_{period}']))
+                                
+                                if len(stock_returns) > 1:
+                                    periods_x, returns_y = zip(*stock_returns)
+                                    fig.add_trace(go.Scatter(
+                                        x=periods_x,
+                                        y=returns_y,
+                                        mode='lines+markers',
+                                        line=dict(color='lightgray', width=1),
+                                        marker=dict(color='gray', size=6),
+                                        name=f"{ticker} ({interval})",
+                                    ))
+                        else:
+                            # Fallback to scatter plot if no returns distribution data
+                            periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                            stock_returns = [(0, 100)]
+                            for period in periods[1:]:
+                                if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                    stock_returns.append((period, 100 + selected_ticker_data[f'avg_return_{period}']))
+                            
+                            if len(stock_returns) > 1:
+                                periods_x, returns_y = zip(*stock_returns)
+                                fig.add_trace(go.Scatter(
+                                    x=periods_x,
+                                    y=returns_y,
+                                    mode='lines+markers',
+                                    line=dict(color='lightgray', width=1),
+                                    marker=dict(color='gray', size=6),
+                                    name=f"{ticker} ({interval})",
+                                ))
+                        
+                        # Add actual price history if available
+                        if 'price_history' in selected_ticker_data and selected_ticker_data['price_history']:
+                            price_history = selected_ticker_data['price_history']
+                            if isinstance(price_history, str):
+                                # Handle case where price_history might be stored as string
+                                try:
+                                    import ast
+                                    import re
+                                    # Clean up numpy float64 references in the string
+                                    cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                                    price_history = ast.literal_eval(cleaned_str)
+                                except Exception as e:
+                                    print(f"Error parsing price_history: {e}")
+                                    price_history = {}
+                            
+                            if price_history and 0 in price_history and price_history[0] is not None:
+                                entry_price = float(price_history[0])
+                                price_periods = []
+                                price_values = []
+                                
+                                # Collect price history points
+                                for period in sorted(price_history.keys()):
+                                    if price_history[period] is not None and period >= 0:
+                                        try:
+                                            relative_price = (float(price_history[period]) / entry_price) * 100
+                                            price_periods.append(period)
+                                            price_values.append(relative_price)
+                                        except (ValueError, TypeError):
+                                            continue
+                        
+                                # Add price history line and dots
+                                if len(price_periods) > 1:
+                                    fig.add_trace(go.Scatter(
+                                        x=price_periods,
+                                        y=price_values,
+                                        mode='lines+markers',
+                                        line=dict(color='red', width=2),
+                                        marker=dict(color='red', size=6),
+                                        name='Price History',
+                                        showlegend=True
+                                    ))
+                                elif len(price_periods) == 1:
+                                    # Single point case
+                                    fig.add_trace(go.Scatter(
+                                        x=price_periods,
+                                        y=price_values,
+                                        mode='markers',
+                                        marker=dict(color='red', size=6),
+                                        name='Price History',
+                                        showlegend=True
+                                    ))
+                                
+                                # Store the last price history point for connecting to current price
+                                if price_periods:
+                                    last_price_period = price_periods[-1]
+                                    last_price_value = price_values[-1]
+                        
+                        # Add baseline reference line at y=100 (add after all traces for visibility)
+                        fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=2, 
+                                     annotation_text="Entry Price (Baseline)", annotation_position="top right")
+                        
+                        # Add gray dot at [0, 100] and connect to first data point
+                        fig.add_trace(go.Scatter(
+                            x=[0],
+                            y=[100],
+                            mode='markers',
+                            marker=dict(color='gray', size=8),
+                            name='Entry Point',
+                            showlegend=True
+                        ))
+                        
+                        # Add gray line from [0, 100] to first available data point
+                        # Find the first period with data (usually period 3)
+                        first_period = None
+                        first_value = None
+                        
+                        # Check if we have boxplot data
+                        if returns_df is not None and not returns_df.empty:
+                            filtered_returns = returns_df[
+                                (returns_df['ticker'] == ticker) &
+                                (returns_df['interval'] == interval)
+                            ]
+                            if not filtered_returns.empty:
+                                periods_with_data = sorted(filtered_returns['period'].unique())
+                                if periods_with_data:
+                                    first_period = periods_with_data[0]
+                                    period_returns = filtered_returns[filtered_returns['period'] == first_period]['return'].values
+                                    if len(period_returns) > 0:
+                                        first_value = 100 + np.median(period_returns)
+                        
+                        # If no boxplot data, use scatter plot data
+                        if first_period is None or first_value is None:
+                            periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                            for period in periods:
+                                if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                    first_period = period
+                                    first_value = 100 + selected_ticker_data[f'avg_return_{period}']
+                                    break
+                        
+                        # Add connecting line if we found a first data point
+                        if first_period is not None and first_value is not None:
                             fig.add_trace(go.Scatter(
-                                x=periods_x,
-                                y=returns_y,
-                                mode='lines+markers',
-                                line=dict(color='lightgray', width=1),
-                                marker=dict(color='gray', size=6),
-                                name=f"{ticker} ({interval})",
+                                x=[0, first_period],
+                                y=[100, first_value],
+                                mode='lines',
+                                line=dict(color='gray', width=2),
+                                name='Baseline Connection',
+                                showlegend=False
                             ))
-
+                        
                         # Highlight best period
                         max_return = -float('inf')
                         best_period = None
+                        periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
                         for period in periods:
                             if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
                                 if selected_ticker_data[f'avg_return_{period}'] > max_return:
