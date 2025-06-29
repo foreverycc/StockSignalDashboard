@@ -625,6 +625,8 @@ class DatabaseManager:
             # Convert to datetime for proper sorting
             good_signals_df['latest_signal'] = pd.to_datetime(good_signals_df['latest_signal'], errors='coerce')
             good_signals_df = good_signals_df.sort_values('latest_signal', ascending=False)
+            # Convert back to ISO format string for consistent display
+            good_signals_df['latest_signal'] = good_signals_df['latest_signal'].dt.strftime('%Y-%m-%d %H:%M')
         
         return good_signals_df
     
@@ -758,6 +760,8 @@ class DatabaseManager:
         if 'latest_signal' in result_df.columns:
             result_df['latest_signal'] = pd.to_datetime(result_df['latest_signal'], errors='coerce')
             result_df = result_df.sort_values('latest_signal', ascending=False)
+            # Convert back to ISO format string for consistent display
+            result_df['latest_signal'] = result_df['latest_signal'].dt.strftime('%Y-%m-%d %H:%M')
         
         return result_df
     

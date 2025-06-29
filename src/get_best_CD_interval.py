@@ -101,12 +101,12 @@ def evaluate_interval(ticker, interval, data=None):
         
         # Get the latest signal date
         latest_signal_date = data_frame.index[cd_signals].max() if signal_count > 0 else None
-        latest_signal_str = latest_signal_date.strftime('%Y-%m-%d %H:%M:%S') if latest_signal_date else None
+        latest_signal_str = latest_signal_date.strftime('%Y-%m-%d %H:%M') if latest_signal_date else None
         latest_signal_price = round(data_frame.loc[latest_signal_date, 'Close'], 2) if latest_signal_date is not None else None
         
         # Get current time and price
         current_time = data_frame.index[-1]
-        current_time_str = current_time.strftime('%Y-%m-%d %H:%M:%S')
+        current_time_str = current_time.strftime('%Y-%m-%d %H:%M')
         current_price = round(data_frame.iloc[-1]['Close'], 2)
         
         if signal_count == 0:

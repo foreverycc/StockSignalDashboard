@@ -73,9 +73,9 @@ def process_ticker_1234(ticker, data_ticker=None):
                     'ticker': ticker,
                     'interval': interval,
                     'score': score,
-                    'signal_date': date.strftime('%Y-%m-%d %H:%M:%S'),
+                    'signal_date': date.strftime('%Y-%m-%d %H:%M'),
                     'signal_price': round(signal_price, 2),
-                    'breakthrough_date': next_breakthrough.strftime('%Y-%m-%d %H:%M:%S') if next_breakthrough is not None else None
+                    'breakthrough_date': next_breakthrough.strftime('%Y-%m-%d %H:%M') if next_breakthrough is not None else None
                 })
         except Exception as e:
             print(f"Error processing {ticker} {interval}: {e}")
@@ -127,9 +127,9 @@ def process_ticker_5230(ticker, data_ticker=None):
                     'ticker': ticker,
                     'interval': interval,
                     'score': score,
-                    'signal_date': date.strftime('%Y-%m-%d %H:%M:%S'),
+                    'signal_date': date.strftime('%Y-%m-%d %H:%M'),
                     'signal_price': round(signal_price, 2),
-                    'breakthrough_date': next_breakthrough.strftime('%Y-%m-%d %H:%M:%S') if next_breakthrough is not None else None
+                    'breakthrough_date': next_breakthrough.strftime('%Y-%m-%d %H:%M') if next_breakthrough is not None else None
                 })
         except Exception as e:
             print(f"Error processing {ticker} {interval}: {e}")
@@ -232,7 +232,7 @@ def identify_1234(file_path, all_ticker_data):
     current_data = df_breakout_candidates['ticker'].apply(lambda ticker: 
         (
             round(all_ticker_data[ticker]['1d'].iloc[-1]['Close'], 2),
-            all_ticker_data[ticker]['1d'].iloc[-1].name.strftime('%Y-%m-%d %H:%M:%S')
+            all_ticker_data[ticker]['1d'].iloc[-1].name.strftime('%Y-%m-%d %H:%M')
         ) if ticker in all_ticker_data and '1d' in all_ticker_data[ticker] and not all_ticker_data[ticker]['1d'].empty else (None, None)
     )
     df_breakout_candidates[['current_price', 'current_time']] = pd.DataFrame(current_data.tolist(), index=df_breakout_candidates.index)
@@ -384,7 +384,7 @@ def identify_5230(file_path, all_ticker_data):
     current_data = df_breakout_candidates['ticker'].apply(lambda ticker: 
         (
             round(all_ticker_data[ticker]['1d'].iloc[-1]['Close'], 2),
-            all_ticker_data[ticker]['1d'].iloc[-1].name.strftime('%Y-%m-%d %H:%M:%S')
+            all_ticker_data[ticker]['1d'].iloc[-1].name.strftime('%Y-%m-%d %H:%M')
         ) if ticker in all_ticker_data and '1d' in all_ticker_data[ticker] and not all_ticker_data[ticker]['1d'].empty else (None, None)
     )
     df_breakout_candidates[['current_price', 'current_time']] = pd.DataFrame(current_data.tolist(), index=df_breakout_candidates.index)

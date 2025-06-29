@@ -485,13 +485,13 @@ if selected_file:
             utc_time = datetime.datetime.fromtimestamp(latest_time, tz=pytz.UTC)
             pst_tz = pytz.timezone('US/Pacific')
             pst_time = utc_time.astimezone(pst_tz)
-            formatted_time = pst_time.strftime("%Y-%m-%d %H:%M:%S PST")
+            formatted_time = pst_time.strftime("%Y-%m-%d %H:%M PST")
         except ImportError:
             # Fallback: manually adjust for PST (UTC-8, or UTC-7 during DST)
             # This is a simple approximation
             utc_time = datetime.datetime.fromtimestamp(latest_time)
             pst_time = utc_time - datetime.timedelta(hours=8)  # Approximate PST
-            formatted_time = pst_time.strftime("%Y-%m-%d %H:%M:%S PST")
+            formatted_time = pst_time.strftime("%Y-%m-%d %H:%M PST")
         
         st.header(f"Results for: {selected_file} (Last updated: {formatted_time})")
     else:
