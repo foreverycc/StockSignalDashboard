@@ -182,6 +182,10 @@ def analyze_stocks(file_path):
     print("Saving CD evaluation results...")
     # Convert CD evaluation results to DataFrame
     if cd_eval_results:
+        # Save to database
+        from database_manager import db_manager
+        db_manager.save_cd_evaluation_results(output_base, cd_eval_results)
+        
         df_cd_eval = pd.DataFrame(cd_eval_results)
         
         # Save detailed results with ticker information
@@ -204,6 +208,9 @@ def analyze_stocks(file_path):
                         })
         
         if returns_data:
+            # Save returns distribution to database
+            db_manager.save_returns_distribution(output_base, returns_data)
+            
             df_returns = pd.DataFrame(returns_data)
             df_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
         else:
@@ -237,7 +244,7 @@ def analyze_stocks(file_path):
                 # Calculate max return and best period for this range
                 range_df = valid_df.copy()
                 range_df['max_return'] = range_df[avg_return_cols].max(axis=1)
-                range_df['best_period'] = range_df[avg_return_cols].idxmax(axis=1).str.extract('(\d+)').astype(int)
+                range_df['best_period'] = range_df[avg_return_cols].idxmax(axis=1).str.extract(r'(\d+)').astype(int)
                 
                 # Get row with highest max_return for each ticker
                 best_intervals = range_df.loc[range_df.groupby('ticker')['max_return'].idxmax()]
@@ -269,7 +276,7 @@ def analyze_stocks(file_path):
             # Calculate max return and best period for good signals
             avg_return_cols = [f'avg_return_{period}' for period in periods if f'avg_return_{period}' in good_signals.columns]
             good_signals['max_return'] = good_signals[avg_return_cols].max(axis=1)
-            good_signals['best_period'] = good_signals[avg_return_cols].idxmax(axis=1).str.extract('(\d+)').astype(int)
+            good_signals['best_period'] = good_signals[avg_return_cols].idxmax(axis=1).str.extract(r'(\d+)').astype(int)
             
             # Calculate hold_time as interval * best_period
             good_signals['hold_time'] = good_signals.apply(
