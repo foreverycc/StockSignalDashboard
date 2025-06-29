@@ -435,10 +435,59 @@ class DatabaseManager:
     
     def _get_cd_evaluation_detailed_df(self, list_name: str) -> Optional[pd.DataFrame]:
         """Get CD evaluation detailed results as DataFrame."""
-        # TODO: The database detailed data structure doesn't match the expected format
-        # For now, return None to fall back to file-based loading
-        # which has the correctly structured detailed data
-        return None
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.execute("""
+                SELECT result_data FROM cd_evaluation 
+                WHERE list_name = ? 
+                ORDER BY latest_signal DESC
+            """, (list_name,))
+            
+            results = []
+            for row in cursor.fetchall():
+                try:
+                    result_data = json.loads(row[0])
+                    results.append(result_data)
+                except json.JSONDecodeError:
+                    continue
+            
+            if not results:
+                return None
+                
+            # Convert to DataFrame
+            df = pd.DataFrame(results)
+            
+            # Fix price_history format - convert string keys to integer keys
+            if 'price_history' in df.columns:
+                def fix_price_history(price_history):
+                    if isinstance(price_history, dict):
+                        # Convert string keys to integer keys
+                        fixed_history = {}
+                        for key, value in price_history.items():
+                            try:
+                                int_key = int(key)
+                                fixed_history[int_key] = value
+                            except ValueError:
+                                # Skip non-numeric keys
+                                continue
+                        return fixed_history
+                    return price_history
+                
+                df['price_history'] = df['price_history'].apply(fix_price_history)
+            
+            # Ensure all expected columns exist with proper data types
+            for col in df.columns:
+                if col.startswith(('avg_return_', 'success_rate_')):
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+                elif col.startswith('test_count_'):
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+                elif col == 'signal_count':
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+                elif col == 'current_period':
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0).astype(int)
+                elif col in ['current_price', 'latest_signal_price']:
+                    df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0.0)
+            
+            return df
     
     def _get_returns_distribution_df(self, list_name: str) -> Optional[pd.DataFrame]:
         """Get returns distribution as DataFrame."""
@@ -457,43 +506,218 @@ class DatabaseManager:
         if detailed_df is None or detailed_df.empty:
             return None
         
-        # Filter for valid signals (similar to original logic)
-        valid_df = detailed_df[detailed_df.get('test_count_10', 0) >= 2]
+        # Filter for valid signals (test_count_10 >= 2)
+        valid_df = detailed_df[detailed_df.get('test_count_10', 0) >= 2].copy()
         
         if valid_df.empty:
             return None
         
         # Calculate derived fields
         periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-        avg_return_cols = [f'avg_return_{period}' for period in periods if f'avg_return_{period}' in valid_df.columns]
         
-        if avg_return_cols:
-            valid_df = valid_df.copy()
-            valid_df['max_return'] = valid_df[avg_return_cols].max(axis=1)
-            valid_df['best_period'] = valid_df[avg_return_cols].idxmax(axis=1).str.extract(r'(\d+)').astype(int)
-            
-            # Calculate derived fields based on best period
-            valid_df['exp_return'] = valid_df.apply(
-                lambda row: row[f'avg_return_{int(row.best_period)}'] if f'avg_return_{int(row.best_period)}' in row else 0, axis=1
-            )
-            valid_df['test_count'] = valid_df.apply(
-                lambda row: row[f'test_count_{int(row.best_period)}'] if f'test_count_{int(row.best_period)}' in row else 0, axis=1
-            )
-            valid_df['success_rate'] = valid_df.apply(
-                lambda row: row[f'success_rate_{int(row.best_period)}'] if f'success_rate_{int(row.best_period)}' in row else 0, axis=1
-            )
-            
-            # Filter for good signals
-            valid_df = valid_df[valid_df['success_rate'] >= 50]
+        # Find best period for each row
+        best_periods = []
+        max_returns = []
+        exp_returns = []
+        test_counts = []
+        success_rates = []
         
-        return valid_df.sort_values('latest_signal', ascending=False) if not valid_df.empty else None
+        for _, row in valid_df.iterrows():
+            # Find available periods with sufficient data
+            available_periods = []
+            for period in periods:
+                if (f'avg_return_{period}' in row and 
+                    f'test_count_{period}' in row and 
+                    f'success_rate_{period}' in row and
+                    row.get(f'test_count_{period}', 0) >= 2):
+                    available_periods.append(period)
+            
+            if not available_periods:
+                best_periods.append(None)
+                max_returns.append(0)
+                exp_returns.append(0)
+                test_counts.append(0)
+                success_rates.append(0)
+                continue
+            
+            # Find period with highest avg_return
+            best_period = None
+            best_return = float('-inf')
+            
+            for period in available_periods:
+                avg_return = row.get(f'avg_return_{period}', 0)
+                if avg_return > best_return:
+                    best_return = avg_return
+                    best_period = period
+            
+            best_periods.append(best_period)
+            max_returns.append(best_return)
+            
+            if best_period:
+                exp_returns.append(row.get(f'avg_return_{best_period}', 0))
+                test_counts.append(row.get(f'test_count_{best_period}', 0))
+                success_rates.append(row.get(f'success_rate_{best_period}', 0))
+            else:
+                exp_returns.append(0)
+                test_counts.append(0)
+                success_rates.append(0)
+        
+        # Add calculated columns
+        valid_df['best_period'] = best_periods
+        valid_df['max_return'] = max_returns
+        valid_df['exp_return'] = exp_returns
+        valid_df['test_count'] = test_counts
+        valid_df['success_rate'] = success_rates
+        
+        # Filter for good signals (success_rate >= 50)
+        good_signals_df = valid_df[valid_df['success_rate'] >= 50].copy()
+        
+        if good_signals_df.empty:
+            return None
+        
+        # Sort by latest signal date
+        if 'latest_signal' in good_signals_df.columns:
+            # Convert to datetime for proper sorting
+            good_signals_df['latest_signal'] = pd.to_datetime(good_signals_df['latest_signal'], errors='coerce')
+            good_signals_df = good_signals_df.sort_values('latest_signal', ascending=False)
+        
+        return good_signals_df
     
     def _get_cd_best_intervals_df(self, list_name: str, file_pattern: str) -> Optional[pd.DataFrame]:
         """Get CD best intervals as DataFrame."""
-        # TODO: The best intervals logic needs to be properly implemented
-        # For now, return None to fall back to file-based loading
-        # which has the correctly processed best intervals data
-        return None
+        # Extract period range from file pattern
+        if '20' in file_pattern:
+            max_period = 20
+        elif '50' in file_pattern:
+            max_period = 50
+        elif '100' in file_pattern:
+            max_period = 100
+        else:
+            max_period = 100
+        
+        # Get detailed data
+        detailed_df = self._get_cd_evaluation_detailed_df(list_name)
+        if detailed_df is None or detailed_df.empty:
+            return None
+        
+        # Filter for valid signals (test_count_10 >= 2)
+        valid_df = detailed_df[detailed_df.get('test_count_10', 0) >= 2].copy()
+        
+        if valid_df.empty:
+            return None
+        
+        # Calculate best intervals
+        best_intervals = []
+        
+        for _, row in valid_df.iterrows():
+            ticker = row['ticker']
+            interval = row['interval']
+            
+            # Find available periods up to max_period
+            periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+            available_periods = [p for p in periods if p <= max_period and f'avg_return_{p}' in row and row.get(f'test_count_{p}', 0) >= 2]
+            
+            if not available_periods:
+                continue
+                
+            # Find the best period (highest avg_return with sufficient test count)
+            best_period = None
+            best_return = float('-inf')
+            
+            for period in available_periods:
+                avg_return = row.get(f'avg_return_{period}', 0)
+                test_count = row.get(f'test_count_{period}', 0)
+                success_rate = row.get(f'success_rate_{period}', 0)
+                
+                # Only consider periods with good success rate and test count
+                if test_count >= 2 and success_rate >= 50 and avg_return > best_return:
+                    best_return = avg_return
+                    best_period = period
+            
+            if best_period is None:
+                continue
+                
+            # Calculate hold time (convert period to readable format)
+            if interval.endswith('m'):
+                interval_mins = int(interval[:-1])
+            elif interval.endswith('h'):
+                interval_mins = int(interval[:-1]) * 60
+            elif interval == '1d':
+                interval_mins = 24 * 60
+            elif interval == '1w':
+                interval_mins = 7 * 24 * 60
+            else:
+                interval_mins = 60  # default
+                
+            hold_mins = best_period * interval_mins
+            
+            # Convert to readable format
+            if hold_mins < 60:
+                hold_time = f"{hold_mins}min"
+            elif hold_mins < 24 * 60:
+                hours = hold_mins // 60
+                mins = hold_mins % 60
+                if mins == 0:
+                    hold_time = f"{hours}hr"
+                else:
+                    hold_time = f"{hours}hr{mins}min"
+            else:
+                days = hold_mins // (24 * 60)
+                remaining_mins = hold_mins % (24 * 60)
+                hours = remaining_mins // 60
+                mins = remaining_mins % 60
+                
+                if hours == 0 and mins == 0:
+                    hold_time = f"{days}days"
+                elif mins == 0:
+                    hold_time = f"{days}days{hours}hr"
+                else:
+                    hold_time = f"{days}days{hours}hr{mins}min"
+            
+            # Create best interval record
+            best_interval = {
+                'ticker': ticker,
+                'interval': interval,
+                'hold_time': hold_time,
+                'avg_return': row.get(f'avg_return_{best_period}', 0),
+                'latest_signal': row.get('latest_signal', ''),
+                'latest_signal_price': row.get('latest_signal_price', 0),
+                'current_time': row.get('current_time', ''),
+                'current_price': row.get('current_price', 0),
+                'current_period': row.get('current_period', 0),
+                'test_count': row.get(f'test_count_{best_period}', 0),
+                'success_rate': row.get(f'success_rate_{best_period}', 0),
+                'best_period': best_period,
+                'signal_count': row.get('signal_count', 0)
+            }
+            
+            best_intervals.append(best_interval)
+        
+        if not best_intervals:
+            return None
+            
+        # Convert to DataFrame and sort
+        result_df = pd.DataFrame(best_intervals)
+        
+        # Remove duplicates (keep the first occurrence)
+        result_df = result_df.drop_duplicates(subset=['ticker', 'interval'], keep='first')
+        
+        # Apply the same filters as the original file-based system
+        # Filter 1: Only show intervals with at least 5% average return
+        result_df = result_df[result_df['avg_return'] >= 5]
+        
+        # Filter 2: Only show intervals where current_period <= best_period (still within optimal holding period)
+        result_df = result_df[result_df['current_period'] <= result_df['best_period']]
+        
+        if result_df.empty:
+            return None
+            
+        # Sort by latest signal date (descending) for consistency with file-based system
+        if 'latest_signal' in result_df.columns:
+            result_df['latest_signal'] = pd.to_datetime(result_df['latest_signal'], errors='coerce')
+            result_df = result_df.sort_values('latest_signal', ascending=False)
+        
+        return result_df
     
     def _get_breakout_summary_df(self, list_name: str, analysis_type: str) -> Optional[pd.DataFrame]:
         """Get breakout candidates summary as DataFrame."""
