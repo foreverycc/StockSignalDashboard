@@ -583,19 +583,6 @@ if selected_file:
         # Load the returns distribution data for boxplots
         returns_df, returns_source = load_results('cd_eval_returns_distribution_', selected_file)
         
-        # Show data source indicators
-        col1, col2 = st.columns(2)
-        with col1:
-            if detailed_source and detailed_source.startswith('database_'):
-                st.success("🗄️ Detailed data: Database")
-            elif detailed_source:
-                st.info("📁 Detailed data: File")
-        with col2:
-            if returns_source and returns_source.startswith('database_'):
-                st.success("🗄️ Returns data: Database") 
-            elif returns_source:
-                st.info("📁 Returns data: File")
-        
         if detailed_df is None or 'ticker' not in detailed_df.columns:
             st.info("Please run an analysis first to view visualizations and period returns.")
         else:
@@ -1089,11 +1076,7 @@ if selected_file:
         # Display best intervals (50)
         with tabs[0]:
             df, source_50 = load_results('cd_eval_best_intervals_50_', selected_file, 'avg_return_10')
-            # Data source indicator
-            if source_50 and source_50.startswith('database_'):
-                st.success("🗄️ Data source: Database")
-            elif source_50:
-                st.info(f"📁 Data source: File ({source_50})")
+            
             if df is not None:
                 if waikiki_ticker_filter:
                     df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
@@ -1110,11 +1093,7 @@ if selected_file:
         # Display best intervals (20)
         with tabs[1]:
             df, source_20 = load_results('cd_eval_best_intervals_20_', selected_file, 'avg_return_10')
-            # Data source indicator
-            if source_20 and source_20.startswith('database_'):
-                st.success("🗄️ Data source: Database")
-            elif source_20:
-                st.info(f"📁 Data source: File ({source_20})")
+            
             if df is not None:
                 if waikiki_ticker_filter:
                     df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
@@ -1131,11 +1110,7 @@ if selected_file:
         # Display best intervals (100)
         with tabs[2]:
             df, source_100 = load_results('cd_eval_best_intervals_100_', selected_file, 'avg_return_10')
-            # Data source indicator
-            if source_100 and source_100.startswith('database_'):
-                st.success("🗄️ Data source: Database")
-            elif source_100:
-                st.info(f"📁 Data source: File ({source_100})")
+            
             if df is not None:
                 if waikiki_ticker_filter:
                     df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
@@ -1152,11 +1127,7 @@ if selected_file:
         # Display high return intervals
         with tabs[3]:
             df, source_good = load_results('cd_eval_good_signals_', selected_file, 'latest_signal')
-            # Data source indicator
-            if source_good and source_good.startswith('database_'):
-                st.success("🗄️ Data source: Database")
-            elif source_good:
-                st.info(f"📁 Data source: File ({source_good})")
+            
             if df is not None:
                 if waikiki_ticker_filter:
                     df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
