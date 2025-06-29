@@ -729,12 +729,32 @@ class DatabaseManager:
                 WHERE list_name = ? AND analysis_type = ?
                 ORDER BY date DESC
             """, conn, params=(list_name, analysis_type))
-            return df if not df.empty else None
+            
+            if df.empty:
+                return None
+                
+            # Remove duplicates by ticker+date combination (since one signal can apply to multiple intervals)
+            # Keep the most recent record for each unique ticker+date
+            df = df.drop_duplicates(subset=['ticker', 'date'], keep='first')
+            
+            return df
     
     def _get_breakout_details_df(self, list_name: str, analysis_type: str) -> Optional[pd.DataFrame]:
         """Get breakout candidates details as DataFrame."""
         results = self.get_analysis_results(analysis_type, list_name)
-        return pd.DataFrame(results) if results else None
+        
+        if not results:
+            return None
+            
+        df = pd.DataFrame(results)
+        
+        # Remove duplicates based on ticker and interval (keep the most recent/first occurrence)
+        if 'ticker' in df.columns and 'interval' in df.columns:
+            df = df.drop_duplicates(subset=['ticker', 'interval'], keep='first')
+        elif 'ticker' in df.columns:
+            df = df.drop_duplicates(subset=['ticker'], keep='first')
+            
+        return df
     
     # Migration methods
     def migrate_existing_files(self, data_dir: str = './data'):
