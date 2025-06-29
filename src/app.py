@@ -427,15 +427,28 @@ if st.sidebar.button("Run Analysis", use_container_width=True, type="primary"):
 
 # Function to get the latest update time for a stock list
 def get_latest_update_time(stock_list_file):
+    """
+    Get latest update time with database compatibility.
+    First tries database, falls back to files.
+    """
     if not stock_list_file:
         return None
     
+    stock_list_name = os.path.splitext(stock_list_file)[0]
+    
+    # Try to get from database first
+    try:
+        from database_manager import db_manager
+        db_time = db_manager.get_latest_update_time(stock_list_name)
+        if db_time:
+            return db_time
+    except Exception as e:
+        print(f"Error getting update time from database: {e}")
+    
+    # Fallback to file-based approach
     output_dir = './output'
     if not os.path.exists(output_dir):
         return None
-    
-    # Extract stock list name from file (remove extension)
-    stock_list_name = os.path.splitext(stock_list_file)[0]
     
     # Find all result files for this specific stock list (exact match)
     result_files = []
@@ -472,13 +485,13 @@ if selected_file:
             utc_time = datetime.datetime.fromtimestamp(latest_time, tz=pytz.UTC)
             pst_tz = pytz.timezone('US/Pacific')
             pst_time = utc_time.astimezone(pst_tz)
-            formatted_time = pst_time.strftime("%Y-%m-%d %H:%M:%S PST")
+            formatted_time = pst_time.strftime("%Y-%m-%d %H:%M PST")
         except ImportError:
             # Fallback: manually adjust for PST (UTC-8, or UTC-7 during DST)
             # This is a simple approximation
             utc_time = datetime.datetime.fromtimestamp(latest_time)
             pst_time = utc_time - datetime.timedelta(hours=8)  # Approximate PST
-            formatted_time = pst_time.strftime("%Y-%m-%d %H:%M:%S PST")
+            formatted_time = pst_time.strftime("%Y-%m-%d %H:%M PST")
         
         st.header(f"Results for: {selected_file} (Last updated: {formatted_time})")
     else:
@@ -489,7 +502,26 @@ else:
 
 # Function to load and display results
 def load_results(file_pattern, stock_list_file=None, default_sort=None):
-    # Look in output directory for result files
+    """
+    Load results with database compatibility.
+    First tries database, falls back to files.
+    """
+    if stock_list_file:
+        stock_list_name = os.path.splitext(stock_list_file)[0]
+        
+        # Try to load from database first
+        try:
+            from database_manager import db_manager
+            df = db_manager.get_results_as_dataframe(file_pattern, stock_list_name)
+            if df is not None and not df.empty:
+                if default_sort and default_sort in df.columns:
+                    df = df.sort_values(by=default_sort, ascending=False)
+                return df, f"database_{file_pattern}_{stock_list_name}"
+        except Exception as e:
+            print(f"Database not available or error loading from database: {e}")
+            # Continue to file fallback
+    
+    # Fallback to file-based loading
     output_dir = './output'
     if not os.path.exists(output_dir):
         return None, "No output directory found. Please run an analysis first."
@@ -546,10 +578,10 @@ if selected_file:
 
     with waikiki_viz_col:
         # Load the detailed results for period information
-        detailed_df, _ = load_results('cd_eval_custom_detailed_', selected_file)
+        detailed_df, detailed_source = load_results('cd_eval_custom_detailed_', selected_file)
         
         # Load the returns distribution data for boxplots
-        returns_df, _ = load_results('cd_eval_returns_distribution_', selected_file)
+        returns_df, returns_source = load_results('cd_eval_returns_distribution_', selected_file)
         
         if detailed_df is None or 'ticker' not in detailed_df.columns:
             st.info("Please run an analysis first to view visualizations and period returns.")
@@ -1043,7 +1075,8 @@ if selected_file:
 
         # Display best intervals (50)
         with tabs[0]:
-            df, message = load_results('cd_eval_best_intervals_50_', selected_file, 'avg_return_10')
+            df, source_50 = load_results('cd_eval_best_intervals_50_', selected_file, 'avg_return_10')
+            
             if df is not None:
                 if waikiki_ticker_filter:
                     df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
@@ -1059,7 +1092,8 @@ if selected_file:
 
         # Display best intervals (20)
         with tabs[1]:
-            df, message = load_results('cd_eval_best_intervals_20_', selected_file, 'avg_return_10')
+            df, source_20 = load_results('cd_eval_best_intervals_20_', selected_file, 'avg_return_10')
+            
             if df is not None:
                 if waikiki_ticker_filter:
                     df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
@@ -1075,7 +1109,8 @@ if selected_file:
 
         # Display best intervals (100)
         with tabs[2]:
-            df, message = load_results('cd_eval_best_intervals_100_', selected_file, 'avg_return_10')
+            df, source_100 = load_results('cd_eval_best_intervals_100_', selected_file, 'avg_return_10')
+            
             if df is not None:
                 if waikiki_ticker_filter:
                     df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
@@ -1091,7 +1126,8 @@ if selected_file:
 
         # Display high return intervals
         with tabs[3]:
-            df, message = load_results('cd_eval_good_signals_', selected_file, 'latest_signal')
+            df, source_good = load_results('cd_eval_good_signals_', selected_file, 'latest_signal')
+            
             if df is not None:
                 if waikiki_ticker_filter:
                     df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]

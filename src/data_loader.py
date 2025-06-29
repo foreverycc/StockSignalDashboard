@@ -1,8 +1,13 @@
 import pandas as pd
 import yfinance as yf
+from database_manager import db_manager
 
 def load_stock_list(file_path):
-    return pd.read_csv(file_path, sep='\t', header=None, names=['ticker'])['ticker'].tolist()
+    """
+    Load stock list with database compatibility.
+    First tries database, falls back to file, and migrates to database.
+    """
+    return db_manager.load_stock_list_compatible(file_path)
 
 def download_stock_data(ticker):
     """
