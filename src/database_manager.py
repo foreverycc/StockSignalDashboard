@@ -117,19 +117,37 @@ class DatabaseManager:
         return sqlite3.connect(self.db_path)
     
     def _convert_numpy_types(self, obj):
-        """Convert NumPy types to JSON-serializable Python types."""
+        """Convert NumPy types to JSON-serializable Python types and round floats to 2 decimal places."""
+        from decimal import Decimal, ROUND_HALF_UP
+        
+        def round_to_2_decimals(value):
+            """Round a number to 2 decimal places."""
+            if value is None or pd.isna(value):
+                return None
+            try:
+                # Convert to Decimal for precise rounding
+                decimal_value = Decimal(str(value))
+                rounded = decimal_value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                return float(rounded)
+            except:
+                return value
+        
         if isinstance(obj, dict):
             return {key: self._convert_numpy_types(value) for key, value in obj.items()}
         elif isinstance(obj, list):
             return [self._convert_numpy_types(item) for item in obj]
         elif isinstance(obj, np.integer):
             return int(obj)
-        elif isinstance(obj, np.floating):
-            return float(obj)
+        elif isinstance(obj, (np.floating, float)):
+            return round_to_2_decimals(float(obj))
         elif isinstance(obj, np.ndarray):
-            return obj.tolist()
+            # Apply rounding to float arrays
+            converted_list = obj.tolist()
+            return [round_to_2_decimals(item) if isinstance(item, (float, int)) else self._convert_numpy_types(item) for item in converted_list]
         elif pd.isna(obj):
             return None
+        elif isinstance(obj, (int, float)):
+            return round_to_2_decimals(obj) if isinstance(obj, float) else obj
         else:
             return obj
         
@@ -276,7 +294,7 @@ class DatabaseManager:
                     results.append(json.loads(row[0]))
                 except json.JSONDecodeError:
                     continue
-            
+            1    
             return results
     
     # File-compatible result saving
@@ -361,9 +379,22 @@ class DatabaseManager:
                 interval = str(clean_result.get('interval', ''))
                 signal_count = int(clean_result.get('signal_count', 0)) if clean_result.get('signal_count') is not None else 0
                 latest_signal = str(clean_result.get('latest_signal', ''))
-                latest_signal_price = float(clean_result.get('latest_signal_price', 0)) if clean_result.get('latest_signal_price') is not None else 0
+                
+                # Apply rounding to price fields
+                from decimal import Decimal, ROUND_HALF_UP
+                def round_to_2_decimals(value):
+                    if value is None or pd.isna(value):
+                        return 0
+                    try:
+                        decimal_value = Decimal(str(value))
+                        rounded = decimal_value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                        return float(rounded)
+                    except:
+                        return 0
+                
+                latest_signal_price = round_to_2_decimals(clean_result.get('latest_signal_price', 0))
                 current_time = str(clean_result.get('current_time', ''))
-                current_price = float(clean_result.get('current_price', 0)) if clean_result.get('current_price') is not None else 0
+                current_price = round_to_2_decimals(clean_result.get('current_price', 0))
                 current_period = int(clean_result.get('current_period', 0)) if clean_result.get('current_period') is not None else 0
                 
                 conn.execute("""
@@ -399,11 +430,25 @@ class DatabaseManager:
             for item in returns_data:
                 # Convert NumPy types to ensure compatibility
                 clean_item = self._convert_numpy_types(item)
+                # Apply rounding to return value
+                from decimal import Decimal, ROUND_HALF_UP
+                def round_to_2_decimals(value):
+                    if value is None or pd.isna(value):
+                        return 0
+                    try:
+                        decimal_value = Decimal(str(value))
+                        rounded = decimal_value.quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+                        return float(rounded)
+                    except:
+                        return 0
+                
+                return_value = round_to_2_decimals(clean_item['return'])
+                
                 conn.execute("""
                     INSERT INTO returns_distribution (list_name, version, ticker, interval, period, return_value)
                     VALUES (?, ?, ?, ?, ?, ?)
                 """, (list_name, version, str(clean_item['ticker']), str(clean_item['interval']), 
-                      int(clean_item['period']), float(clean_item['return'])))
+                      int(clean_item['period']), return_value))
             
             conn.commit()
     
@@ -699,9 +744,6 @@ class DatabaseManager:
         # Convert to DataFrame and sort
         result_df = pd.DataFrame(best_intervals)
         
-        # Remove duplicates (keep the first occurrence)
-        result_df = result_df.drop_duplicates(subset=['ticker', 'interval'], keep='first')
-        
         # Apply the same filters as the original file-based system
         # Filter 1: Only show intervals with at least 5% average return
         result_df = result_df[result_df['avg_return'] >= 5]
@@ -733,10 +775,6 @@ class DatabaseManager:
             if df.empty:
                 return None
                 
-            # Remove duplicates by ticker+date combination (since one signal can apply to multiple intervals)
-            # Keep the most recent record for each unique ticker+date
-            df = df.drop_duplicates(subset=['ticker', 'date'], keep='first')
-            
             return df
     
     def _get_breakout_details_df(self, list_name: str, analysis_type: str) -> Optional[pd.DataFrame]:
@@ -746,15 +784,7 @@ class DatabaseManager:
         if not results:
             return None
             
-        df = pd.DataFrame(results)
-        
-        # Remove duplicates based on ticker and interval (keep the most recent/first occurrence)
-        if 'ticker' in df.columns and 'interval' in df.columns:
-            df = df.drop_duplicates(subset=['ticker', 'interval'], keep='first')
-        elif 'ticker' in df.columns:
-            df = df.drop_duplicates(subset=['ticker'], keep='first')
-            
-        return df
+        return pd.DataFrame(results)
     
     # Migration methods
     def migrate_existing_files(self, data_dir: str = './data'):
@@ -797,6 +827,120 @@ class DatabaseManager:
                 except:
                     return None
             return None
+
+    def cleanup_duplicate_records(self, list_name: Optional[str] = None):
+        """Remove duplicate records from database, keeping only the latest records."""
+        print("Starting database cleanup to remove duplicates...")
+        
+        with sqlite3.connect(self.db_path) as conn:
+            # 1. Clean up CD evaluation duplicates (keep latest by ticker+interval)
+            print("Cleaning CD evaluation duplicates...")
+            if list_name:
+                cursor = conn.execute("""
+                    DELETE FROM cd_evaluation 
+                    WHERE rowid NOT IN (
+                        SELECT MAX(rowid)
+                        FROM cd_evaluation 
+                        WHERE list_name = ?
+                        GROUP BY list_name, ticker, interval
+                    )
+                    AND list_name = ?
+                """, (list_name, list_name))
+            else:
+                cursor = conn.execute("""
+                    DELETE FROM cd_evaluation 
+                    WHERE rowid NOT IN (
+                        SELECT MAX(rowid)
+                        FROM cd_evaluation 
+                        GROUP BY list_name, ticker, interval
+                    )
+                """)
+            cd_deleted = cursor.rowcount
+            
+            # 2. Clean up breakout candidates summary duplicates (keep latest by ticker+date+analysis_type)
+            print("Cleaning breakout candidates summary duplicates...")
+            if list_name:
+                cursor = conn.execute("""
+                    DELETE FROM breakout_candidates 
+                    WHERE rowid NOT IN (
+                        SELECT MAX(rowid)
+                        FROM breakout_candidates 
+                        WHERE list_name = ?
+                        GROUP BY list_name, ticker, date, analysis_type
+                    )
+                    AND list_name = ?
+                """, (list_name, list_name))
+            else:
+                cursor = conn.execute("""
+                    DELETE FROM breakout_candidates 
+                    WHERE rowid NOT IN (
+                        SELECT MAX(rowid)
+                        FROM breakout_candidates 
+                        GROUP BY list_name, ticker, date, analysis_type
+                    )
+                """)
+            breakout_deleted = cursor.rowcount
+            
+            # 3. Clean up analysis results duplicates (keep latest by ticker+analysis_type)
+            print("Cleaning analysis results duplicates...")
+            if list_name:
+                cursor = conn.execute("""
+                    DELETE FROM analysis_results 
+                    WHERE rowid NOT IN (
+                        SELECT MAX(rowid)
+                        FROM analysis_results 
+                        WHERE list_name = ?
+                        GROUP BY list_name, analysis_type, ticker
+                    )
+                    AND list_name = ?
+                """, (list_name, list_name))
+            else:
+                cursor = conn.execute("""
+                    DELETE FROM analysis_results 
+                    WHERE rowid NOT IN (
+                        SELECT MAX(rowid)
+                        FROM analysis_results 
+                        GROUP BY list_name, analysis_type, ticker
+                    )
+                """)
+            analysis_deleted = cursor.rowcount
+            
+            # 4. Clean up returns distribution duplicates (keep latest by ticker+interval+period)
+            print("Cleaning returns distribution duplicates...")
+            if list_name:
+                cursor = conn.execute("""
+                    DELETE FROM returns_distribution 
+                    WHERE rowid NOT IN (
+                        SELECT MAX(rowid)
+                        FROM returns_distribution 
+                        WHERE list_name = ?
+                        GROUP BY list_name, ticker, interval, period
+                    )
+                    AND list_name = ?
+                """, (list_name, list_name))
+            else:
+                cursor = conn.execute("""
+                    DELETE FROM returns_distribution 
+                    WHERE rowid NOT IN (
+                        SELECT MAX(rowid)
+                        FROM returns_distribution 
+                        GROUP BY list_name, ticker, interval, period
+                    )
+                """)
+            returns_deleted = cursor.rowcount
+            
+            conn.commit()
+            
+            total_deleted = cd_deleted + breakout_deleted + analysis_deleted + returns_deleted
+            
+            print(f"Database cleanup completed:")
+            print(f"  - CD evaluation records removed: {cd_deleted}")
+            print(f"  - Breakout candidates removed: {breakout_deleted}")
+            print(f"  - Analysis results removed: {analysis_deleted}")
+            print(f"  - Returns distribution removed: {returns_deleted}")
+            print(f"  - Total records removed: {total_deleted}")
+            
+            return total_deleted
 
 
 # Global database manager instance
