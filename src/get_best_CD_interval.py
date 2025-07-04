@@ -1,8 +1,124 @@
 import pandas as pd
 import numpy as np
 from data_loader import download_stock_data
-from indicators import compute_cd_indicator
+from indicators import compute_cd_indicator, compute_mc_indicator
 import yfinance as yf
+
+def find_latest_mc_signal_before_cd(data, cd_date, mc_signals):
+    """
+    Find the latest MC signal that occurred before a given CD signal date.
+    
+    Args:
+        data: DataFrame with price data
+        cd_date: Date of the CD signal
+        mc_signals: Series with MC signals (boolean)
+    
+    Returns:
+        Tuple of (mc_signal_date, mc_signal_price) or (None, None) if no MC signal found
+    """
+    # Get all MC signal dates before the CD signal date
+    mc_signal_dates = data.index[mc_signals]
+    previous_mc_signals = mc_signal_dates[mc_signal_dates < cd_date]
+    
+    if len(previous_mc_signals) == 0:
+        return None, None
+    
+    # Get the latest MC signal before the CD signal
+    latest_mc_date = previous_mc_signals.max()
+    latest_mc_price = data.loc[latest_mc_date, 'Close']
+    
+    return latest_mc_date, latest_mc_price
+
+def evaluate_mc_at_top_price(data, mc_date, mc_price, lookback_periods=20, lookahead_periods=10):
+    """
+    Evaluate if an MC signal was at a "top price" by checking if it was near a local maximum.
+    
+    Args:
+        data: DataFrame with price data
+        mc_date: Date of the MC signal
+        mc_price: Price at the MC signal
+        lookback_periods: Number of periods to look back for comparison
+        lookahead_periods: Number of periods to look ahead for confirmation
+    
+    Returns:
+        Dictionary with evaluation metrics
+    """
+    try:
+        mc_idx = data.index.get_loc(mc_date)
+        
+        # Calculate lookback range
+        lookback_start = max(0, mc_idx - lookback_periods)
+        lookback_data = data.iloc[lookback_start:mc_idx]
+        
+        # Calculate lookahead range
+        lookahead_end = min(len(data), mc_idx + lookahead_periods + 1)
+        lookahead_data = data.iloc[mc_idx:lookahead_end]
+        
+        # Calculate metrics
+        metrics = {}
+        
+        # 1. Check if MC price is near the highest price in lookback period
+        if not lookback_data.empty:
+            lookback_max = lookback_data['High'].max()
+            lookback_min = lookback_data['Low'].min()
+            lookback_range = lookback_max - lookback_min
+            
+            # Calculate percentile position of MC price in lookback range
+            if lookback_range > 0:
+                price_percentile = (mc_price - lookback_min) / lookback_range
+                metrics['lookback_price_percentile'] = price_percentile
+                metrics['is_near_lookback_high'] = price_percentile >= 0.8  # Top 20% of range
+            else:
+                metrics['lookback_price_percentile'] = 0.5
+                metrics['is_near_lookback_high'] = False
+        else:
+            metrics['lookback_price_percentile'] = 0.5
+            metrics['is_near_lookback_high'] = False
+        
+        # 2. Check if price declined after MC signal (confirmation of good sell signal)
+        if len(lookahead_data) > 1:
+            lookahead_min = lookahead_data['Low'].min()
+            price_decline_pct = (mc_price - lookahead_min) / mc_price * 100
+            metrics['price_decline_after_mc'] = price_decline_pct
+            metrics['is_followed_by_decline'] = price_decline_pct >= 2.0  # At least 2% decline
+        else:
+            metrics['price_decline_after_mc'] = 0
+            metrics['is_followed_by_decline'] = False
+        
+        # 3. Check if MC signal is at local maximum
+        window_start = max(0, mc_idx - 5)
+        window_end = min(len(data), mc_idx + 6)
+        window_data = data.iloc[window_start:window_end]
+        
+        if not window_data.empty:
+            is_local_max = mc_price >= window_data['High'].max() * 0.95  # Within 5% of local max
+            metrics['is_local_maximum'] = is_local_max
+        else:
+            metrics['is_local_maximum'] = False
+        
+        # 4. Overall evaluation - MC signal is at "top price" if it meets multiple criteria
+        criteria_met = sum([
+            metrics['is_near_lookback_high'],
+            metrics['is_followed_by_decline'],
+            metrics['is_local_maximum']
+        ])
+        
+        metrics['criteria_met'] = criteria_met
+        metrics['is_at_top_price'] = criteria_met >= 2  # At least 2 out of 3 criteria
+        
+        return metrics
+        
+    except Exception as e:
+        print(f"Error evaluating MC signal at {mc_date}: {e}")
+        return {
+            'lookback_price_percentile': 0.5,
+            'is_near_lookback_high': False,
+            'price_decline_after_mc': 0,
+            'is_followed_by_decline': False,
+            'is_local_maximum': False,
+            'criteria_met': 0,
+            'is_at_top_price': False
+        }
 
 def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]):
     """
@@ -18,6 +134,9 @@ def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
     """
     results = []
     signal_dates = data.index[cd_signals]
+    
+    # Also compute MC signals for analysis
+    mc_signals = compute_mc_indicator(data)
     
     for date in signal_dates:
         idx = data.index.get_loc(date)
@@ -35,10 +154,29 @@ def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
                 returns[f'return_{period}'] = (exit_price - entry_price) / entry_price * 100
             else:
                 returns[f'return_{period}'] = np.nan
+        
+        # Find the latest MC signal before this CD signal
+        latest_mc_date, latest_mc_price = find_latest_mc_signal_before_cd(data, date, mc_signals)
+        
+        # Evaluate if the MC signal was at top price
+        mc_evaluation = {}
+        if latest_mc_date is not None:
+            mc_evaluation = evaluate_mc_at_top_price(data, latest_mc_date, latest_mc_price)
+            
+        # Add MC signal analysis to the results
+        mc_info = {
+            'prev_mc_date': latest_mc_date.strftime('%Y-%m-%d %H:%M:%S') if latest_mc_date else None,
+            'prev_mc_price': round(latest_mc_price, 2) if latest_mc_price else None,
+            'mc_at_top_price': mc_evaluation.get('is_at_top_price', False),
+            'mc_price_percentile': round(mc_evaluation.get('lookback_price_percentile', 0), 3),
+            'mc_decline_after': round(mc_evaluation.get('price_decline_after_mc', 0), 2),
+            'mc_criteria_met': mc_evaluation.get('criteria_met', 0)
+        }
                 
         results.append({
             'date': date,
-            **returns
+            **returns,
+            **mc_info
         })
     
     return pd.DataFrame(results)
@@ -130,6 +268,14 @@ def evaluate_interval(ticker, interval, data=None):
                 result[f'success_rate_{period}'] = 0
                 result[f'avg_return_{period}'] = 0
                 result[f'returns_{period}'] = []  # Store empty list for individual returns
+            
+            # Add MC signal analysis fields
+            result['mc_signals_before_cd'] = 0
+            result['mc_at_top_price_count'] = 0
+            result['mc_at_top_price_rate'] = 0
+            result['avg_mc_price_percentile'] = 0
+            result['avg_mc_decline_after'] = 0
+            result['avg_mc_criteria_met'] = 0
             return result
             
         # Calculate returns for each signal
@@ -156,6 +302,14 @@ def evaluate_interval(ticker, interval, data=None):
                 result[f'success_rate_{period}'] = 0
                 result[f'avg_return_{period}'] = 0
                 result[f'returns_{period}'] = []  # Store empty list for individual returns
+            
+            # Add MC signal analysis fields
+            result['mc_signals_before_cd'] = 0
+            result['mc_at_top_price_count'] = 0
+            result['mc_at_top_price_rate'] = 0
+            result['avg_mc_price_percentile'] = 0
+            result['avg_mc_decline_after'] = 0
+            result['avg_mc_criteria_met'] = 0
             return result
         
         # Define all periods
@@ -221,6 +375,33 @@ def evaluate_interval(ticker, interval, data=None):
             result[f'success_rate_{period}'] = success_rate
             result[f'avg_return_{period}'] = avg_return
             result[f'returns_{period}'] = individual_returns  # Store individual returns for boxplot
+        
+        # Add MC signal analysis summary to the result
+        if not returns_df.empty:
+            # Calculate MC signal statistics
+            mc_at_top_count = returns_df['mc_at_top_price'].sum() if 'mc_at_top_price' in returns_df else 0
+            mc_total_count = len(returns_df[returns_df['prev_mc_date'].notna()]) if 'prev_mc_date' in returns_df else 0
+            mc_at_top_rate = (mc_at_top_count / mc_total_count * 100) if mc_total_count > 0 else 0
+            
+            # Average MC evaluation metrics
+            avg_mc_percentile = returns_df['mc_price_percentile'].mean() if 'mc_price_percentile' in returns_df else 0
+            avg_mc_decline = returns_df['mc_decline_after'].mean() if 'mc_decline_after' in returns_df else 0
+            avg_mc_criteria = returns_df['mc_criteria_met'].mean() if 'mc_criteria_met' in returns_df else 0
+            
+            # Add MC analysis to result
+            result['mc_signals_before_cd'] = mc_total_count
+            result['mc_at_top_price_count'] = mc_at_top_count
+            result['mc_at_top_price_rate'] = round(mc_at_top_rate, 2)
+            result['avg_mc_price_percentile'] = round(avg_mc_percentile, 3)
+            result['avg_mc_decline_after'] = round(avg_mc_decline, 2)
+            result['avg_mc_criteria_met'] = round(avg_mc_criteria, 2)
+        else:
+            result['mc_signals_before_cd'] = 0
+            result['mc_at_top_price_count'] = 0
+            result['mc_at_top_price_rate'] = 0
+            result['avg_mc_price_percentile'] = 0
+            result['avg_mc_decline_after'] = 0
+            result['avg_mc_criteria_met'] = 0
         
         # Calculate max and min returns across all periods
         all_returns = []

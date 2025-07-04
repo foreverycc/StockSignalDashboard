@@ -1010,10 +1010,28 @@ if page == "CD Analysis (抄底)":
                         'avg_return': 100,         # 10 chars: "avg_return"
                     }
                     
+                    # Add MC signal analysis column widths
+                    mc_column_widths = {
+                        'mc_signals_before_cd': 150,        # 18 chars: "mc_signals_before_cd"
+                        'mc_at_top_price_count': 160,       # 20 chars: "mc_at_top_price_count"
+                        'mc_at_top_price_rate': 150,        # 18 chars: "mc_at_top_price_rate"
+                        'avg_mc_price_percentile': 170,     # 21 chars: "avg_mc_price_percentile"
+                        'avg_mc_decline_after': 160,        # 19 chars: "avg_mc_decline_after"
+                        'avg_mc_criteria_met': 150,         # 18 chars: "avg_mc_criteria_met"
+                    }
+                    
                     # Configure columns with specific widths
                     for col_name, width in column_widths.items():
                         if col_name in df.columns:
                             if col_name in ['exp_return', 'latest_signal_price', 'current_price', 'success_rate', 'max_return', 'min_return', 'avg_return']:
+                                gb.configure_column(col_name, type=['numericColumn', 'numberColumnFilter'], precision=2, width=width)
+                            else:
+                                gb.configure_column(col_name, width=width)
+                    
+                    # Configure MC signal analysis columns
+                    for col_name, width in mc_column_widths.items():
+                        if col_name in df.columns:
+                            if col_name in ['mc_at_top_price_rate', 'avg_mc_price_percentile', 'avg_mc_decline_after', 'avg_mc_criteria_met']:
                                 gb.configure_column(col_name, type=['numericColumn', 'numberColumnFilter'], precision=2, width=width)
                             else:
                                 gb.configure_column(col_name, width=width)
@@ -1074,7 +1092,8 @@ if page == "CD Analysis (抄底)":
                 "Best Intervals (20)", 
                 "Best Intervals (100)", 
                 "High Return Intervals",
-                "Interval Details"
+                "Interval Details",
+                "MC Analysis"
             ])
 
             # Display best intervals (50)
@@ -1161,6 +1180,90 @@ if page == "CD Analysis (抄底)":
                     waikiki_aggrid_editor(df, 'details')
                 else:
                     st.info("No interval summary data available. Please run CD Signal Evaluation first.")
+
+            # Display MC signal analysis
+            with tabs[5]:
+                # Load returns distribution data which contains individual CD signals with MC analysis
+                df, message = load_results('cd_eval_returns_distribution_', selected_file, 'date')
+                if df is not None:
+                    if waikiki_ticker_filter:
+                        df = df[df['ticker'].str.contains(waikiki_ticker_filter, case=False)]
+                    
+                    # Check if MC analysis columns exist (for backward compatibility)
+                    if 'prev_mc_date' in df.columns:
+                        # Filter for only signals that have MC analysis data
+                        mc_df = df[df['prev_mc_date'].notna()].copy()
+                        
+                        if not mc_df.empty:
+                            # Create a summary view of MC analysis
+                            mc_summary_cols = ['ticker', 'interval', 'date', 'period', 'return', 
+                                             'prev_mc_date', 'prev_mc_price', 'mc_at_top_price', 
+                                             'mc_price_percentile', 'mc_decline_after', 'mc_criteria_met']
+                            
+                            # Filter to only include columns that exist
+                            available_cols = [col for col in mc_summary_cols if col in mc_df.columns]
+                            mc_display_df = mc_df[available_cols].copy()
+                            
+                            # Add interval filter
+                            if 'interval' in mc_display_df.columns:
+                                intervals = sorted(mc_display_df['interval'].unique())
+                                selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"mc_analysis_interval_filter_{selected_file}")
+                                if selected_intervals:
+                                    mc_display_df = mc_display_df[mc_display_df['interval'].isin(selected_intervals)]
+                            
+                            # Add period filter  
+                            if 'period' in mc_display_df.columns:
+                                periods = sorted(mc_display_df['period'].unique())
+                                selected_periods = st.multiselect("Filter by period:", periods, default=periods, key=f"mc_analysis_period_filter_{selected_file}")
+                                if selected_periods:
+                                    mc_display_df = mc_display_df[mc_display_df['period'].isin(selected_periods)]
+                            
+                            # Add filter for MC at top price
+                            if 'mc_at_top_price' in mc_display_df.columns:
+                                show_all_mc = st.checkbox("Show all CD signals (including those without MC at top)", value=True, key=f"show_all_mc_{selected_file}")
+                                if not show_all_mc:
+                                    mc_display_df = mc_display_df[mc_display_df['mc_at_top_price'] == True]
+                            
+                            # Sort by date (most recent first)
+                            if 'date' in mc_display_df.columns:
+                                mc_display_df = mc_display_df.sort_values('date', ascending=False)
+                            
+                            st.write(f"**CD Signals with Previous MC Analysis** ({len(mc_display_df)} signals)")
+                            st.write("This table shows individual CD signals and analysis of the MC signal that occurred before each CD signal.")
+                            
+                            # Display with AgGrid
+                            waikiki_aggrid_editor(mc_display_df, 'mc_analysis')
+                            
+                            # Display summary statistics
+                            if len(mc_display_df) > 0:
+                                st.markdown("### Summary Statistics")
+                                col1, col2, col3 = st.columns(3)
+                                
+                                with col1:
+                                    total_signals = len(mc_display_df)
+                                    mc_at_top_count = mc_display_df['mc_at_top_price'].sum() if 'mc_at_top_price' in mc_display_df else 0
+                                    mc_at_top_rate = (mc_at_top_count / total_signals * 100) if total_signals > 0 else 0
+                                    st.metric("MC at Top Price Rate", f"{mc_at_top_rate:.1f}%", f"{mc_at_top_count}/{total_signals}")
+                                
+                                with col2:
+                                    avg_percentile = mc_display_df['mc_price_percentile'].mean() if 'mc_price_percentile' in mc_display_df else 0
+                                    st.metric("Avg MC Price Percentile", f"{avg_percentile:.2f}")
+                                
+                                with col3:
+                                    avg_decline = mc_display_df['mc_decline_after'].mean() if 'mc_decline_after' in mc_display_df else 0
+                                    st.metric("Avg Price Decline After MC", f"{avg_decline:.1f}%")
+                            
+                        else:
+                            st.info("No CD signals with previous MC signal analysis found.")
+                    else:
+                        st.warning("**MC Analysis not available for this data.**")
+                        st.info("The current analysis results were generated before the MC signal analysis feature was added. Please run a new analysis to see MC signal analysis data.")
+                        st.markdown("**To get MC analysis:**")
+                        st.markdown("1. Select your stock list above")
+                        st.markdown("2. Click 'Run Analysis' to generate new results with MC signal analysis")
+                        st.markdown("3. Return to this tab to view the MC signal analysis")
+                else:
+                    st.info("No returns distribution data available for MC analysis. Please run CD Signal Evaluation first.")
 
         # Resonance Model section
         st.subheader("Resonance Model")
