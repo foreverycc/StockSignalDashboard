@@ -1811,8 +1811,8 @@ elif page == "MC Analysis (卖出)":
                                         name=f'Period {period}',
                                         boxpoints=False,  # Don't show individual points
                                         showlegend=False,
-                                        marker=dict(color='lightcoral'),
-                                        line=dict(color='darkred')
+                                        marker=dict(color='lightgray'),
+                                        line=dict(color='gray')
                                     ))
                                     
                                     # Store median for connecting line
@@ -1825,84 +1825,270 @@ elif page == "MC Analysis (卖出)":
                                     x=median_periods,
                                     y=median_values,
                                     mode='lines+markers',
-                                    line=dict(color='red', width=2),
-                                    marker=dict(color='red', size=8),
+                                    line=dict(color='gray', width=1),
+                                    marker=dict(color='gray', size=6),
                                     name='Median Returns',
                                     showlegend=True
                                 ))
+                        else:
+                            # Fallback to original scatter plot if no returns distribution data
+                            periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                            stock_returns = [(0, 100)]  # Start with (0, 100)
+                            for period in periods[1:]:  # Skip 0 as we already added it
+                                if f'avg_return_{period}' in selected_ticker:
+                                    stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
+                            
+                            if stock_returns:
+                                periods_x, returns_y = zip(*stock_returns)
+                                fig.add_trace(go.Scatter(
+                                    x=periods_x,
+                                    y=returns_y,
+                                    mode='lines+markers',
+                                    line=dict(color='lightgray', width=1),
+                                    marker=dict(color='gray', size=6),
+                                    name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                                    showlegend=True
+                                ))
+                    else:
+                        # Fallback to original scatter plot if no returns distribution data available
+                        periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                        stock_returns = [(0, 100)]  # Start with (0, 100)
+                        for period in periods[1:]:  # Skip 0 as we already added it
+                            if f'avg_return_{period}' in selected_ticker:
+                                stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
                         
-                        # Add baseline reference line at y=100
-                        fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
-                                     annotation_text="Entry Price (Baseline)", annotation_position="top right")
+                        if stock_returns:
+                            periods_x, returns_y = zip(*stock_returns)
+                            fig.add_trace(go.Scatter(
+                                x=periods_x,
+                                y=returns_y,
+                                mode='lines+markers',
+                                line=dict(color='lightgray', width=1),
+                                marker=dict(color='gray', size=6),
+                                name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                                showlegend=True
+                            ))
+                    
+                    # Initialize variables for tracking last price point
+                    last_price_period = None
+                    last_price_value = None
+                    
+                    # Add actual price history if available
+                    if 'price_history' in selected_ticker and selected_ticker['price_history']:
+                        price_history = selected_ticker['price_history']
+                        if isinstance(price_history, str):
+                            # Handle case where price_history might be stored as string
+                            try:
+                                import ast
+                                import re
+                                # Clean up numpy float64 references in the string
+                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                                price_history = ast.literal_eval(cleaned_str)
+                            except Exception as e:
+                                print(f"Error parsing price_history: {e}")
+                                price_history = {}
                         
-                        # Add gray dot at [0, 100] to represent entry point
-                        fig.add_trace(go.Scatter(
-                            x=[0],
-                            y=[100],
-                            mode='markers',
-                            marker=dict(color='gray', size=8),
-                            name='Entry Point',
-                            showlegend=True
-                        ))
+                        if price_history and 0 in price_history and price_history[0] is not None:
+                            entry_price = float(price_history[0])
+                            price_periods = []
+                            price_values = []
+                            
+                            # Collect price history points
+                            for period in sorted(price_history.keys()):
+                                if price_history[period] is not None and period >= 0:
+                                    try:
+                                        relative_price = (float(price_history[period]) / entry_price) * 100
+                                        price_periods.append(period)
+                                        price_values.append(relative_price)
+                                    except (ValueError, TypeError):
+                                        continue
+                            
+                            # Add price history line and dots
+                            if len(price_periods) > 1:
+                                fig.add_trace(go.Scatter(
+                                    x=price_periods,
+                                    y=price_values,
+                                    mode='lines+markers',
+                                    line=dict(color='red', width=1),
+                                    marker=dict(color='red', size=6),
+                                    name='Price History',
+                                    showlegend=True
+                                ))
+                            elif len(price_periods) == 1:
+                                # Single point case
+                                fig.add_trace(go.Scatter(
+                                    x=price_periods,
+                                    y=price_values,
+                                    mode='markers',
+                                    marker=dict(color='red', size=6),
+                                    name='Price History',
+                                    showlegend=True
+                                ))
+                            
+                            # Store the last price history point for connecting to current price
+                            if price_periods:
+                                last_price_period = price_periods[-1]
+                                last_price_value = price_values[-1]
+                    
+                    # Add current price at current period (updated to avoid duplicate)
+                    if ('current_period' in selected_ticker and 'current_price' in selected_ticker and 
+                        'latest_signal_price' in selected_ticker):
+                        current_period = selected_ticker['current_period']
                         
-                        # Find best period (most negative return for MC signals)
-                        min_return = float('inf')
-                        best_period = None
+                        # Calculate current price relative value
+                        current_price_relative = None
+                        if selected_ticker['latest_signal_price']:
+                            price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
+                                             selected_ticker['latest_signal_price'] * 100)
+                            current_price_relative = 100 + price_change
+                        
+                        # Parse price_history if it's a string for checking duplicates
+                        price_history = selected_ticker.get('price_history', {})
+                        if isinstance(price_history, str):
+                            try:
+                                import ast
+                                import re
+                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                                price_history = ast.literal_eval(cleaned_str)
+                            except:
+                                price_history = {}
+                        
+                        # Add current price marker if it's not already in price_history
+                        if (current_period > 0 and current_price_relative is not None and 
+                            (not isinstance(price_history, dict) or current_period not in price_history)):
+                            
+                            # Add connecting line from last price history point to current price
+                            if last_price_period is not None and last_price_value is not None:
+                                fig.add_trace(go.Scatter(
+                                    x=[last_price_period, current_period],
+                                    y=[last_price_value, current_price_relative],
+                                    mode='lines',
+                                    line=dict(color='red', width=1, dash='dot'),
+                                    name='Price Projection',
+                                    showlegend=False
+                                ))
+                            
+                            # Add current price star
+                            fig.add_trace(go.Scatter(
+                                x=[current_period],
+                                y=[current_price_relative],
+                                mode='markers',
+                                marker=dict(color='red', size=10, symbol='star'),
+                                name='Current Price',
+                                showlegend=True
+                            ))
+                    
+                    # Add baseline reference line at y=100 (add after all traces for visibility)
+                    fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
+                                 annotation_text="Entry Price (Baseline)", annotation_position="top right")
+                    
+                    # Add gray dot at [0, 100] and connect to first data point
+                    fig.add_trace(go.Scatter(
+                        x=[0],
+                        y=[100],
+                        mode='markers',
+                        marker=dict(color='gray', size=8),
+                        name='Entry Point',
+                        showlegend=True
+                    ))
+                    
+                    # Add gray line from [0, 100] to first available data point
+                    # Find the first period with data (usually period 3)
+                    first_period = None
+                    first_value = None
+                    
+                    # Check if we have boxplot data
+                    if returns_df is not None and not returns_df.empty:
+                        filtered_returns = returns_df[
+                            (returns_df['ticker'] == ticker_filter) &
+                            (returns_df['interval'] == selected_interval)
+                        ]
+                        if not filtered_returns.empty:
+                            periods_with_data = sorted(filtered_returns['period'].unique())
+                            if periods_with_data:
+                                first_period = periods_with_data[0]
+                                period_returns = filtered_returns[filtered_returns['period'] == first_period]['return'].values
+                                if len(period_returns) > 0:
+                                    first_value = 100 + np.median(period_returns)
+                    
+                    # If no boxplot data, use scatter plot data
+                    if first_period is None or first_value is None:
                         periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
                         for period in periods:
-                            if f'avg_return_{period}' in selected_ticker and pd.notna(selected_ticker[f'avg_return_{period}']):
-                                if selected_ticker[f'avg_return_{period}'] < min_return:
-                                    min_return = selected_ticker[f'avg_return_{period}']
-                                    best_period = period
-                        
-                        # Update layout
-                        title_html = (
-                            f"<span style='font-size:24px'><b>{selected_ticker['ticker']} ({selected_ticker['interval']})</b></span><br>"
-                            f"<span style='font-size:12px'>best period: {best_period}\t  "
-                            f"best return: {min_return:.2f}%  "
-                            f"success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t  "
-                            f"test count: {selected_ticker[f'test_count_{best_period}']}</span>"
+                            if f'avg_return_{period}' in selected_ticker:
+                                first_period = period
+                                first_value = 100 + selected_ticker[f'avg_return_{period}']
+                                break
+                    
+                    # Add connecting line if we found a first data point
+                    if first_period is not None and first_value is not None:
+                        fig.add_trace(go.Scatter(
+                            x=[0, first_period],
+                            y=[100, first_value],
+                            mode='lines',
+                            line=dict(color='gray', width=1),
+                            name='Baseline Connection',
+                            showlegend=False
+                        ))
+                    
+                    # Find best period (most negative return for MC signals)
+                    min_return = float('inf')
+                    best_period = None
+                    periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                    for period in periods:
+                        if f'avg_return_{period}' in selected_ticker and pd.notna(selected_ticker[f'avg_return_{period}']):
+                            if selected_ticker[f'avg_return_{period}'] < min_return:
+                                min_return = selected_ticker[f'avg_return_{period}']
+                                best_period = period
+                    
+                    # Update layout
+                    title_html = (
+                        f"<span style='font-size:24px'><b>{selected_ticker['ticker']} ({selected_ticker['interval']})</b></span><br>"
+                        f"<span style='font-size:12px'>best period: {best_period}\t  "
+                        f"best return: {min_return:.2f}%  "
+                        f"success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t  "
+                        f"test count: {selected_ticker[f'test_count_{best_period}']}</span>"
+                    )
+                                    
+                    fig.update_layout(
+                        legend=dict(font=dict(color='black')),
+                        title=dict(
+                            text=title_html,
+                            x=0.5,
+                            font=dict(size=24, color='black'),
+                            xanchor='center',
+                            yanchor='top'
+                        ),
+                        xaxis_title="Period",
+                        yaxis_title="Relative Price (Baseline = 100)", 
+                        showlegend=True,
+                        height=398,
+                        plot_bgcolor='white',
+                        paper_bgcolor='white',
+                        xaxis=dict(
+                            showgrid=True,
+                            gridwidth=1,
+                            gridcolor='lightgray',
+                            showline=True,
+                            linewidth=1,
+                            linecolor='black', 
+                            tickfont=dict(color='black'),
+                            title=dict(text="Period", font=dict(color='black'))
+                        ),
+                        yaxis=dict(
+                            showgrid=True,
+                            gridwidth=1,
+                            gridcolor='lightgray',
+                            showline=True,
+                            linewidth=1,
+                            linecolor='black',
+                            tickfont=dict(color='black'),
+                            title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
                         )
-                                        
-                        fig.update_layout(
-                            legend=dict(font=dict(color='black')),
-                            title=dict(
-                                text=title_html,
-                                x=0.5,
-                                font=dict(size=24, color='black'),
-                                xanchor='center',
-                                yanchor='top'
-                            ),
-                            xaxis_title="Period",
-                            yaxis_title="Relative Price (Baseline = 100)", 
-                            showlegend=True,
-                            height=398,
-                            plot_bgcolor='white',
-                            paper_bgcolor='white',
-                            xaxis=dict(
-                                showgrid=True,
-                                gridwidth=1,
-                                gridcolor='lightgray',
-                                showline=True,
-                                linewidth=1,
-                                linecolor='black', 
-                                tickfont=dict(color='black'),
-                                title=dict(text="Period", font=dict(color='black'))
-                            ),
-                            yaxis=dict(
-                                showgrid=True,
-                                gridwidth=1,
-                                gridcolor='lightgray',
-                                showline=True,
-                                linewidth=1,
-                                linecolor='black',
-                                tickfont=dict(color='black'),
-                                title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
-                            )
-                        )
-                        
-                        # Display the plot
-                        st.plotly_chart(fig, use_container_width=True)
+                    )
+                    
+                    # Display the plot
+                    st.plotly_chart(fig, use_container_width=True)
 
                 elif ticker_filter:
                     st.info("No matching stocks found for the selected criteria.")
@@ -1918,6 +2104,11 @@ elif page == "MC Analysis (卖出)":
                     for col in df.columns:
                         if df[col].dtype == 'object':
                             df[col] = df[col].astype(str)
+
+                    # Round all numeric columns to 2 decimal places
+                    for col in df.columns:
+                        if df[col].dtype in ['float64', 'float32']:
+                            df[col] = df[col].round(2)
 
                     gb = GridOptionsBuilder.from_dataframe(df)
                     gb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True)
