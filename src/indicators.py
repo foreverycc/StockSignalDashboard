@@ -41,6 +41,59 @@ def compute_cd_indicator(data):
 
     return dxdx
 
+def compute_mc_indicator(data):
+    """
+    计算MC (卖出) 信号
+    Based on the sell signal logic from futu_CD.txt
+    """
+    close = data['Close']
+    # 计算MACD
+    fast_ema = close.ewm(span=12, adjust=False).mean()
+    slow_ema = close.ewm(span=26, adjust=False).mean()
+    diff = fast_ema - slow_ema
+    dea = diff.ewm(span=9, adjust=False).mean()
+    mcd = (diff - dea) * 2
+
+    # 计算交叉事件
+    cross_down = (mcd.shift(1) >= 0) & (mcd < 0)
+    cross_up = (mcd.shift(1) <= 0) & (mcd > 0)
+
+    # 计算N1和MM1
+    n1 = _compute_barslast(cross_down, len(data))
+    mm1 = _compute_barslast(cross_up, len(data))
+
+    # 计算N1_SAFE和MM1_SAFE
+    n1_safe = n1 + 1
+    mm1_safe = mm1 + 1
+
+    # 计算CH系列 (使用HHV for highest high values)
+    ch1 = _compute_hhv(close, mm1_safe)
+    ch2 = _compute_ref(ch1, n1_safe)
+    ch3 = _compute_ref(ch2, n1_safe)
+
+    # 计算DIFH系列 (使用HHV for highest DIFF values)
+    difh1 = _compute_hhv(diff, mm1_safe)
+    difh2 = _compute_ref(difh1, n1_safe)
+    difh3 = _compute_ref(difh2, n1_safe)
+
+    # 生成卖出条件信号
+    # ZJDBL := CH1 > CH2 AND DIFH1 < DIFH2 AND REF(MCD,1) > 0 AND DIFF > 0;
+    zjdbl = (ch1 > ch2) & (difh1 < difh2) & (mcd.shift(1) > 0) & (diff > 0)
+    
+    # GXDBL := CH1 > CH3 AND DIFH1 > DIFH2 AND DIFH1 < DIFH3 AND REF(MCD,1) > 0 AND DIFF > 0;
+    gxdbl = (ch1 > ch3) & (difh1 > difh2) & (difh1 < difh3) & (mcd.shift(1) > 0) & (diff > 0)
+    
+    # DBBL := (ZJDBL OR GXDBL) AND DIFF > 0;
+    dbbl = (zjdbl | gxdbl) & (diff > 0)
+    
+    # DBJG := REF(DBBL,1) AND REF(DIFF,1)>= DIFF * 1.01;
+    dbjg = dbbl.shift(1) & (diff.shift(1) >= diff * 1.01)
+    
+    # DBJGXC := NOT(REF(DBJG,1)) AND DBJG;
+    dbjgxc = dbjg & ~dbjg.shift(1, fill_value=False).fillna(False)
+
+    return dbjgxc
+
 def compute_nx_break_through(data):
     high = data['High']
     short_upper = high.ewm(span=24, adjust=False).mean()
@@ -66,6 +119,20 @@ def _compute_llv(series, periods):
         else:
             llv.iloc[i] = np.nan
     return llv
+
+def _compute_hhv(series, periods):
+    """
+    计算HHV (Highest High Value) - 最高值
+    """
+    hhv = pd.Series(index=series.index, dtype=float)
+    for i in range(len(series)):
+        period = periods.iloc[i]
+        if period > 0:
+            start = max(0, i - period + 1)
+            hhv.iloc[i] = series.iloc[start:i+1].max()
+        else:
+            hhv.iloc[i] = np.nan
+    return hhv
 
 def _compute_ref(series, lags):
     ref = pd.Series(index=series.index, dtype=float)
