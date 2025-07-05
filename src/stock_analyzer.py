@@ -7,6 +7,41 @@ from get_best_CD_interval import evaluate_interval
 from get_best_MC_interval import evaluate_interval as evaluate_mc_interval
 from multiprocessing import Pool, cpu_count
 
+# Define column configurations at module level for reusability
+best_intervals_columns = ['ticker', 'interval', 'hold_time',  
+                          'avg_return', 'latest_signal', 'latest_signal_price', 
+                          'current_time', 'current_price', 'current_period',
+                          'test_count', 'success_rate', 'best_period', 'signal_count',
+                          'mc_signals_before_cd', 'mc_at_top_price_count', 'mc_at_top_price_rate',
+                          'avg_mc_price_percentile', 'avg_mc_decline_after', 'avg_mc_criteria_met',
+                          'latest_mc_date', 'latest_mc_price', 'latest_mc_at_top_price',
+                          'latest_mc_price_percentile', 'latest_mc_decline_after', 'latest_mc_criteria_met']
+
+# Define all periods for dynamic handling
+periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+
+# Define period ranges for different best intervals tables
+period_ranges = {
+    '20': [3, 5, 10, 15, 20],
+    '50': [3, 5, 10, 15, 20, 25, 30, 40, 50],
+    '100': [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+}
+
+# Build good_signals_columns dynamically
+good_signals_columns = ['ticker', 'interval', 'hold_time', 
+                        'exp_return', 'latest_signal', 'latest_signal_price',
+                        'current_time', 'current_price', 'current_period',
+                        'test_count', 'success_rate', 'best_period', 'signal_count',
+                        'mc_signals_before_cd', 'mc_at_top_price_count', 'mc_at_top_price_rate',
+                        'avg_mc_price_percentile', 'avg_mc_decline_after', 'avg_mc_criteria_met',
+                        'latest_mc_date', 'latest_mc_price', 'latest_mc_at_top_price',
+                        'latest_mc_price_percentile', 'latest_mc_decline_after', 'latest_mc_criteria_met']
+
+# Add all period-specific columns to good_signals_columns
+for period in periods:
+    good_signals_columns.extend([f'test_count_{period}', f'success_rate_{period}', f'avg_return_{period}'])
+good_signals_columns.extend(['max_return', 'min_return'])
+
 def parse_interval_to_minutes(interval_str):
     """
     Parse interval string to minutes.
@@ -125,31 +160,6 @@ def analyze_stocks(file_path):
     mc_eval_results = []
     all_ticker_data = {}
     failed_tickers = []
-    best_intervals_columns = ['ticker', 'interval', 'hold_time',  
-                              'avg_return', 'latest_signal', 'latest_signal_price', 
-                              'current_time', 'current_price', 'current_period',
-                              'test_count', 'success_rate', 'best_period', 'signal_count']
-    # Define all periods for dynamic handling
-    periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-    
-    # Define period ranges for different best intervals tables
-    period_ranges = {
-        '20': [3, 5, 10, 15, 20],
-        '50': [3, 5, 10, 15, 20, 25, 30, 40, 50],
-        '100': [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-    }
-    
-    # Build good_signals_columns dynamically
-    good_signals_columns = ['ticker', 'interval', 'hold_time', 
-                            'exp_return', 'latest_signal', 'latest_signal_price',
-                            'current_time', 'current_price', 'current_period',
-                            'test_count', 'success_rate', 'best_period', 'signal_count']
-    
-    # Add all period-specific columns
-    for period in periods:
-        good_signals_columns.extend([f'test_count_{period}', f'success_rate_{period}', f'avg_return_{period}'])
-    
-    good_signals_columns.extend(['max_return', 'min_return'])
 
     for i in range(0, len(stock_list), batch_size):
         batch = stock_list[i:i+batch_size]
@@ -258,9 +268,11 @@ def analyze_stocks(file_path):
                     test_count=best_intervals.apply(lambda x: x[f'test_count_{int(x.best_period)}'], axis=1),
                     success_rate=best_intervals.apply(lambda x: x[f'success_rate_{int(x.best_period)}'], axis=1),
                     avg_return=best_intervals['max_return']
-                )[['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price', 
-                   'current_time', 'current_price', 'current_period',
-                   'test_count', 'success_rate', 'best_period', 'avg_return']].sort_values('latest_signal', ascending=False)
+                )
+                
+                # Keep all columns that are in best_intervals_columns
+                available_columns = [col for col in best_intervals_columns if col in best_intervals.columns]
+                best_intervals = best_intervals[available_columns].sort_values('latest_signal', ascending=False)
                 
                 # Calculate hold_time as interval * best_period
                 best_intervals['hold_time'] = best_intervals.apply(
@@ -268,7 +280,8 @@ def analyze_stocks(file_path):
                 )
                 
                 # Reorder columns to put hold_time after interval
-                best_intervals = best_intervals[best_intervals_columns]
+                final_columns = [col for col in best_intervals_columns if col in best_intervals.columns]
+                best_intervals = best_intervals[final_columns]
                 best_intervals = best_intervals[best_intervals['avg_return'] >= 5]
                 best_intervals = best_intervals[best_intervals['success_rate'] >= 50]
                 best_intervals = best_intervals[best_intervals['current_period'] <= best_intervals['best_period']]
@@ -299,7 +312,8 @@ def analyze_stocks(file_path):
             )
             
             # Reorder columns to put hold_time after interval and exp_return after signal_count
-            good_signals = good_signals[good_signals_columns]
+            available_good_columns = [col for col in good_signals_columns if col in good_signals.columns]
+            good_signals = good_signals[available_good_columns]
             good_signals = good_signals[good_signals['success_rate'] >= 50]
             
             good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
@@ -337,7 +351,11 @@ def analyze_stocks(file_path):
         for period in periods:
             empty_detailed_columns.extend([f'test_count_{period}', f'success_rate_{period}', f'avg_return_{period}'])
         
-        empty_detailed_columns.extend(['max_return', 'min_return'])
+        empty_detailed_columns.extend(['max_return', 'min_return',
+                                      'mc_signals_before_cd', 'mc_at_top_price_count', 'mc_at_top_price_rate',
+                                      'avg_mc_price_percentile', 'avg_mc_decline_after', 'avg_mc_criteria_met',
+                                      'latest_mc_date', 'latest_mc_price', 'latest_mc_at_top_price',
+                                      'latest_mc_price_percentile', 'latest_mc_decline_after', 'latest_mc_criteria_met'])
         empty_detailed = pd.DataFrame(columns=empty_detailed_columns)
         empty_detailed.to_csv(os.path.join(output_dir, f'cd_eval_custom_detailed_{output_base}.csv'), index=False)
         
@@ -423,9 +441,11 @@ def analyze_stocks(file_path):
                     test_count=best_intervals.apply(lambda x: x[f'test_count_{int(x.best_period)}'], axis=1),
                     success_rate=best_intervals.apply(lambda x: x[f'success_rate_{int(x.best_period)}'], axis=1),
                     avg_return=best_intervals['min_return']
-                )[['ticker', 'interval', 'signal_count', 'latest_signal', 'latest_signal_price', 
-                   'current_time', 'current_price', 'current_period',
-                   'test_count', 'success_rate', 'best_period', 'avg_return']].sort_values('latest_signal', ascending=False)
+                )
+                
+                # Keep all columns that are in best_intervals_columns
+                available_columns = [col for col in best_intervals_columns if col in best_intervals.columns]
+                best_intervals = best_intervals[available_columns].sort_values('latest_signal', ascending=False)
                 
                 # Calculate hold_time as interval * best_period
                 best_intervals['hold_time'] = best_intervals.apply(
@@ -433,7 +453,8 @@ def analyze_stocks(file_path):
                 )
                 
                 # Reorder columns to put hold_time after interval
-                best_intervals = best_intervals[best_intervals_columns]
+                final_columns = [col for col in best_intervals_columns if col in best_intervals.columns]
+                best_intervals = best_intervals[final_columns]
                 best_intervals = best_intervals[best_intervals['avg_return'] <= -5]
                 best_intervals = best_intervals[best_intervals['success_rate'] >= 50]
                 best_intervals = best_intervals[best_intervals['current_period'] <= best_intervals['best_period']]
@@ -464,7 +485,8 @@ def analyze_stocks(file_path):
             )
             
             # Reorder columns to put hold_time after interval and exp_return after signal_count
-            good_signals = good_signals[good_signals_columns]
+            available_good_columns = [col for col in good_signals_columns if col in good_signals.columns]
+            good_signals = good_signals[available_good_columns]
             good_signals = good_signals[good_signals['success_rate'] >= 50]
             
             good_signals.to_csv(os.path.join(output_dir, f'mc_eval_good_signals_{output_base}.csv'), index=False)

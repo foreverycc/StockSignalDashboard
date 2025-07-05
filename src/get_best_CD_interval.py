@@ -276,6 +276,14 @@ def evaluate_interval(ticker, interval, data=None):
             result['avg_mc_price_percentile'] = 0
             result['avg_mc_decline_after'] = 0
             result['avg_mc_criteria_met'] = 0
+            
+            # Add latest MC signal data (all None/False when no data)
+            result['latest_mc_date'] = None
+            result['latest_mc_price'] = None
+            result['latest_mc_at_top_price'] = False
+            result['latest_mc_price_percentile'] = 0
+            result['latest_mc_decline_after'] = 0
+            result['latest_mc_criteria_met'] = 0
             return result
             
         # Calculate returns for each signal
@@ -310,6 +318,14 @@ def evaluate_interval(ticker, interval, data=None):
             result['avg_mc_price_percentile'] = 0
             result['avg_mc_decline_after'] = 0
             result['avg_mc_criteria_met'] = 0
+            
+            # Add latest MC signal data (all None/False when no data)
+            result['latest_mc_date'] = None
+            result['latest_mc_price'] = None
+            result['latest_mc_at_top_price'] = False
+            result['latest_mc_price_percentile'] = 0
+            result['latest_mc_decline_after'] = 0
+            result['latest_mc_criteria_met'] = 0
             return result
         
         # Define all periods
@@ -388,6 +404,24 @@ def evaluate_interval(ticker, interval, data=None):
             avg_mc_decline = returns_df['mc_decline_after'].mean() if 'mc_decline_after' in returns_df else 0
             avg_mc_criteria = returns_df['mc_criteria_met'].mean() if 'mc_criteria_met' in returns_df else 0
             
+            # Latest MC signal data (from the most recent CD signal)
+            latest_cd_signal = returns_df[returns_df['prev_mc_date'].notna()].sort_values('date', ascending=False)
+            if not latest_cd_signal.empty:
+                latest_mc_data = latest_cd_signal.iloc[0]
+                latest_mc_price = latest_mc_data['prev_mc_price'] if 'prev_mc_price' in latest_mc_data else None
+                latest_mc_date = latest_mc_data['prev_mc_date'] if 'prev_mc_date' in latest_mc_data else None
+                latest_mc_at_top_price = latest_mc_data['mc_at_top_price'] if 'mc_at_top_price' in latest_mc_data else False
+                latest_mc_price_percentile = latest_mc_data['mc_price_percentile'] if 'mc_price_percentile' in latest_mc_data else 0
+                latest_mc_decline_after = latest_mc_data['mc_decline_after'] if 'mc_decline_after' in latest_mc_data else 0
+                latest_mc_criteria_met = latest_mc_data['mc_criteria_met'] if 'mc_criteria_met' in latest_mc_data else 0
+            else:
+                latest_mc_price = None
+                latest_mc_date = None
+                latest_mc_at_top_price = False
+                latest_mc_price_percentile = 0
+                latest_mc_decline_after = 0
+                latest_mc_criteria_met = 0
+            
             # Add MC analysis to result
             result['mc_signals_before_cd'] = mc_total_count
             result['mc_at_top_price_count'] = mc_at_top_count
@@ -395,6 +429,14 @@ def evaluate_interval(ticker, interval, data=None):
             result['avg_mc_price_percentile'] = round(avg_mc_percentile, 3)
             result['avg_mc_decline_after'] = round(avg_mc_decline, 2)
             result['avg_mc_criteria_met'] = round(avg_mc_criteria, 2)
+            
+            # Add latest MC signal data
+            result['latest_mc_date'] = latest_mc_date
+            result['latest_mc_price'] = round(latest_mc_price, 2) if latest_mc_price else None
+            result['latest_mc_at_top_price'] = latest_mc_at_top_price
+            result['latest_mc_price_percentile'] = round(latest_mc_price_percentile, 3)
+            result['latest_mc_decline_after'] = round(latest_mc_decline_after, 2)
+            result['latest_mc_criteria_met'] = latest_mc_criteria_met
         else:
             result['mc_signals_before_cd'] = 0
             result['mc_at_top_price_count'] = 0
@@ -402,6 +444,14 @@ def evaluate_interval(ticker, interval, data=None):
             result['avg_mc_price_percentile'] = 0
             result['avg_mc_decline_after'] = 0
             result['avg_mc_criteria_met'] = 0
+            
+            # Add latest MC signal data (all None/False when no data)
+            result['latest_mc_date'] = None
+            result['latest_mc_price'] = None
+            result['latest_mc_at_top_price'] = False
+            result['latest_mc_price_percentile'] = 0
+            result['latest_mc_decline_after'] = 0
+            result['latest_mc_criteria_met'] = 0
         
         # Calculate max and min returns across all periods
         all_returns = []

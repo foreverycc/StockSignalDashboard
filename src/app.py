@@ -1018,6 +1018,12 @@ if page == "CD Analysis (抄底)":
                         'avg_mc_price_percentile': 170,     # 21 chars: "avg_mc_price_percentile"
                         'avg_mc_decline_after': 160,        # 19 chars: "avg_mc_decline_after"
                         'avg_mc_criteria_met': 150,         # 18 chars: "avg_mc_criteria_met"
+                        'latest_mc_date': 160,              # 15 chars: "latest_mc_date"
+                        'latest_mc_price': 140,             # 16 chars: "latest_mc_price"
+                        'latest_mc_at_top_price': 180,      # 22 chars: "latest_mc_at_top_price"
+                        'latest_mc_price_percentile': 190,  # 26 chars: "latest_mc_price_percentile"
+                        'latest_mc_decline_after': 180,     # 23 chars: "latest_mc_decline_after"
+                        'latest_mc_criteria_met': 170,      # 22 chars: "latest_mc_criteria_met"
                     }
                     
                     # Configure columns with specific widths
@@ -1031,8 +1037,11 @@ if page == "CD Analysis (抄底)":
                     # Configure MC signal analysis columns
                     for col_name, width in mc_column_widths.items():
                         if col_name in df.columns:
-                            if col_name in ['mc_at_top_price_rate', 'avg_mc_price_percentile', 'avg_mc_decline_after', 'avg_mc_criteria_met']:
+                            if col_name in ['mc_at_top_price_rate', 'avg_mc_price_percentile', 'avg_mc_decline_after', 'avg_mc_criteria_met', 
+                                          'latest_mc_price', 'latest_mc_price_percentile', 'latest_mc_decline_after']:
                                 gb.configure_column(col_name, type=['numericColumn', 'numberColumnFilter'], precision=2, width=width)
+                            elif col_name in ['latest_mc_date']:
+                                gb.configure_column(col_name, minWidth=width)
                             else:
                                 gb.configure_column(col_name, width=width)
                     
