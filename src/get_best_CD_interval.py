@@ -29,7 +29,7 @@ def find_latest_mc_signal_before_cd(data, cd_date, mc_signals):
     
     return latest_mc_date, latest_mc_price
 
-def evaluate_mc_at_top_price(data, mc_date, mc_price, lookback_periods=20, lookahead_periods=10):
+def evaluate_mc_at_top_price(data, mc_date, mc_price, cd_date):
     """
     Evaluate if an MC signal was at a "top price" by checking if it was near a local maximum.
     
@@ -37,37 +37,35 @@ def evaluate_mc_at_top_price(data, mc_date, mc_price, lookback_periods=20, looka
         data: DataFrame with price data
         mc_date: Date of the MC signal
         mc_price: Price at the MC signal
-        lookback_periods: Number of periods to look back for comparison
-        lookahead_periods: Number of periods to look ahead for confirmation
+        cd_date: Date of the latest CD signal (used for range calculations)
     
     Returns:
         Dictionary with evaluation metrics
     """
     try:
         mc_idx = data.index.get_loc(mc_date)
+        cd_idx = data.index.get_loc(cd_date)
         
-        # Calculate lookback range
-        lookback_start = max(0, mc_idx - lookback_periods)
-        lookback_data = data.iloc[lookback_start:mc_idx]
+        # 1. Calculate lookback range: from start of data to latest CD time point
+        lookback_data = data.iloc[0:cd_idx+1]  # Include CD signal date
         
-        # Calculate lookahead range
-        lookahead_end = min(len(data), mc_idx + lookahead_periods + 1)
-        lookahead_data = data.iloc[mc_idx:lookahead_end]
+        # 2. Calculate lookahead range: from MC signal to latest CD time point
+        lookahead_data = data.iloc[mc_idx:cd_idx+1]  # Include CD signal date
         
         # Calculate metrics
         metrics = {}
         
-        # 1. Check if MC price is near the highest price in lookback period
+        # 1. Check if MC price is near the highest price in the full historical range
         if not lookback_data.empty:
             lookback_max = lookback_data['High'].max()
             lookback_min = lookback_data['Low'].min()
             lookback_range = lookback_max - lookback_min
             
-            # Calculate percentile position of MC price in lookback range
+            # Calculate percentile position of MC price in full historical range
             if lookback_range > 0:
                 price_percentile = (mc_price - lookback_min) / lookback_range
                 metrics['lookback_price_percentile'] = price_percentile
-                metrics['is_near_lookback_high'] = price_percentile >= 0.8  # Top 20% of range
+                metrics['is_near_lookback_high'] = price_percentile >= 0.8  # Top 20% of full range
             else:
                 metrics['lookback_price_percentile'] = 0.5
                 metrics['is_near_lookback_high'] = False
@@ -75,23 +73,33 @@ def evaluate_mc_at_top_price(data, mc_date, mc_price, lookback_periods=20, looka
             metrics['lookback_price_percentile'] = 0.5
             metrics['is_near_lookback_high'] = False
         
-        # 2. Check if price declined after MC signal (confirmation of good sell signal)
+        # 2. Check if price declined after MC signal until CD signal (more stringent threshold)
         if len(lookahead_data) > 1:
             lookahead_min = lookahead_data['Low'].min()
             price_decline_pct = (mc_price - lookahead_min) / mc_price * 100
             metrics['price_decline_after_mc'] = price_decline_pct
-            metrics['is_followed_by_decline'] = price_decline_pct >= 2.0  # At least 2% decline
+            metrics['is_followed_by_decline'] = price_decline_pct >= 5.0  # At least 5% decline (increased from 2%)
         else:
             metrics['price_decline_after_mc'] = 0
             metrics['is_followed_by_decline'] = False
         
-        # 3. Check if MC signal is at local maximum
-        window_start = max(0, mc_idx - 5)
-        window_end = min(len(data), mc_idx + 6)
+        # 3. Check if MC signal is at local maximum using relative method
+        # Use dynamic window size based on data availability and relative price position
+        # Calculate window size as a percentage of total data length (more robust across timeframes)
+        total_length = len(data)
+        window_size = max(3, min(10, total_length // 20))  # 5% of data length, but between 3-10 periods
+        
+        window_start = max(0, mc_idx - window_size)
+        window_end = min(len(data), mc_idx + window_size + 1)
         window_data = data.iloc[window_start:window_end]
         
-        if not window_data.empty:
-            is_local_max = mc_price >= window_data['High'].max() * 0.95  # Within 5% of local max
+        if not window_data.empty and len(window_data) > 1:
+            # Use relative ranking instead of fixed percentage
+            window_highs = window_data['High'].values
+            mc_rank = sum(mc_price >= h for h in window_highs) / len(window_highs)
+            
+            # MC signal is local max if it's in top 30% of surrounding prices
+            is_local_max = mc_rank >= 0.7
             metrics['is_local_maximum'] = is_local_max
         else:
             metrics['is_local_maximum'] = False
@@ -161,7 +169,7 @@ def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
         # Evaluate if the MC signal was at top price
         mc_evaluation = {}
         if latest_mc_date is not None:
-            mc_evaluation = evaluate_mc_at_top_price(data, latest_mc_date, latest_mc_price)
+            mc_evaluation = evaluate_mc_at_top_price(data, latest_mc_date, latest_mc_price, date)
             
         # Add MC signal analysis to the results
         mc_info = {
