@@ -4,6 +4,9 @@ from data_loader import download_stock_data
 from indicators import compute_cd_indicator, compute_mc_indicator
 import yfinance as yf
 
+# EMA warmup period - should match the value in indicators.py
+EMA_WARMUP_PERIOD = 50
+
 def find_latest_mc_signal_before_cd(data, cd_date, mc_signals):
     """
     Find the latest MC signal that occurred before a given CD signal date.
@@ -17,7 +20,9 @@ def find_latest_mc_signal_before_cd(data, cd_date, mc_signals):
         Tuple of (mc_signal_date, mc_signal_price) or (None, None) if no MC signal found
     """
     # Get all MC signal dates before the CD signal date
-    mc_signal_dates = data.index[mc_signals]
+    # Handle NaN values by replacing them with False for boolean indexing
+    mc_signals_bool = mc_signals.fillna(False).infer_objects(copy=False)
+    mc_signal_dates = data.index[mc_signals_bool]
     previous_mc_signals = mc_signal_dates[mc_signal_dates < cd_date]
     
     if len(previous_mc_signals) == 0:
@@ -46,8 +51,10 @@ def evaluate_mc_at_top_price(data, mc_date, mc_price, cd_date):
         mc_idx = data.index.get_loc(mc_date)
         cd_idx = data.index.get_loc(cd_date)
         
-        # 1. Calculate lookback range: from start of data to latest CD time point
-        lookback_data = data.iloc[0:cd_idx+1]  # Include CD signal date
+        # 1. Calculate lookback range: from EMA warmup period to latest CD time point
+        # Exclude unreliable early periods before EMA convergence
+        warmup_start = min(EMA_WARMUP_PERIOD, len(data) - 1)
+        lookback_data = data.iloc[warmup_start:cd_idx+1]  # Start from warmup period, include CD signal date
         
         # 2. Calculate lookahead range: from MC signal to latest CD time point
         lookahead_data = data.iloc[mc_idx:cd_idx+1]  # Include CD signal date
@@ -141,7 +148,9 @@ def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
         DataFrame with signal dates and returns for each period
     """
     results = []
-    signal_dates = data.index[cd_signals]
+    # Handle NaN values by replacing them with False for boolean indexing
+    cd_signals_bool = cd_signals.fillna(False).infer_objects(copy=False)
+    signal_dates = data.index[cd_signals_bool]
     
     # Also compute MC signals for analysis
     mc_signals = compute_mc_indicator(data)
@@ -243,10 +252,13 @@ def evaluate_interval(ticker, interval, data=None):
             
         # Compute CD signals
         cd_signals = compute_cd_indicator(data_frame)
-        signal_count = cd_signals.sum()
+        # Handle NaN values for signal count calculation
+        signal_count = cd_signals.fillna(False).infer_objects(copy=False).sum()
         
         # Get the latest signal date
-        latest_signal_date = data_frame.index[cd_signals].max() if signal_count > 0 else None
+        # Handle NaN values by replacing them with False for boolean indexing
+        cd_signals_bool = cd_signals.fillna(False).infer_objects(copy=False)
+        latest_signal_date = data_frame.index[cd_signals_bool].max() if signal_count > 0 else None
         latest_signal_str = latest_signal_date.strftime('%Y-%m-%d %H:%M:%S') if latest_signal_date else None
         latest_signal_price = round(data_frame.loc[latest_signal_date, 'Close'], 2) if latest_signal_date is not None else None
         

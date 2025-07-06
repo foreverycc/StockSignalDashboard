@@ -7,6 +7,9 @@ from get_best_CD_interval import evaluate_interval
 from get_best_MC_interval import evaluate_interval as evaluate_mc_interval
 from multiprocessing import Pool, cpu_count
 
+# Suppress pandas FutureWarnings about downcasting
+pd.set_option('future.no_silent_downcasting', True)
+
 # Define column configurations at module level for reusability
 best_intervals_columns = ['ticker', 'interval', 'hold_time',  
                           'avg_return', 'latest_signal', 'latest_signal_price', 

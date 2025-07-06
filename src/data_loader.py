@@ -16,7 +16,8 @@ def download_stock_data(ticker):
     # Define base timeframes to download directly
     try:
         # Get 5-minute data for short timeframes
-        data_ticker['5m'] = stock.history(interval='5m', period='1mo')
+        # data_ticker['5m'] = stock.history(interval='5m', period='1mo')
+        data_ticker['5m'] = stock.history(interval='5m', period='60d')
         if not data_ticker['5m'].empty:
             print(f"Downloaded 5m data for {ticker}")
     except Exception as e:

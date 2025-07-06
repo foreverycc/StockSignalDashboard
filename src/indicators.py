@@ -2,7 +2,16 @@ import pandas as pd
 import numpy as np
 
 def compute_cd_indicator(data):
+    # Ensure we get a Series, not a DataFrame column
     close = data['Close']
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]  # Extract first column as Series
+    
+    # Define EMA warmup period (conservative standard)
+    # Extended to 50 periods for additional safety margin in EMA convergence
+    # Ensures high-quality signals with sufficient historical context
+    ema_warmup_period = 50
+    
     # 计算MACD
     fast_ema = close.ewm(span=12, adjust=False).mean()
     slow_ema = close.ewm(span=26, adjust=False).mean()
@@ -39,14 +48,28 @@ def compute_cd_indicator(data):
     jjj = ccc.shift(1) & (abs(diff.shift(1)) >= abs(diff) * 1.01)
     dxdx = jjj & ~jjj.shift(1, fill_value=False).fillna(False)
 
-    return dxdx
+    # Mark early periods as NA due to EMA approximation
+    # Professional approach: Only show signals when we're confident they're accurate
+    result = dxdx.copy().astype('object')  # Convert to object dtype to allow NaN
+    result.iloc[:ema_warmup_period] = np.nan
+    
+    return result
 
 def compute_mc_indicator(data):
     """
     计算MC (卖出) 信号
     Based on the sell signal logic from futu_CD.txt
     """
+    # Ensure we get a Series, not a DataFrame column
     close = data['Close']
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]  # Extract first column as Series
+    
+    # Define EMA warmup period (conservative standard)
+    # Extended to 50 periods for additional safety margin in EMA convergence
+    # Ensures high-quality signals with sufficient historical context
+    ema_warmup_period = 50
+    
     # 计算MACD
     fast_ema = close.ewm(span=12, adjust=False).mean()
     slow_ema = close.ewm(span=26, adjust=False).mean()
@@ -92,19 +115,32 @@ def compute_mc_indicator(data):
     # DBJGXC := NOT(REF(DBJG,1)) AND DBJG;
     dbjgxc = dbjg & ~dbjg.shift(1, fill_value=False).fillna(False)
 
-    return dbjgxc
+    # Mark early periods as NA due to EMA approximation
+    # Professional approach: Only show signals when we're confident they're accurate
+    result = dbjgxc.copy().astype('object')  # Convert to object dtype to allow NaN
+    result.iloc[:ema_warmup_period] = np.nan
+    
+    return result
 
 def compute_nx_break_through(data):
+    # Ensure we get Series, not DataFrame columns
     high = data['High']
+    close = data['Close']
+    if isinstance(high, pd.DataFrame):
+        high = high.iloc[:, 0]
+    if isinstance(close, pd.DataFrame):
+        close = close.iloc[:, 0]
+    
     short_upper = high.ewm(span=24, adjust=False).mean()
-    break_through = (data['Close'] > short_upper) & (data['Close'].shift(1) <= short_upper.shift(1))
+    break_through = (close > short_upper) & (close.shift(1) <= short_upper.shift(1))
     return break_through
 
 def _compute_barslast(cross_events, length):
     barslast = np.zeros(length, dtype=int)
     last_event = -1
     for i in range(length):
-        if cross_events.iloc[i]:
+        # Get scalar boolean value
+        if cross_events.iloc[i].item():
             last_event = i
         barslast[i] = i - last_event if last_event != -1 else 0
     return pd.Series(barslast, index=cross_events.index)

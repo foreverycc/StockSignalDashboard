@@ -58,11 +58,15 @@ def process_ticker_1234(ticker, data_ticker=None):
         try:
             cd = compute_cd_indicator(data)
             breakthrough = compute_nx_break_through(data)
-            buy_signals = (cd.astype(bool) & breakthrough) | (cd.astype(bool) & breakthrough.rolling(10).apply(lambda x: x.iloc[0] if x.any() else False))   
+            # Handle NaN values by replacing them with False for boolean operations
+            cd_bool = cd.fillna(False).infer_objects(copy=False).astype(bool)
+            buy_signals = (cd_bool & breakthrough) | (cd_bool & breakthrough.rolling(10).apply(lambda x: x.iloc[0] if x.any() else False))   
             signal_dates = data.index[buy_signals]
             breakthrough_dates = data.index[breakthrough]
             
-            for date in data.index[cd]:
+            # Filter out NaN values for signal processing
+            valid_cd_signals = cd.fillna(False).infer_objects(copy=False)
+            for date in data.index[valid_cd_signals]:
                 score = calculate_score(data, interval, date)
                 signal_price = data.loc[date, 'Close']  # Get the Close price at signal date
                 # Find the next breakthrough date after the signal date
@@ -112,11 +116,15 @@ def process_ticker_5230(ticker, data_ticker=None):
         try:
             cd = compute_cd_indicator(data)
             breakthrough = compute_nx_break_through(data)
-            buy_signals = (cd.astype(bool) & breakthrough) | (cd.astype(bool) & breakthrough.rolling(10).apply(lambda x: x.iloc[0] if x.any() else False))   
+            # Handle NaN values by replacing them with False for boolean operations
+            cd_bool = cd.fillna(False).infer_objects(copy=False).astype(bool)
+            buy_signals = (cd_bool & breakthrough) | (cd_bool & breakthrough.rolling(10).apply(lambda x: x.iloc[0] if x.any() else False))   
             signal_dates = data.index[buy_signals]
             breakthrough_dates = data.index[breakthrough]
             
-            for date in data.index[cd]:
+            # Filter out NaN values for signal processing
+            valid_cd_signals = cd.fillna(False).infer_objects(copy=False)
+            for date in data.index[valid_cd_signals]:
                 score = calculate_score(data, interval, date)
                 signal_price = data.loc[date, 'Close']  # Get the Close price at signal date
                 # Find the next breakthrough date after the signal date
