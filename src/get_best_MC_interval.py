@@ -17,7 +17,9 @@ def calculate_returns(data, mc_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
         DataFrame with signal dates and returns for each period
     """
     results = []
-    signal_dates = data.index[mc_signals]
+    # Handle NaN values by replacing them with False for boolean indexing
+    mc_signals_bool = mc_signals.fillna(False).infer_objects(copy=False)
+    signal_dates = data.index[mc_signals_bool]
     
     for date in signal_dates:
         idx = data.index.get_loc(date)
@@ -98,10 +100,13 @@ def evaluate_interval(ticker, interval, data=None):
             
         # Compute MC signals
         mc_signals = compute_mc_indicator(data_frame)
-        signal_count = mc_signals.sum()
+        # Handle NaN values for signal count calculation
+        signal_count = mc_signals.fillna(False).infer_objects(copy=False).sum()
         
         # Get the latest signal date
-        latest_signal_date = data_frame.index[mc_signals].max() if signal_count > 0 else None
+        # Handle NaN values by replacing them with False for boolean indexing
+        mc_signals_bool = mc_signals.fillna(False).infer_objects(copy=False)
+        latest_signal_date = data_frame.index[mc_signals_bool].max() if signal_count > 0 else None
         latest_signal_str = latest_signal_date.strftime('%Y-%m-%d %H:%M:%S') if latest_signal_date else None
         latest_signal_price = round(data_frame.loc[latest_signal_date, 'Close'], 2) if latest_signal_date is not None else None
         
