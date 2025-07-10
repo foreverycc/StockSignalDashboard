@@ -26,7 +26,8 @@ def download_stock_data(ticker):
     
     try:
         # Get 1-hour data for medium timeframes
-        data_ticker['1h'] = stock.history(interval='60m', period='3mo')
+        # data_ticker['1h'] = stock.history(interval='60m', period='3mo')
+        data_ticker['1h'] = stock.history(interval='60m', period='1y')
         if not data_ticker['1h'].empty:
             print(f"Downloaded 1h data for {ticker}")
     except Exception as e:
@@ -35,7 +36,8 @@ def download_stock_data(ticker):
     
     try:
         # Get daily data for long timeframes
-        data_ticker['1d'] = stock.history(interval='1d', period='1y')
+        # data_ticker['1d'] = stock.history(interval='1d', period='1y')
+        data_ticker['1d'] = stock.history(interval='1d', period='2y')
         if not data_ticker['1d'].empty:
             print(f"Downloaded 1d data for {ticker}")
     except Exception as e:
