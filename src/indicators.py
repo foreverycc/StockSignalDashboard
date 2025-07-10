@@ -10,7 +10,7 @@ def compute_cd_indicator(data):
     # Define EMA warmup period (conservative standard)
     # Extended to 50 periods for additional safety margin in EMA convergence
     # Ensures high-quality signals with sufficient historical context
-    ema_warmup_period = 50
+    ema_warmup_period = 0
     
     # 计算MACD
     fast_ema = close.ewm(span=12, adjust=False).mean()
@@ -68,7 +68,7 @@ def compute_mc_indicator(data):
     # Define EMA warmup period (conservative standard)
     # Extended to 50 periods for additional safety margin in EMA convergence
     # Ensures high-quality signals with sufficient historical context
-    ema_warmup_period = 50
+    ema_warmup_period = 0
     
     # 计算MACD
     fast_ema = close.ewm(span=12, adjust=False).mean()
