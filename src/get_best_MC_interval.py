@@ -4,7 +4,10 @@ from data_loader import download_stock_data
 from indicators import compute_mc_indicator
 import yfinance as yf
 
-def calculate_returns(data, mc_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]):
+# Maximum number of latest signals to process (to reduce noise from older signals)
+MAX_SIGNALS_THRESHOLD = 10
+
+def calculate_returns(data, mc_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100], max_signals=MAX_SIGNALS_THRESHOLD):
     """
     Calculate returns after MC signals for specified periods.
     
@@ -12,6 +15,7 @@ def calculate_returns(data, mc_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
         data: DataFrame with price data
         mc_signals: Series with MC signals (boolean)
         periods: List of periods to calculate returns for
+        max_signals: Maximum number of latest signals to process (default: MAX_SIGNALS_THRESHOLD)
     
     Returns:
         DataFrame with signal dates and returns for each period
@@ -20,6 +24,10 @@ def calculate_returns(data, mc_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
     # Handle NaN values by replacing them with False for boolean indexing
     mc_signals_bool = mc_signals.fillna(False).infer_objects(copy=False)
     signal_dates = data.index[mc_signals_bool]
+    
+    # Limit to the latest N signals to reduce noise from older signals
+    if len(signal_dates) > max_signals:
+        signal_dates = signal_dates[-max_signals:]
     
     for date in signal_dates:
         idx = data.index.get_loc(date)
@@ -138,8 +146,8 @@ def evaluate_interval(ticker, interval, data=None):
                 result[f'returns_{period}'] = []  # Store empty list for individual returns
             return result
             
-        # Calculate returns for each signal
-        returns_df = calculate_returns(data_frame, mc_signals)
+        # Calculate returns for each signal (limit to latest signals to reduce noise)
+        returns_df = calculate_returns(data_frame, mc_signals, max_signals=MAX_SIGNALS_THRESHOLD)
         
         if returns_df.empty:
             result = {
