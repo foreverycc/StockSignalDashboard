@@ -7,6 +7,9 @@ import yfinance as yf
 # EMA warmup period - should match the value in indicators.py
 EMA_WARMUP_PERIOD = 50
 
+# Maximum number of latest signals to process (to reduce noise from older signals)
+MAX_SIGNALS_THRESHOLD = 10
+
 def find_latest_mc_signal_before_cd(data, cd_date, mc_signals):
     """
     Find the latest MC signal that occurred before a given CD signal date.
@@ -135,7 +138,7 @@ def evaluate_mc_at_top_price(data, mc_date, mc_price, cd_date):
             'is_at_top_price': False
         }
 
-def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]):
+def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100], max_signals=MAX_SIGNALS_THRESHOLD):
     """
     Calculate returns after CD signals for specified periods.
     
@@ -143,6 +146,7 @@ def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
         data: DataFrame with price data
         cd_signals: Series with CD signals (boolean)
         periods: List of periods to calculate returns for
+        max_signals: Maximum number of latest signals to process (default: MAX_SIGNALS_THRESHOLD)
     
     Returns:
         DataFrame with signal dates and returns for each period
@@ -151,6 +155,10 @@ def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
     # Handle NaN values by replacing them with False for boolean indexing
     cd_signals_bool = cd_signals.fillna(False).infer_objects(copy=False)
     signal_dates = data.index[cd_signals_bool]
+    
+    # Limit to the latest N signals to reduce noise from older signals
+    if len(signal_dates) > max_signals:
+        signal_dates = signal_dates[-max_signals:]
     
     # Also compute MC signals for analysis
     mc_signals = compute_mc_indicator(data)
@@ -306,8 +314,8 @@ def evaluate_interval(ticker, interval, data=None):
             result['latest_mc_criteria_met'] = 0
             return result
             
-        # Calculate returns for each signal
-        returns_df = calculate_returns(data_frame, cd_signals)
+        # Calculate returns for each signal (limit to latest signals to reduce noise)
+        returns_df = calculate_returns(data_frame, cd_signals, max_signals=MAX_SIGNALS_THRESHOLD)
         
         if returns_df.empty:
             result = {
