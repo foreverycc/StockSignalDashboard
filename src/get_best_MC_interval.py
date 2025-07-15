@@ -95,7 +95,7 @@ def evaluate_interval(ticker, interval, data=None):
                 })
             # Get data based on interval type
             elif interval in ['5m', '10m', '15m', '30m', '1h', '2h', '3h', '4h']:
-                data_ticker = download_stock_data(ticker)
+                data_ticker = download_stock_data(ticker, end_date=None)
                 data_frame = data_ticker[interval]
             elif interval == '1d':
                 stock = yf.Ticker(ticker)
@@ -276,7 +276,7 @@ def analyze_mc_signals(file_path):
         try:
             print(f"Processing {ticker}")
             # Download data once for all intervals
-            data = download_stock_data(ticker)
+            data = download_stock_data(ticker, end_date=None)
             
             # Skip if no data available
             if all(df.empty for df in data.values()):

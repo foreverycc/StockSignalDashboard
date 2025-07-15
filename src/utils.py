@@ -22,6 +22,10 @@ def save_breakout_candidates_1234(df, file_path):
     base_name = os.path.basename(file_path)
     output_path = os.path.join(directory, base_name).replace("details", "summary")
     
+    # Handle case where df might be a list (convert to empty DataFrame)
+    if isinstance(df, list):
+        df = pd.DataFrame()
+    
     # Handle empty DataFrame
     if df.empty:
         print("No 1234 breakout candidates to save")
@@ -50,6 +54,10 @@ def save_breakout_candidates_5230(df, file_path):
     directory = os.path.dirname(file_path)
     base_name = os.path.basename(file_path)
     output_path = os.path.join(directory, base_name).replace("details", "summary")
+    
+    # Handle case where df might be a list (convert to empty DataFrame)
+    if isinstance(df, list):
+        df = pd.DataFrame()
     
     # Handle empty DataFrame
     if df.empty:

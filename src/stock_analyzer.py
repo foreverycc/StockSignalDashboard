@@ -6,6 +6,7 @@ from utils import save_results, save_breakout_candidates_1234, save_breakout_can
 from get_best_CD_interval import evaluate_interval
 from get_best_MC_interval import evaluate_interval as evaluate_mc_interval
 from multiprocessing import Pool, cpu_count
+import functools
 
 # Suppress pandas FutureWarnings about downcasting
 pd.set_option('future.no_silent_downcasting', True)
@@ -88,12 +89,12 @@ def format_hold_time(total_minutes):
     return "".join(result) if result else "0min"
 
 # Move this function outside the analyze_stocks function so it can be pickled
-def process_ticker_all(ticker):
+def process_ticker_all(ticker, end_date=None):
     """Process a single ticker for all analysis types"""
     try:
         print(f"Processing {ticker}")
         # Download data once for all analyses
-        data = download_stock_data(ticker)
+        data = download_stock_data(ticker, end_date=end_date)
         
         # Skip if no data available
         if all(df.empty for df in data.values()):
@@ -127,7 +128,7 @@ def process_ticker_all(ticker):
         print(f"Error processing {ticker}: {e}")
         return None, None, [], [], None
 
-def analyze_stocks(file_path):
+def analyze_stocks(file_path, end_date=None):
     """
     Comprehensive stock analysis function that performs all three types of analysis:
     - 1234 Breakout candidates
@@ -136,6 +137,7 @@ def analyze_stocks(file_path):
     
     Args:
         file_path: Path to the file containing stock ticker symbols
+        end_date: Optional end date for backtesting (format: 'YYYY-MM-DD')
     
     Returns:
         None: Results are saved to output files
@@ -169,8 +171,10 @@ def analyze_stocks(file_path):
         print(f"Processing batch {i//batch_size + 1}/{(len(stock_list) + batch_size - 1)//batch_size}: {batch}")
         
         # Process the batch with multiprocessing
+        # Use functools.partial to bind end_date parameter
+        process_ticker_with_end_date = functools.partial(process_ticker_all, end_date=end_date)
         with Pool(processes=num_processes) as pool:
-            batch_results = pool.map(process_ticker_all, batch)
+            batch_results = pool.map(process_ticker_with_end_date, batch)
         
         # Collect results from batch
         for i, (r1234, r5230, cd_eval, mc_eval, data) in enumerate(batch_results):

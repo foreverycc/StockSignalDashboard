@@ -1,25 +1,75 @@
 import pandas as pd
 import yfinance as yf
+from datetime import datetime
 
 def load_stock_list(file_path):
     return pd.read_csv(file_path, sep='\t', header=None, names=['ticker'])['ticker'].tolist()
 
-def download_stock_data(ticker):
+def truncate_data_to_date(data_frame, end_date):
+    """
+    Truncate DataFrame to only include data up to the specified end_date.
+    
+    Args:
+        data_frame: pandas DataFrame with datetime index
+        end_date: end date (string 'YYYY-MM-DD' or datetime object)
+    
+    Returns:
+        Truncated DataFrame
+    """
+    if data_frame.empty:
+        return data_frame
+        
+    if isinstance(end_date, str):
+        end_date = datetime.strptime(end_date, '%Y-%m-%d')
+    
+    # Convert end_date to pandas Timestamp and handle timezone
+    end_date = pd.Timestamp(end_date)
+    
+    # Handle timezone-aware datetime indexes
+    if data_frame.index.tz is not None:
+        # If data has timezone, convert end_date to the same timezone
+        # First convert to UTC, then to the data's timezone
+        end_date = end_date.tz_localize('UTC').tz_convert(data_frame.index.tz)
+    
+    return data_frame[data_frame.index.date <= end_date.date()]
+
+def download_stock_data(ticker, end_date=None):
     """
     Download stock data for all required intervals in a single function
-    Returns a dictionary with data for all intervals needed
+    
+    Args:
+        ticker: Stock ticker symbol
+        end_date: Optional end date for backtesting (format: 'YYYY-MM-DD' or datetime)
+                 If None, uses current date (no truncation)
+    
+    Returns:
+        Dictionary with data for all intervals needed
     """
     print(f"Downloading data for {ticker}...")
+    
+    # Process end_date parameter for truncation
+    truncate_data = False
+    if end_date is not None:
+        truncate_data = True
+        if isinstance(end_date, str):
+            try:
+                end_date = datetime.strptime(end_date, '%Y-%m-%d')
+            except ValueError:
+                print(f"Invalid end_date format: {end_date}. No truncation will be applied.")
+                truncate_data = False
+    
     data_ticker = {}
     stock = yf.Ticker(ticker)
     
-    # Define base timeframes to download directly
+    # Define base timeframes to download directly (using original periods)
     try:
         # Get 5-minute data for short timeframes
         # data_ticker['5m'] = stock.history(interval='5m', period='1mo')
         data_ticker['5m'] = stock.history(interval='5m', period='60d')
         if not data_ticker['5m'].empty:
             print(f"Downloaded 5m data for {ticker}")
+        else:
+            print(f"No 5m data available for {ticker}")
     except Exception as e:
         print(f"Error downloading {ticker} 5m data: {e}")
         data_ticker['5m'] = pd.DataFrame()
@@ -30,6 +80,8 @@ def download_stock_data(ticker):
         data_ticker['1h'] = stock.history(interval='60m', period='1y')
         if not data_ticker['1h'].empty:
             print(f"Downloaded 1h data for {ticker}")
+        else:
+            print(f"No 1h data available for {ticker}")
     except Exception as e:
         print(f"Error downloading {ticker} 1h data: {e}")
         data_ticker['1h'] = pd.DataFrame()
@@ -40,9 +92,21 @@ def download_stock_data(ticker):
         data_ticker['1d'] = stock.history(interval='1d', period='2y')
         if not data_ticker['1d'].empty:
             print(f"Downloaded 1d data for {ticker}")
+        else:
+            print(f"No 1d data available for {ticker}")
     except Exception as e:
         print(f"Error downloading {ticker} 1d data: {e}")
         data_ticker['1d'] = pd.DataFrame()
+    
+    # Truncate data to end_date if backtesting mode is enabled
+    if truncate_data:
+        print(f"Truncating data to {end_date.strftime('%Y-%m-%d')} for backtesting")
+        for interval_key in ['5m', '1h', '1d']:
+            if not data_ticker[interval_key].empty:
+                original_count = len(data_ticker[interval_key])
+                data_ticker[interval_key] = truncate_data_to_date(data_ticker[interval_key], end_date)
+                if not data_ticker[interval_key].empty:
+                    print(f"Truncated {interval_key} data for {ticker}: {len(data_ticker[interval_key])}/{original_count} records up to {end_date.strftime('%Y-%m-%d')}")
     
     # Generate derived timeframes from base downloads
     # Process 5m to create 10m, 15m, 30m
