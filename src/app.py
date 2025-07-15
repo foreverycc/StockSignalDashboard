@@ -384,6 +384,30 @@ if selected_file:
     except Exception as e:
         st.sidebar.error(f"Error reading file: {e}")
 
+# Backtesting configuration
+st.sidebar.markdown("---")
+st.sidebar.header("Backtesting Settings")
+
+# End date picker for backtesting
+from datetime import datetime, date
+enable_backtesting = st.sidebar.checkbox("Enable Backtesting", value=False, 
+                                        help="Enable to analyze data up to a specific date for backtesting")
+
+end_date = None
+if enable_backtesting:
+    end_date = st.sidebar.date_input(
+        "End Date for Analysis",
+        value=date.today(),
+        max_value=date.today(),
+        help="Select the end date for backtesting. Analysis will only use data up to this date."
+    )
+    
+    # Convert date to string for passing to analysis function
+    end_date_str = end_date.strftime('%Y-%m-%d')
+    st.sidebar.info(f"📅 Data will be truncated to: {end_date_str}")
+else:
+    st.sidebar.info("🔄 Using current data (live analysis)")
+
 # Run analysis button in sidebar
 st.sidebar.markdown("---")
 if st.sidebar.button("Run Analysis", use_container_width=True, type="primary"):
@@ -422,11 +446,17 @@ if st.sidebar.button("Run Analysis", use_container_width=True, type="primary"):
                             progress_bar.empty()
                             status_text.empty()
                         else:
-                            status_text.text(f"Analyzing {len(stock_symbols)} stocks...")
+                            # Show different status messages based on backtesting mode
+                            if enable_backtesting:
+                                status_text.text(f"Backtesting {len(stock_symbols)} stocks (up to {end_date_str})...")
+                            else:
+                                status_text.text(f"Analyzing {len(stock_symbols)} stocks...")
                             progress_bar.progress(50)
                             
                             # Run the consolidated analysis function
-                            analyze_stocks(file_path)
+                            # Pass end_date if backtesting is enabled
+                            analysis_end_date = end_date_str if enable_backtesting else None
+                            analyze_stocks(file_path, end_date=analysis_end_date)
                             
                             progress_bar.progress(100)
                             status_text.text("Analysis complete!")
@@ -434,7 +464,10 @@ if st.sidebar.button("Run Analysis", use_container_width=True, type="primary"):
                             status_text.empty()
                             progress_bar.empty()
                             
-                            st.sidebar.success(f"Analysis completed successfully for {len(stock_symbols)} stocks!")
+                            if enable_backtesting:
+                                st.sidebar.success(f"Backtesting completed successfully for {len(stock_symbols)} stocks (up to {end_date_str})!")
+                            else:
+                                st.sidebar.success(f"Analysis completed successfully for {len(stock_symbols)} stocks!")
             
         except Exception as e:
             progress_bar.empty()
@@ -531,9 +564,18 @@ if selected_file:
             pst_time = utc_time - datetime.timedelta(hours=8)  # Approximate PST
             formatted_time = pst_time.strftime("%Y-%m-%d %H:%M:%S PST")
         
-        st.header(f"Results for: {selected_file} (Last updated: {formatted_time})")
+        # Show backtesting indicator if enabled
+        if enable_backtesting:
+            st.header(f"📊 Backtesting Results for: {selected_file} (Data up to: {end_date_str})")
+            st.info(f"🔍 **Backtesting Mode**: Results shown use historical data up to {end_date_str}. Last updated: {formatted_time}")
+        else:
+            st.header(f"Results for: {selected_file} (Last updated: {formatted_time})")
     else:
-        st.header(f"Results for: {selected_file} (No results found)")
+        if enable_backtesting:
+            st.header(f"📊 Backtesting Results for: {selected_file} (Data up to: {end_date_str})")
+            st.warning("⚠️ **Backtesting Mode**: No results found. Please run analysis first.")
+        else:
+            st.header(f"Results for: {selected_file} (No results found)")
 else:
     st.header("Results")
     st.info("Please select a stock list to view corresponding results.")
@@ -1427,7 +1469,7 @@ if page == "CD Analysis (抄底)":
                     grid_response = resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_5230')
 
                     # If new selection is made in this grid
-                    if grid_response['selected_rows'] is not None and not pd.DataFrame(grid_response['selected_rows']).empty:
+                    if grid_response and grid_response['selected_rows'] is not None and not pd.DataFrame(grid_response['selected_rows']).empty:
                         selected_df = pd.DataFrame(grid_response['selected_rows'])
                         # Avoid rerun if selection hasn't changed
                         if not selected_df.equals(st.session_state.resonance_5230_selected):

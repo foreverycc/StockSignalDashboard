@@ -172,7 +172,7 @@ def identify_1234(file_path, all_ticker_data):
         print(df)
     except Exception as e:
         print(f"Failed to read file {file_path}: {e}")
-        return []
+        return pd.DataFrame()  # Return empty DataFrame instead of empty list
 
     # Ensure signal_date is parsed as datetime
     if "signal_date" in df.columns:
@@ -335,7 +335,7 @@ def identify_5230(file_path, all_ticker_data):
         df = pd.read_csv(file_path, sep="\t", engine="python")
     except Exception as e:
         print(f"Failed to read file {file_path}: {e}")
-        return []
+        return pd.DataFrame()  # Return empty DataFrame instead of empty list
 
     # Ensure signal_date is parsed as datetime
     if "signal_date" in df.columns:
