@@ -222,13 +222,24 @@ def analyze_stocks(file_path, end_date=None):
             interval = result['interval']
             for period in periods:
                 returns_key = f'returns_{period}'
+                volumes_key = f'volumes_{period}'
                 if returns_key in result and result[returns_key]:
-                    for return_value in result[returns_key]:
+                    # Get individual returns and volumes for this period
+                    individual_returns = result[returns_key]
+                    individual_volumes = result.get(volumes_key, [])
+                    
+                    # Ensure volumes list has same length as returns
+                    if len(individual_volumes) < len(individual_returns):
+                        individual_volumes.extend([None] * (len(individual_returns) - len(individual_volumes)))
+                    
+                    for i, return_value in enumerate(individual_returns):
+                        volume_value = individual_volumes[i] if i < len(individual_volumes) else None
                         returns_data.append({
                             'ticker': ticker,
                             'interval': interval,
                             'period': period,
-                            'return': return_value
+                            'return': return_value,
+                            'volume': volume_value
                         })
         
         if returns_data:
@@ -236,7 +247,7 @@ def analyze_stocks(file_path, end_date=None):
             df_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
         else:
             # Create empty returns distribution file
-            empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return'])
+            empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return', 'volume'])
             empty_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
 
         # Find the best interval for each ticker based on success rate and returns
@@ -367,7 +378,7 @@ def analyze_stocks(file_path, end_date=None):
         empty_detailed.to_csv(os.path.join(output_dir, f'cd_eval_custom_detailed_{output_base}.csv'), index=False)
         
         # Create empty returns distribution file
-        empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return'])
+        empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return', 'volume'])
         empty_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
         
         # Create empty files with proper headers for each range
@@ -394,13 +405,24 @@ def analyze_stocks(file_path, end_date=None):
             interval = result['interval']
             for period in periods:
                 returns_key = f'returns_{period}'
+                volumes_key = f'volumes_{period}'
                 if returns_key in result and result[returns_key]:
-                    for return_value in result[returns_key]:
+                    # Get individual returns and volumes for this period
+                    individual_returns = result[returns_key]
+                    individual_volumes = result.get(volumes_key, [])
+                    
+                    # Ensure volumes list has same length as returns
+                    if len(individual_volumes) < len(individual_returns):
+                        individual_volumes.extend([None] * (len(individual_returns) - len(individual_volumes)))
+                    
+                    for i, return_value in enumerate(individual_returns):
+                        volume_value = individual_volumes[i] if i < len(individual_volumes) else None
                         returns_data.append({
                             'ticker': ticker,
                             'interval': interval,
                             'period': period,
-                            'return': return_value
+                            'return': return_value,
+                            'volume': volume_value
                         })
         
         if returns_data:
@@ -408,7 +430,7 @@ def analyze_stocks(file_path, end_date=None):
             df_returns.to_csv(os.path.join(output_dir, f'mc_eval_returns_distribution_{output_base}.csv'), index=False)
         else:
             # Create empty returns distribution file
-            empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return'])
+            empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return', 'volume'])
             empty_returns.to_csv(os.path.join(output_dir, f'mc_eval_returns_distribution_{output_base}.csv'), index=False)
 
         # Find the best interval for each ticker based on success rate and returns
@@ -536,7 +558,7 @@ def analyze_stocks(file_path, end_date=None):
         empty_detailed.to_csv(os.path.join(output_dir, f'mc_eval_custom_detailed_{output_base}.csv'), index=False)
         
         # Create empty returns distribution file
-        empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return'])
+        empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return', 'volume'])
         empty_returns.to_csv(os.path.join(output_dir, f'mc_eval_returns_distribution_{output_base}.csv'), index=False)
         
         # Create empty files with proper headers for each range
