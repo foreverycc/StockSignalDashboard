@@ -5,6 +5,7 @@ import time
 from stock_analyzer import analyze_stocks
 import re
 import plotly.graph_objects as go
+from plotly.subplots import make_subplots
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 import numpy as np
 
@@ -694,10 +695,13 @@ if page == "CD Analysis (抄底)":
                         st.dataframe(df)
 
                     # Visualization Panel
-                    # Create figure
-                    fig = go.Figure(layout=dict(
-                        font=dict(color='black')
-                    ))
+                    # Create figure with subplots: price on top, volume on bottom
+                    fig = make_subplots(
+                        rows=2, cols=1,
+                        subplot_titles=('Price Movement', 'Volume'),
+                        vertical_spacing=0.1,
+                        row_heights=[0.7, 0.3]
+                    )
                     
                     # Filter returns distribution data for selected ticker and interval
                     if returns_df is not None and not returns_df.empty:
@@ -710,17 +714,23 @@ if page == "CD Analysis (抄底)":
                             # Get periods that have data
                             periods_with_data = sorted(filtered_returns['period'].unique())
                             
-                            # Add boxplots for each period
-                            median_values = []
+                            # Add price boxplots for each period
+                            median_price_values = []
                             median_periods = []
                             
+                            # Add volume bars for each period
+                            volume_periods = []
+                            avg_volumes = []
+                            
                             for period in periods_with_data:
-                                period_returns = filtered_returns[filtered_returns['period'] == period]['return'].values
+                                period_data = filtered_returns[filtered_returns['period'] == period]
+                                period_returns = period_data['return'].values
+                                
                                 if len(period_returns) > 0:
                                     # Convert returns to relative price (baseline = 100)
                                     relative_prices = 100 + period_returns
                                     
-                                    # Add boxplot
+                                    # Add price boxplot
                                     fig.add_trace(go.Box(
                                         y=relative_prices,
                                         x=[period] * len(relative_prices),
@@ -732,20 +742,38 @@ if page == "CD Analysis (抄底)":
                                     ))
                                     
                                     # Store median for connecting line
-                                    median_values.append(100 + np.median(period_returns))
+                                    median_price_values.append(100 + np.median(period_returns))
                                     median_periods.append(period)
+                                
+                                # Add volume data if available
+                                if 'volume' in period_data.columns:
+                                    period_volumes = period_data['volume'].values
+                                    if len(period_volumes) > 0:
+                                        avg_volume = np.mean(period_volumes[~np.isnan(period_volumes)])
+                                        volume_periods.append(period)
+                                        avg_volumes.append(avg_volume)
                             
-                            # Add line connecting medians
-                            if len(median_values) > 1:
+                            # Add median price connection line
+                            if len(median_price_values) > 1:
                                 fig.add_trace(go.Scatter(
                                     x=median_periods,
-                                    y=median_values,
+                                    y=median_price_values,
                                     mode='lines+markers',
                                     line=dict(color='gray', width=1),
                                     marker=dict(color='gray', size=6),
                                     name='Median Returns',
                                     showlegend=True
                                 ))
+                            
+                            # Add volume bars (grey bars for average volumes)
+                            if len(avg_volumes) > 0:
+                                fig.add_trace(go.Bar(
+                                    x=volume_periods,
+                                    y=avg_volumes,
+                                    name='Average Volume',
+                                    marker_color='lightgray',
+                                    showlegend=True
+                                ), row=2, col=1)
                         else:
                             # Fallback to original scatter plot if no returns distribution data
                             periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
@@ -765,6 +793,59 @@ if page == "CD Analysis (抄底)":
                                     name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
                                     showlegend=True
                                 ))
+                            
+                            # Add volume bars for fallback case
+                            volume_periods = []
+                            avg_volumes = []
+                            for period in periods[1:]:
+                                if f'avg_volume_{period}' in selected_ticker:
+                                    volume_periods.append(period)
+                                    avg_volumes.append(selected_ticker[f'avg_volume_{period}'])
+                            
+                            if len(avg_volumes) > 0:
+                                fig.add_trace(go.Bar(
+                                    x=volume_periods,
+                                    y=avg_volumes,
+                                    name='Average Volume',
+                                    marker_color='lightgray',
+                                    showlegend=True
+                                ), row=2, col=1)
+                    else:
+                        # Fallback to original scatter plot if no returns distribution data available
+                        periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                        stock_returns = [(0, 100)]  # Start with (0, 100)
+                        for period in periods[1:]:  # Skip 0 as we already added it
+                            if f'avg_return_{period}' in selected_ticker:
+                                stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
+                        
+                        if stock_returns:
+                            periods_x, returns_y = zip(*stock_returns)
+                            fig.add_trace(go.Scatter(
+                                x=periods_x,
+                                y=returns_y,
+                                mode='lines+markers',
+                                line=dict(color='lightgray', width=1),
+                                marker=dict(color='gray', size=6),
+                                name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
+                                showlegend=True
+                            ))
+                        
+                        # Add volume bars
+                        volume_periods = []
+                        avg_volumes = []
+                        for period in periods[1:]:
+                            if f'avg_volume_{period}' in selected_ticker:
+                                volume_periods.append(period)
+                                avg_volumes.append(selected_ticker[f'avg_volume_{period}'])
+                        
+                        if len(avg_volumes) > 0:
+                            fig.add_trace(go.Bar(
+                                x=volume_periods,
+                                y=avg_volumes,
+                                name='Average Volume',
+                                marker_color='lightgray',
+                                showlegend=True
+                            ), row=2, col=1)
                     
                     # Initialize variables for tracking last price point
                     last_price_period = None
@@ -827,6 +908,54 @@ if page == "CD Analysis (抄底)":
                                 last_price_period = price_periods[-1]
                                 last_price_value = price_values[-1]
                     
+                    # Add actual volume history if available
+                    if 'volume_history' in selected_ticker and selected_ticker['volume_history']:
+                        volume_history = selected_ticker['volume_history']
+                        if isinstance(volume_history, str):
+                            try:
+                                import ast
+                                import re
+                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(volume_history))
+                                volume_history = ast.literal_eval(cleaned_str)
+                            except Exception as e:
+                                print(f"Error parsing volume_history: {e}")
+                                volume_history = {}
+                        
+                        if volume_history and 0 in volume_history and volume_history[0] is not None:
+                            volume_periods = []
+                            volume_values = []
+                            
+                            # Collect volume history points
+                            for period in sorted(volume_history.keys()):
+                                if volume_history[period] is not None and period >= 0:
+                                    try:
+                                        volume_periods.append(period)
+                                        volume_values.append(float(volume_history[period]))
+                                    except (ValueError, TypeError):
+                                        continue
+                            
+                            # Add volume history line (red lines for latest signal)
+                            if len(volume_periods) > 1:
+                                fig.add_trace(go.Scatter(
+                                    x=volume_periods,
+                                    y=volume_values,
+                                    mode='lines+markers',
+                                    line=dict(color='red', width=2),
+                                    marker=dict(color='red', size=6),
+                                    name='Latest Signal Volume',
+                                    showlegend=True
+                                ), row=2, col=1)
+                            elif len(volume_periods) == 1:
+                                # Single point case
+                                fig.add_trace(go.Scatter(
+                                    x=volume_periods,
+                                    y=volume_values,
+                                    mode='markers',
+                                    marker=dict(color='red', size=6),
+                                    name='Latest Signal Volume',
+                                    showlegend=True
+                                ), row=2, col=1)
+                    
                     # Add current price at current period (updated to avoid duplicate)
                     if ('current_period' in selected_ticker and 'current_price' in selected_ticker and 
                         'latest_signal_price' in selected_ticker and 'price_history' in selected_ticker):
@@ -884,6 +1013,36 @@ if page == "CD Analysis (抄底)":
                                 name='Current Price',
                                 showlegend=True
                             ))
+                    
+                    # Add current volume marker (red dot)
+                    if ('current_period' in selected_ticker and 'volume_history' in selected_ticker and 
+                        selected_ticker['volume_history']):
+                        current_period = selected_ticker['current_period']
+                        volume_history = selected_ticker['volume_history']
+                        
+                        # Parse volume_history if it's a string
+                        if isinstance(volume_history, str):
+                            try:
+                                import ast
+                                import re
+                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(volume_history))
+                                volume_history = ast.literal_eval(cleaned_str)
+                            except:
+                                volume_history = {}
+                        
+                        # Add current volume marker if available
+                        if (isinstance(volume_history, dict) and current_period > 0 and 
+                            current_period in volume_history and volume_history[current_period] is not None):
+                            
+                            current_volume = volume_history[current_period]
+                            fig.add_trace(go.Scatter(
+                                x=[current_period],
+                                y=[current_volume],
+                                mode='markers',
+                                marker=dict(color='red', size=10, symbol='circle'),
+                                name='Current Volume',
+                                showlegend=True
+                            ), row=2, col=1)
                     
                     # Add baseline reference line at y=100 (add after all traces for visibility)
                     fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
@@ -993,6 +1152,12 @@ if page == "CD Analysis (抄底)":
                             title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
                         )
                     )
+                    
+                    # Update axes for subplots
+                    fig.update_xaxes(title_text="Period", row=1, col=1)
+                    fig.update_xaxes(title_text="Period", row=2, col=1)
+                    fig.update_yaxes(title_text="Relative Price (Baseline = 100)", row=1, col=1)
+                    fig.update_yaxes(title_text="Volume", row=2, col=1)
                     
                     # Display the plot
                     st.plotly_chart(fig, use_container_width=True)
@@ -1614,8 +1779,8 @@ if page == "CD Analysis (抄底)":
                                 else:
                                     # Fallback to scatter plot
                                     periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-                                    stock_returns = [(0, 100)]
-                                    for period in periods[1:]:
+                                    stock_returns = [(0, 100)]  # Start with (0, 100)
+                                    for period in periods[1:]:  # Skip 0 as we already added it
                                         if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
                                             stock_returns.append((period, 100 + selected_ticker_data[f'avg_return_{period}']))
                                     
@@ -1813,276 +1978,55 @@ if page == "CD Analysis (抄底)":
                             )
                             
                             st.plotly_chart(fig, use_container_width=True)
-        else:
-            st.info("Select a ticker from the '1234 Candidates' or '5230 Candidates' table to display visualizations.")
-    else:
-        st.info("👆 Please select a stock list above to view results.")
 
-# ============================
-# MC ANALYSIS PAGE
-# ============================
-elif page == "MC Analysis (卖出)":
-    # Function to load MC results
-    def load_mc_results(file_pattern, stock_list_file=None, default_sort=None):
-        # Look in output directory for result files
-        output_dir = './output'
-        if not os.path.exists(output_dir):
-            return None, "No output directory found. Please run an analysis first."
-        
-        # Extract stock list name from file (remove extension)
-        if stock_list_file:
-            stock_list_name = os.path.splitext(stock_list_file)[0]
-            # Look for files that match both the pattern and the stock list
-            result_files = [f for f in os.listdir(output_dir) 
-                           if f.startswith(file_pattern) and stock_list_name in f]
-        else:
-            # Fallback to original behavior if no stock list specified
-            result_files = [f for f in os.listdir(output_dir) if f.startswith(file_pattern)]
-        
-        if not result_files:
-            if stock_list_file:
-                return None, f"No MC results found for stock list '{stock_list_file}'. Please run analysis first."
-            else:
-                return None, "No MC results found. Please run an analysis first."
-        
-        # Get the most recent file
-        latest_file = max(result_files, key=lambda f: os.path.getctime(os.path.join(output_dir, f)))
-        file_path = os.path.join(output_dir, latest_file)
-        
-        try:
-            # Determine file type and load accordingly
-            if latest_file.endswith('.csv'):
-                df = pd.read_csv(file_path)
-            else:  # .tab files
-                df = pd.read_csv(file_path, sep='\t')
-                
-            if default_sort and default_sort in df.columns:
-                df = df.sort_values(by=default_sort, ascending=False)
-                
-            return df, latest_file
-        except Exception as e:
-            return None, f"Error loading MC results: {e}"
-
-    # Load Chinese stock mapping once for all tables
-    chinese_stock_mapping = get_chinese_stock_mapping() if selected_file else {}
-
-    # Update output files with Chinese names if mapping is available
-    if chinese_stock_mapping and selected_file:
-        update_output_files_with_chinese_names(chinese_stock_mapping)
-
-    # Create two columns for the two table views
-    if selected_file:
-        st.subheader("MC Waikiki Model")
-        
-        # Add shared ticker filter for MC Waikiki model
-        mc_waikiki_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"mc_waikiki_ticker_filter_{selected_file}")
-
-        mc_waikiki_viz_col, mc_waikiki_tables_col = st.columns([1, 1])
-
-        with mc_waikiki_viz_col:
-            # Load the detailed results for period information
-            detailed_df, _ = load_mc_results('mc_eval_custom_detailed_', selected_file)
-            
-            # Load the returns distribution data for boxplots
-            returns_df, _ = load_mc_results('mc_eval_returns_distribution_', selected_file)
-            
-            if detailed_df is None or 'ticker' not in detailed_df.columns:
-                st.info("Please run an analysis first to view MC signal visualizations and period returns.")
-            else:
-                # Use selected ticker and interval from session state
-                ticker_filter = st.session_state.mc_selected_ticker if st.session_state.mc_selected_ticker else ""
-                selected_interval = st.session_state.mc_selected_interval if st.session_state.mc_selected_interval else '1d'
-                
-                # If no ticker is selected, automatically select the first one from the best intervals (50) data
-                if not ticker_filter:
-                    best_50_df, _ = load_mc_results('mc_eval_best_intervals_50_', selected_file, 'avg_return_10')
-                    if best_50_df is not None and not best_50_df.empty:
-                        first_row = best_50_df.iloc[0]
-                        ticker_filter = first_row['ticker']
-                        selected_interval = first_row['interval']
-                        # Update session state
-                        st.session_state.mc_selected_ticker = ticker_filter
-                        st.session_state.mc_selected_interval = selected_interval
-
-                # Filter the detailed DataFrame with exact match for ticker and interval
-                filtered_detailed = detailed_df[
-                    (detailed_df['ticker'] == ticker_filter) &
-                    (detailed_df['interval'] == selected_interval)
-                ]
-                
-                if not filtered_detailed.empty:
-                    selected_ticker = filtered_detailed.iloc[0]
-
-                    # Period Returns Panel
-                    period_data = []
-                    for period in [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]:
-                        if f'avg_return_{period}' in selected_ticker:
-                            period_data.append({
-                                'Period': period,
-                                'Return': f"{selected_ticker[f'avg_return_{period}']:.2f}%",
-                                'Success Rate': f"{selected_ticker[f'success_rate_{period}']:.2f}%",
-                                'Test Count': selected_ticker[f'test_count_{period}']
-                            })
-                    if period_data:
-                        df = pd.DataFrame(period_data).set_index('Period').T
-                        # To prevent ArrowTypeError from mixed types, convert object columns to string
-                        for col in df.columns:
-                            if df[col].dtype == 'object':
-                                df[col] = df[col].astype(str)
-                        st.dataframe(df)
-
-                    # Visualization Panel
-                    # Create figure
-                    fig = go.Figure(layout=dict(
-                        font=dict(color='black')
-                    ))
-                    
-                    # Filter returns distribution data for selected ticker and interval
-                    if returns_df is not None and not returns_df.empty:
-                        filtered_returns = returns_df[
-                            (returns_df['ticker'] == ticker_filter) &
-                            (returns_df['interval'] == selected_interval)
-                        ]
-                        
-                        if not filtered_returns.empty:
-                            # Get periods that have data
-                            periods_with_data = sorted(filtered_returns['period'].unique())
-                            
-                            # Add boxplots for each period
-                            median_values = []
-                            median_periods = []
-                            
-                            for period in periods_with_data:
-                                period_returns = filtered_returns[filtered_returns['period'] == period]['return'].values
-                                if len(period_returns) > 0:
-                                    # Convert returns to relative price (baseline = 100)
-                                    relative_prices = 100 + period_returns
-                                    
-                                    # Add boxplot
-                                    fig.add_trace(go.Box(
-                                        y=relative_prices,
-                                        x=[period] * len(relative_prices),
-                                        name=f'Period {period}',
-                                        boxpoints=False,  # Don't show individual points
-                                        showlegend=False,
-                                        marker=dict(color='lightgray'),
-                                        line=dict(color='gray')
-                                    ))
-                                    
-                                    # Store median for connecting line
-                                    median_values.append(100 + np.median(period_returns))
-                                    median_periods.append(period)
-                            
-                            # Add median connection line
-                            if len(median_values) > 1:
-                                fig.add_trace(go.Scatter(
-                                    x=median_periods,
-                                    y=median_values,
-                                    mode='lines+markers',
-                                    line=dict(color='gray', width=1),
-                                    marker=dict(color='gray', size=6),
-                                    name='Median Returns',
-                                    showlegend=True
-                                ))
-                        else:
-                            # Fallback to original scatter plot if no returns distribution data
-                            periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-                            stock_returns = [(0, 100)]  # Start with (0, 100)
-                            for period in periods[1:]:  # Skip 0 as we already added it
-                                if f'avg_return_{period}' in selected_ticker:
-                                    stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
-                            
-                            if stock_returns:
-                                periods_x, returns_y = zip(*stock_returns)
-                                fig.add_trace(go.Scatter(
-                                    x=periods_x,
-                                    y=returns_y,
-                                    mode='lines+markers',
-                                    line=dict(color='lightgray', width=1),
-                                    marker=dict(color='gray', size=6),
-                                    name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
-                                    showlegend=True
-                                ))
-                    else:
-                        # Fallback to original scatter plot if no returns distribution data available
-                        periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-                        stock_returns = [(0, 100)]  # Start with (0, 100)
-                        for period in periods[1:]:  # Skip 0 as we already added it
-                            if f'avg_return_{period}' in selected_ticker:
-                                stock_returns.append((period, 100 + selected_ticker[f'avg_return_{period}']))
-                        
-                        if stock_returns:
-                            periods_x, returns_y = zip(*stock_returns)
-                            fig.add_trace(go.Scatter(
-                                x=periods_x,
-                                y=returns_y,
-                                mode='lines+markers',
-                                line=dict(color='lightgray', width=1),
-                                marker=dict(color='gray', size=6),
-                                name=f"{selected_ticker['ticker']} ({selected_ticker['interval']})",
-                                showlegend=True
-                            ))
-                    
-                    # Initialize variables for tracking last price point
-                    last_price_period = None
-                    last_price_value = None
-                    
-                    # Add actual price history if available
-                    if 'price_history' in selected_ticker and selected_ticker['price_history']:
-                        price_history = selected_ticker['price_history']
-                        if isinstance(price_history, str):
-                            # Handle case where price_history might be stored as string
-                            try:
-                                import ast
-                                import re
-                                # Clean up numpy float64 references in the string
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
-                                price_history = ast.literal_eval(cleaned_str)
-                            except Exception as e:
-                                print(f"Error parsing price_history: {e}")
-                                price_history = {}
-                        
-                        if price_history and 0 in price_history and price_history[0] is not None:
-                            entry_price = float(price_history[0])
-                            price_periods = []
-                            price_values = []
-                            
-                            # Collect price history points
-                            for period in sorted(price_history.keys()):
-                                if price_history[period] is not None and period >= 0:
+                            # Add actual volume history if available
+                            if 'volume_history' in selected_ticker and selected_ticker['volume_history']:
+                                volume_history = selected_ticker['volume_history']
+                                if isinstance(volume_history, str):
                                     try:
-                                        relative_price = (float(price_history[period]) / entry_price) * 100
-                                        price_periods.append(period)
-                                        price_values.append(relative_price)
-                                    except (ValueError, TypeError):
-                                        continue
-                            
-                            # Add price history line and dots
-                            if len(price_periods) > 1:
-                                fig.add_trace(go.Scatter(
-                                    x=price_periods,
-                                    y=price_values,
-                                    mode='lines+markers',
-                                    line=dict(color='red', width=1),
-                                    marker=dict(color='red', size=6),
-                                    name='Price History',
-                                    showlegend=True
-                                ))
-                            elif len(price_periods) == 1:
-                                # Single point case
-                                fig.add_trace(go.Scatter(
-                                    x=price_periods,
-                                    y=price_values,
-                                    mode='markers',
-                                    marker=dict(color='red', size=6),
-                                    name='Price History',
-                                    showlegend=True
-                                ))
-                            
-                            # Store the last price history point for connecting to current price
-                            if price_periods:
-                                last_price_period = price_periods[-1]
-                                last_price_value = price_values[-1]
+                                        import ast
+                                        import re
+                                        # Clean up numpy float64 references in the string
+                                        cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(volume_history))
+                                        volume_history = ast.literal_eval(cleaned_str)
+                                    except Exception as e:
+                                        print(f"Error parsing volume_history: {e}")
+                                        volume_history = {}
+                                
+                                if volume_history and 0 in volume_history and volume_history[0] is not None:
+                                    volume_periods = []
+                                    volume_values = []
+                                    
+                                    # Collect volume history points
+                                    for period in sorted(volume_history.keys()):
+                                        if volume_history[period] is not None and period >= 0:
+                                            try:
+                                                volume_periods.append(period)
+                                                volume_values.append(float(volume_history[period]))
+                                            except (ValueError, TypeError):
+                                                continue
+                                    
+                                    # Add volume history line (red lines for latest signal)
+                                    if len(volume_periods) > 1:
+                                        fig.add_trace(go.Scatter(
+                                            x=volume_periods,
+                                            y=volume_values,
+                                            mode='lines+markers',
+                                            line=dict(color='red', width=2),
+                                            marker=dict(color='red', size=6),
+                                            name='Latest Signal Volume',
+                                            showlegend=True
+                                        ))
+                                    elif len(volume_periods) == 1:
+                                        # Single point case
+                                        fig.add_trace(go.Scatter(
+                                            x=volume_periods,
+                                            y=volume_values,
+                                            mode='markers',
+                                            marker=dict(color='red', size=6),
+                                            name='Latest Signal Volume',
+                                            showlegend=True
+                                        ))
                     
                     # Add current price at current period (updated to avoid duplicate)
                     if ('current_period' in selected_ticker and 'current_price' in selected_ticker and 
@@ -2244,172 +2188,54 @@ elif page == "MC Analysis (卖出)":
                     # Display the plot
                     st.plotly_chart(fig, use_container_width=True)
 
-                elif ticker_filter:
+                if ticker_filter:
                     st.info("No matching stocks found for the selected criteria.")
                 else:
                     st.info("Please select a stock from the tables below to view MC signal details.")
 
-        with mc_waikiki_tables_col:
-            # Helper for AgGrid in MC Waikiki model
-            def mc_waikiki_aggrid_editor(df, tab_key):
-                if df is not None and not df.empty:
-                    df = df.copy()
-                    # To prevent ArrowTypeError from mixed types, convert object columns to string
-                    for col in df.columns:
-                        if df[col].dtype == 'object':
-                            df[col] = df[col].astype(str)
-
-                    # Round all numeric columns to 2 decimal places
-                    for col in df.columns:
-                        if df[col].dtype in ['float64', 'float32']:
-                            df[col] = df[col].round(2)
-
-                    gb = GridOptionsBuilder.from_dataframe(df)
-                    gb.configure_default_column(editable=False, filterable=True, sortable=True, resizable=True)
-                    gb.configure_pagination(paginationAutoPageSize=True)
-                    gb.configure_selection('single', use_checkbox=True, groupSelectsChildren=False, groupSelectsFiltered=False)
-
-                    if 'ticker' in df.columns:
-                        gb.configure_column('ticker', pinned='left', minWidth=90)
-                    if 'latest_signal' in df.columns:
-                        gb.configure_column('latest_signal', minWidth=120)
-
-                    grid_options = gb.build()
-                    
-                    grid_response = AgGrid(
-                        df,
-                        gridOptions=grid_options,
-                        data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
-                        update_mode=GridUpdateMode.SELECTION_CHANGED,
-                        fit_columns_on_grid_load=True,
-                        theme='streamlit',
-                        height=350,
-                        width='100%',
-                        key=f"mc_waikiki_aggrid_{tab_key}_{selected_file}",
-                        reload_data=False,
-                        allow_unsafe_jscode=True
-                    )
-                    
-                    selected_rows = grid_response['selected_rows']
-                    
-                    if selected_rows is not None and len(selected_rows) > 0:
-                        selected_row = selected_rows.iloc[0]  # Take first selected row
-                        new_ticker = selected_row['ticker']
-                        new_interval = selected_row['interval']
-                        
-                        # Update session state if selection changed
-                        if (st.session_state.mc_selected_ticker != new_ticker or
-                            st.session_state.mc_selected_interval != new_interval):
-                            st.session_state.mc_selected_ticker = new_ticker
-                            st.session_state.mc_selected_interval = new_interval
-                            st.rerun()
-                    
-                    return grid_response['data']
-                else:
-                    st.info("No data available for this MC table. Please run analysis first.")
-                    return None
-
-            tabs = st.tabs([
-                "Best Intervals (50)", 
-                "Best Intervals (20)", 
-                "Best Intervals (100)", 
-                "High Return Intervals",
-                "Interval Details"
-            ])
-
-            # Display MC best intervals (50)
-            with tabs[0]:
-                df, message = load_mc_results('mc_eval_best_intervals_50_', selected_file, 'avg_return_10')
-                if df is not None:
-                    if mc_waikiki_ticker_filter:
-                        df = df[df['ticker'].str.contains(mc_waikiki_ticker_filter, case=False)]
-                    
-                    if 'interval' in df.columns:
-                        intervals = sorted(df['interval'].unique())
-                        selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"mc_interval_filter_best_50_{selected_file}")
-                        if selected_intervals:
-                            df = df[df['interval'].isin(selected_intervals)]
-                    mc_waikiki_aggrid_editor(df, '50')
-                else:
-                    st.info("No MC best intervals data available for 50-period analysis. Please run MC Signal Evaluation first.")
-
-            # Display MC best intervals (20)
-            with tabs[1]:
-                df, message = load_mc_results('mc_eval_best_intervals_20_', selected_file, 'avg_return_10')
-                if df is not None:
-                    if mc_waikiki_ticker_filter:
-                        df = df[df['ticker'].str.contains(mc_waikiki_ticker_filter, case=False)]
-                    
-                    if 'interval' in df.columns:
-                        intervals = sorted(df['interval'].unique())
-                        selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"mc_interval_filter_best_20_{selected_file}")
-                        if selected_intervals:
-                            df = df[df['interval'].isin(selected_intervals)]
-                    mc_waikiki_aggrid_editor(df, '20')
-                else:
-                    st.info("No MC best intervals data available for 20-period analysis. Please run MC Signal Evaluation first.")
-
-            # Display MC best intervals (100)
-            with tabs[2]:
-                df, message = load_mc_results('mc_eval_best_intervals_100_', selected_file, 'avg_return_10')
-                if df is not None:
-                    if mc_waikiki_ticker_filter:
-                        df = df[df['ticker'].str.contains(mc_waikiki_ticker_filter, case=False)]
-                    
-                    if 'interval' in df.columns:
-                        intervals = sorted(df['interval'].unique())
-                        selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"mc_interval_filter_best_100_{selected_file}")
-                        if selected_intervals:
-                            df = df[df['interval'].isin(selected_intervals)]
-                    mc_waikiki_aggrid_editor(df, '100')
-                else:
-                    st.info("No MC best intervals data available for 100-period analysis. Please run MC Signal Evaluation first.")
-
-            # Display MC high return intervals
-            with tabs[3]:
-                df, message = load_mc_results('mc_eval_good_signals_', selected_file, 'latest_signal')
-                if df is not None:
-                    if mc_waikiki_ticker_filter:
-                        df = df[df['ticker'].str.contains(mc_waikiki_ticker_filter, case=False)]
-                    
-                    if 'latest_signal' in df.columns:
-                        df = df[df['latest_signal'].notna()]
-                        df = df.sort_values(by='latest_signal', ascending=False)
-                        if 'interval' in df.columns:
-                            intervals = sorted(df['interval'].unique())
-                            selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"mc_interval_filter_recent_{selected_file}")
-                            if selected_intervals:
-                                df = df[df['interval'].isin(selected_intervals)]
-                        mc_waikiki_aggrid_editor(df, 'good')
-                    else:
-                        st.info("No signal date information available in the MC results.")
-                else:
-                    st.info("No MC recent signals data available. Please run an analysis first.")
-
-            # Display MC interval details
-            with tabs[4]:
-                df, message = load_mc_results('mc_eval_custom_detailed_', selected_file, 'avg_return_10')
-                if df is not None:
-                    if mc_waikiki_ticker_filter:
-                        df = df[df['ticker'].str.contains(mc_waikiki_ticker_filter, case=False)]
-                    
-                    if 'interval' in df.columns:
-                        intervals = sorted(df['interval'].unique())
-                        selected_intervals = st.multiselect("Filter by interval:", intervals, default=intervals, key=f"mc_interval_filter_details_{selected_file}")
-                        if selected_intervals:
-                            df = df[df['interval'].isin(selected_intervals)]
-                    mc_waikiki_aggrid_editor(df, 'details')
-                else:
-                    st.info("No MC interval summary data available. Please run MC Signal Evaluation first.")
-
-        # MC Resonance Model section
-        st.subheader("MC Resonance Model")
+        # MC Analysis placeholder - will be implemented in future update
+        st.info("**MC Analysis Feature Coming Soon**")
+        st.markdown("""
+        The MC Analysis dashboard is currently under development. This feature will provide:
+        - **MC Signal Evaluation**: Analysis of sell signals and their performance
+        - **MC Waikiki Model**: Detailed MC signal analysis with visualizations
+        - **MC Resonance Model**: Advanced MC signal pattern detection
+        - **Volume Analysis**: MC signal volume pattern analysis
         
-        # Add shared ticker filter for MC Resonance model
-        mc_resonance_ticker_filter = st.text_input("Filter by ticker symbol:", key=f"mc_resonance_ticker_filter_{selected_file}")
-        
-        st.info("MC Resonance Model will be available in a future update. Currently, MC analysis focuses on direct sell signal evaluation.")
+        For now, you can view MC signal information within the CD Analysis section under the "MC Analysis" tab.
+        """)
 
+# ============================
+# MC ANALYSIS PAGE  
+# ============================
+elif page == "MC Analysis (卖出)":
+    if selected_file:
+        st.info("**MC Analysis Dashboard - Under Development**")
+        st.markdown("""
+        ### 🚧 Coming Soon: Full MC Analysis Dashboard
+        
+        The dedicated MC Analysis page is currently being developed. This will include:
+        
+        **📊 MC Waikiki Model**
+        - MC signal performance analysis
+        - Price movement tracking after MC signals
+        - Volume pattern analysis
+        - Interactive visualizations
+        
+        **🔍 MC Resonance Model**
+        - Advanced MC signal detection
+        - Pattern recognition for optimal sell timing
+        - Risk assessment metrics
+        
+        **📈 Performance Metrics**
+        - Success rate analysis
+        - Return distribution analysis
+        - Time-based performance tracking
+        
+        ### 💡 Current MC Analysis Available
+        For now, you can access MC signal analysis in the **CD Analysis** page under the "MC Analysis" tab, 
+        which shows how MC signals relate to CD signals.
+        """)
     else:
         st.info("👆 Please select a stock list above to view MC analysis results.")
 
