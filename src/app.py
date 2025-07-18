@@ -676,24 +676,6 @@ if page == "CD Analysis (抄底)":
                 if not filtered_detailed.empty:
                     selected_ticker = filtered_detailed.iloc[0]
 
-                    # Period Returns Panel
-                    period_data = []
-                    for period in [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]:
-                        if f'avg_return_{period}' in selected_ticker:
-                            period_data.append({
-                                'Period': period,
-                                'Return': f"{selected_ticker[f'avg_return_{period}']:.2f}%",
-                                'Success Rate': f"{selected_ticker[f'success_rate_{period}']:.2f}%",
-                                'Test Count': selected_ticker[f'test_count_{period}']
-                            })
-                    if period_data:
-                        df = pd.DataFrame(period_data).set_index('Period').T
-                        # To prevent ArrowTypeError from mixed types, convert object columns to string
-                        for col in df.columns:
-                            if df[col].dtype == 'object':
-                                df[col] = df[col].astype(str)
-                        st.dataframe(df)
-
                     # Visualization Panel
                     # Create figure with subplots: price on top, volume on bottom
                     fig = make_subplots(
@@ -1153,7 +1135,7 @@ if page == "CD Analysis (抄底)":
                             yanchor='top'
                         ),
                         showlegend=True,
-                        height=500,  # Increased height for dual subplots
+                        height=566,  # Increased height for dual subplots
                         plot_bgcolor='white',
                         paper_bgcolor='white'
                     )
@@ -1769,12 +1751,13 @@ if page == "CD Analysis (抄底)":
                             
                             selected_ticker_data = plot_data.iloc[0]
 
-                            # Create figure
-                            fig = go.Figure()
-                            
-                            # Add baseline reference line at y=100
-                            fig.add_hline(y=100, line_dash="dash", line_color="lightgray", line_width=1, 
-                                         annotation_text="Entry Price", annotation_position="top right")
+                            # Create figure with subplots: price on top, volume on bottom
+                            fig = make_subplots(
+                                rows=2, cols=1,
+                                subplot_titles=('Price Movement', 'Volume'),
+                                vertical_spacing=0.1,
+                                row_heights=[0.7, 0.3]
+                            )
                             
                             # Initialize variables for tracking last price point
                             last_price_period = None
@@ -1792,16 +1775,22 @@ if page == "CD Analysis (抄底)":
                                     periods_with_data = sorted(filtered_returns['period'].unique())
                                     
                                     # Add boxplots for each period
-                                    median_values = []
+                                    median_price_values = []
                                     median_periods = []
                                     
+                                    # Add volume bars for each period
+                                    volume_periods = []
+                                    avg_volumes = []
+                                    
                                     for period in periods_with_data:
-                                        period_returns = filtered_returns[filtered_returns['period'] == period]['return'].values
+                                        period_data = filtered_returns[filtered_returns['period'] == period]
+                                        period_returns = period_data['return'].values
+                                        
                                         if len(period_returns) > 0:
                                             # Convert returns to relative price (baseline = 100)
                                             relative_prices = 100 + period_returns
                                             
-                                            # Add boxplot
+                                            # Add price boxplot
                                             fig.add_trace(go.Box(
                                                 y=relative_prices,
                                                 x=[period] * len(relative_prices),
@@ -1810,23 +1799,41 @@ if page == "CD Analysis (抄底)":
                                                 showlegend=False,
                                                 marker=dict(color='lightgray'),
                                                 line=dict(color='gray')
-                                            ))
+                                            ), row=1, col=1)
                                             
                                             # Store median for connecting line
-                                            median_values.append(100 + np.median(period_returns))
+                                            median_price_values.append(100 + np.median(period_returns))
                                             median_periods.append(period)
+                                        
+                                        # Add volume data if available
+                                        if 'volume' in period_data.columns:
+                                            period_volumes = period_data['volume'].values
+                                            if len(period_volumes) > 0:
+                                                avg_volume = np.mean(period_volumes[~np.isnan(period_volumes)])
+                                                volume_periods.append(period)
+                                                avg_volumes.append(avg_volume)
                                     
-                                    # Add line connecting medians
-                                    if len(median_values) > 1:
+                                    # Add median price connection line
+                                    if len(median_price_values) > 1:
                                         fig.add_trace(go.Scatter(
                                             x=median_periods,
-                                            y=median_values,
+                                            y=median_price_values,
                                             mode='lines+markers',
                                             line=dict(color='gray', width=1),
                                             marker=dict(color='gray', size=4),
                                             name='Median Returns',
                                             showlegend=False
-                                        ))
+                                        ), row=1, col=1)
+                                    
+                                    # Add volume bars (grey bars for average volumes)
+                                    if len(avg_volumes) > 0:
+                                        fig.add_trace(go.Bar(
+                                            x=volume_periods,
+                                            y=avg_volumes,
+                                            name='Average Volume',
+                                            marker_color='lightgray',
+                                            showlegend=False
+                                        ), row=2, col=1)
                                 else:
                                     # Fallback to scatter plot
                                     periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
@@ -1844,7 +1851,24 @@ if page == "CD Analysis (抄底)":
                                             line=dict(color='lightgray', width=1),
                                             marker=dict(color='gray', size=6),
                                             name=f"{ticker} ({interval})",
-                                        ))
+                                        ), row=1, col=1)
+                                    
+                                    # Add volume bars for fallback case
+                                    volume_periods = []
+                                    avg_volumes = []
+                                    for period in periods[1:]:
+                                        if f'avg_volume_{period}' in selected_ticker_data:
+                                            volume_periods.append(period)
+                                            avg_volumes.append(selected_ticker_data[f'avg_volume_{period}'])
+                                    
+                                    if len(avg_volumes) > 0:
+                                        fig.add_trace(go.Bar(
+                                            x=volume_periods,
+                                            y=avg_volumes,
+                                            name='Average Volume',
+                                            marker_color='lightgray',
+                                            showlegend=False
+                                        ), row=2, col=1)
                             else:
                                 # Fallback to scatter plot if no returns distribution data
                                 periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
@@ -1862,7 +1886,24 @@ if page == "CD Analysis (抄底)":
                                         line=dict(color='lightgray', width=1),
                                         marker=dict(color='gray', size=6),
                                         name=f"{ticker} ({interval})",
-                                    ))
+                                    ), row=1, col=1)
+                                
+                                # Add volume bars
+                                volume_periods = []
+                                avg_volumes = []
+                                for period in periods[1:]:
+                                    if f'avg_volume_{period}' in selected_ticker_data:
+                                        volume_periods.append(period)
+                                        avg_volumes.append(selected_ticker_data[f'avg_volume_{period}'])
+                                
+                                if len(avg_volumes) > 0:
+                                    fig.add_trace(go.Bar(
+                                        x=volume_periods,
+                                        y=avg_volumes,
+                                        name='Average Volume',
+                                        marker_color='lightgray',
+                                        showlegend=False
+                                    ), row=2, col=1)
                             
                             # Add actual price history if available
                             if 'price_history' in selected_ticker_data and selected_ticker_data['price_history']:
@@ -1910,7 +1951,7 @@ if page == "CD Analysis (抄底)":
                                             marker=dict(color='red', size=6),
                                             name='Price History',
                                             showlegend=True
-                                        ))
+                                        ), row=1, col=1)
                                     elif len(price_periods) == 1:
                                         # Single point case
                                         fig.add_trace(go.Scatter(
@@ -1920,122 +1961,13 @@ if page == "CD Analysis (抄底)":
                                             marker=dict(color='red', size=6),
                                             name='Price History',
                                             showlegend=True
-                                        ))
+                                        ), row=1, col=1)
                                     
                                     # Store the last price history point for connecting to current price
                                     if price_periods:
                                         last_price_period = price_periods[-1]
                                         last_price_value = price_values[-1]
-                        
-                            # Add baseline reference line at y=100 (add after all traces for visibility)
-                            fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
-                                         annotation_text="Entry Price (Baseline)", annotation_position="top right")
                             
-                            # Add gray dot at [0, 100] and connect to first data point
-                            fig.add_trace(go.Scatter(
-                                x=[0],
-                                y=[100],
-                                mode='markers',
-                                marker=dict(color='gray', size=8),
-                                name='Entry Point',
-                                showlegend=True
-                            ))
-                            
-                            # Add gray line from [0, 100] to first available data point
-                            # Find the first period with data (usually period 3)
-                            first_period = None
-                            first_value = None
-                            
-                            # Check if we have boxplot data
-                            if returns_df is not None and not returns_df.empty:
-                                filtered_returns = returns_df[
-                                    (returns_df['ticker'] == ticker) &
-                                    (returns_df['interval'] == interval)
-                                ]
-                                if not filtered_returns.empty:
-                                    periods_with_data = sorted(filtered_returns['period'].unique())
-                                    if periods_with_data:
-                                        first_period = periods_with_data[0]
-                                        period_returns = filtered_returns[filtered_returns['period'] == first_period]['return'].values
-                                        if len(period_returns) > 0:
-                                            first_value = 100 + np.median(period_returns)
-                            
-                            # If no boxplot data, use scatter plot data
-                            if first_period is None or first_value is None:
-                                periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-                                for period in periods:
-                                    if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
-                                        first_period = period
-                                        first_value = 100 + selected_ticker_data[f'avg_return_{period}']
-                                        break
-                            
-                            # Add connecting line if we found a first data point
-                            if first_period is not None and first_value is not None:
-                                fig.add_trace(go.Scatter(
-                                    x=[0, first_period],
-                                    y=[100, first_value],
-                                    mode='lines',
-                                    line=dict(color='gray', width=1),
-                                    name='Baseline Connection',
-                                    showlegend=False
-                                ))
-                            
-                            # Highlight best period
-                            max_return = -float('inf')
-                            best_period = None
-                            periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-                            for period in periods:
-                                if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
-                                    if selected_ticker_data[f'avg_return_{period}'] > max_return:
-                                        max_return = selected_ticker_data[f'avg_return_{period}']
-                                        best_period = period
-                            
-                            title_html = (
-                                f"<span style='font-size:16px'><b>{ticker} ({interval})</b></span><br>"
-                            )
-                            if best_period is not None:
-                                 title_html += (f"<span style='font-size:10px'>best period: {best_period} | "
-                                f"return: {max_return:.2f}% | "
-                                f"success: {selected_ticker_data.get(f'success_rate_{best_period}', 0):.2f}  "
-                                f"test count: {selected_ticker_data.get(f'test_count_{best_period}', 0)}</span>")
-                            
-                            fig.update_layout(
-                                title=dict(text=title_html, 
-                                            x=0.5, 
-                                            font=dict(color='black'),
-                                            xanchor='center',
-                                            yanchor='top'),
-                                xaxis_title="Period",
-                                yaxis_title="Relative Price (Baseline = 100)",
-                                showlegend=False,
-                                height=300,
-                                plot_bgcolor='white',
-                                paper_bgcolor='white',
-                                xaxis=dict(
-                                    showgrid=True,
-                                    gridwidth=1,
-                                    gridcolor='lightgray',
-                                    showline=True,
-                                    linewidth=1,
-                                    linecolor='black',
-                                    tickfont=dict(color='black'),
-                                    title=dict(text="Period", 
-                                                font=dict(color='black'))
-                                ),
-                                yaxis=dict(
-                                    showgrid=True,
-                                    gridwidth=1,
-                                    gridcolor='lightgray',
-                                    showline=True,
-                                    linewidth=1,
-                                    linecolor='black',
-                                    tickfont=dict(color='black'),
-                                    title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
-                                )
-                            )
-                            
-                            st.plotly_chart(fig, use_container_width=True)
-
                             # Add actual volume history if available
                             if 'volume_history' in selected_ticker_data and selected_ticker_data['volume_history']:
                                 volume_history = selected_ticker_data['volume_history']
@@ -2079,7 +2011,7 @@ if page == "CD Analysis (抄底)":
                                             marker=dict(color='red', size=6),
                                             name='Latest Signal Volume',
                                             showlegend=True
-                                        ))
+                                        ), row=2, col=1)
                                     elif len(volume_periods) == 1:
                                         # Single point case
                                         fig.add_trace(go.Scatter(
@@ -2089,9 +2021,145 @@ if page == "CD Analysis (抄底)":
                                             marker=dict(color='red', size=6),
                                             name='Latest Signal Volume',
                                             showlegend=True
-                                        ))
-                    
-                    # Add current price at current period (updated to avoid duplicate)
+                                        ), row=2, col=1)
+                        
+                            # Add baseline reference line at y=100 (add after all traces for visibility)
+                            fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
+                                         annotation_text="Entry Price (Baseline)", annotation_position="top right", row=1, col=1)
+                            
+                            # Add gray dot at [0, 100] and connect to first data point
+                            fig.add_trace(go.Scatter(
+                                x=[0],
+                                y=[100],
+                                mode='markers',
+                                marker=dict(color='gray', size=8),
+                                name='Entry Point',
+                                showlegend=True
+                            ), row=1, col=1)
+                            
+                            # Add gray line from [0, 100] to first available data point
+                            # Find the first period with data (usually period 3)
+                            first_period = None
+                            first_value = None
+                            
+                            # Check if we have boxplot data
+                            if returns_df is not None and not returns_df.empty:
+                                filtered_returns = returns_df[
+                                    (returns_df['ticker'] == ticker) &
+                                    (returns_df['interval'] == interval)
+                                ]
+                                if not filtered_returns.empty:
+                                    periods_with_data = sorted(filtered_returns['period'].unique())
+                                    if periods_with_data:
+                                        first_period = periods_with_data[0]
+                                        period_returns = filtered_returns[filtered_returns['period'] == first_period]['return'].values
+                                        if len(period_returns) > 0:
+                                            first_value = 100 + np.median(period_returns)
+                            
+                            # If no boxplot data, use scatter plot data
+                            if first_period is None or first_value is None:
+                                periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                                for period in periods:
+                                    if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                        first_period = period
+                                        first_value = 100 + selected_ticker_data[f'avg_return_{period}']
+                                        break
+                            
+                            # Add connecting line if we found a first data point
+                            if first_period is not None and first_value is not None:
+                                fig.add_trace(go.Scatter(
+                                    x=[0, first_period],
+                                    y=[100, first_value],
+                                    mode='lines',
+                                    line=dict(color='gray', width=1),
+                                    name='Baseline Connection',
+                                    showlegend=False
+                                ), row=1, col=1)
+                            
+                            # Highlight best period
+                            max_return = -float('inf')
+                            best_period = None
+                            periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                            for period in periods:
+                                if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                                    if selected_ticker_data[f'avg_return_{period}'] > max_return:
+                                        max_return = selected_ticker_data[f'avg_return_{period}']
+                                        best_period = period
+                            
+                            title_html = (
+                                f"<span style='font-size:16px'><b>{ticker} ({interval})</b></span><br>"
+                            )
+                            if best_period is not None:
+                                 title_html += (f"<span style='font-size:10px'>best period: {best_period} | "
+                                f"return: {max_return:.2f}% | "
+                                f"success: {selected_ticker_data.get(f'success_rate_{best_period}', 0):.2f}  "
+                                f"test count: {selected_ticker_data.get(f'test_count_{best_period}', 0)}</span>")
+                            
+                            fig.update_layout(
+                                title=dict(text=title_html, 
+                                            x=0.5, 
+                                            font=dict(color='black'),
+                                            xanchor='center',
+                                            yanchor='top'),
+                                showlegend=False,
+                                height=400,  # Increased height for dual subplots
+                                plot_bgcolor='white',
+                                paper_bgcolor='white'
+                            )
+                            
+                            # Update axes for subplots
+                            fig.update_xaxes(
+                                title_text="Period", 
+                                row=1, col=1,
+                                showgrid=True,
+                                gridwidth=1,
+                                gridcolor='lightgray',
+                                showline=True,
+                                linewidth=1,
+                                linecolor='black',
+                                tickfont=dict(color='black'),
+                                title=dict(text="Period", font=dict(color='black'))
+                            )
+                            fig.update_xaxes(
+                                title_text="Period", 
+                                row=2, col=1,
+                                showgrid=True,
+                                gridwidth=1,
+                                gridcolor='lightgray',
+                                showline=True,
+                                linewidth=1,
+                                linecolor='black',
+                                tickfont=dict(color='black'),
+                                title=dict(text="Period", font=dict(color='black'))
+                            )
+                            fig.update_yaxes(
+                                title_text="Relative Price (Baseline = 100)", 
+                                row=1, col=1,
+                                showgrid=True,
+                                gridwidth=1,
+                                gridcolor='lightgray',
+                                showline=True,
+                                linewidth=1,
+                                linecolor='black',
+                                tickfont=dict(color='black'),
+                                title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
+                            )
+                            fig.update_yaxes(
+                                title_text="Volume", 
+                                row=2, col=1,
+                                showgrid=True,
+                                gridwidth=1,
+                                gridcolor='lightgray',
+                                showline=True,
+                                linewidth=1,
+                                linecolor='black',
+                                tickfont=dict(color='black'),
+                                title=dict(text="Volume", font=dict(color='black'))
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+
+                    # Add current price at current period
                     if ('current_period' in selected_ticker_data and 'current_price' in selected_ticker_data and 
                         'latest_signal_price' in selected_ticker_data):
                         current_period = selected_ticker_data['current_period']
@@ -2199,65 +2267,6 @@ if page == "CD Analysis (抄底)":
                             showlegend=False
                         ))
                     
-                    # Find best period (most negative return for MC signals)
-                    min_return = float('inf')
-                    best_period = None
-                    periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
-                    for period in periods:
-                        if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
-                            if selected_ticker_data[f'avg_return_{period}'] < min_return:
-                                min_return = selected_ticker_data[f'avg_return_{period}']
-                                best_period = period
-                    
-                    # Update layout
-                    title_html = (
-                        f"<span style='font-size:24px'><b>{selected_ticker_data['ticker']} ({selected_ticker_data['interval']})</b></span><br>"
-                        f"<span style='font-size:12px'>best period: {best_period}\t  "
-                        f"best return: {min_return:.2f}%  "
-                        f"success rate: {selected_ticker_data[f'success_rate_{best_period}']:.2f}\t  "
-                        f"test count: {selected_ticker_data[f'test_count_{best_period}']}</span>"
-                    )
-                                    
-                    fig.update_layout(
-                        legend=dict(font=dict(color='black')),
-                        title=dict(
-                            text=title_html,
-                            x=0.5,
-                            font=dict(size=24, color='black'),
-                            xanchor='center',
-                            yanchor='top'
-                        ),
-                        xaxis_title="Period",
-                        yaxis_title="Relative Price (Baseline = 100)", 
-                        showlegend=True,
-                        height=398,
-                        plot_bgcolor='white',
-                        paper_bgcolor='white',
-                        xaxis=dict(
-                            showgrid=True,
-                            gridwidth=1,
-                            gridcolor='lightgray',
-                            showline=True,
-                            linewidth=1,
-                            linecolor='black', 
-                            tickfont=dict(color='black'),
-                            title=dict(text="Period", font=dict(color='black'))
-                        ),
-                        yaxis=dict(
-                            showgrid=True,
-                            gridwidth=1,
-                            gridcolor='lightgray',
-                            showline=True,
-                            linewidth=1,
-                            linecolor='black',
-                            tickfont=dict(color='black'),
-                            title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
-                        )
-                    )
-                    
-                    # Display the plot
-                    st.plotly_chart(fig, use_container_width=True)
-
                 if ticker_filter:
                     st.info("No matching stocks found for the selected criteria.")
                 else:
