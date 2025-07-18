@@ -2107,10 +2107,11 @@ if page == "CD Analysis (抄底)":
                                 paper_bgcolor='white'
                             )
                             
-                            # Update axes for subplots
+                            # Update axes for subplots with synchronized x-axis
                             fig.update_xaxes(
                                 title_text="Period", 
                                 row=1, col=1,
+                                range=[-5, 105],  # Set consistent x-axis range
                                 showgrid=True,
                                 gridwidth=1,
                                 gridcolor='lightgray',
@@ -2123,6 +2124,7 @@ if page == "CD Analysis (抄底)":
                             fig.update_xaxes(
                                 title_text="Period", 
                                 row=2, col=1,
+                                range=[-5, 105],  # Same x-axis range as top subplot
                                 showgrid=True,
                                 gridwidth=1,
                                 gridcolor='lightgray',
