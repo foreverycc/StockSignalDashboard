@@ -1152,39 +1152,63 @@ if page == "CD Analysis (抄底)":
                             xanchor='center',
                             yanchor='top'
                         ),
-                        xaxis_title="Period",
-                        yaxis_title="Relative Price (Baseline = 100)", 
                         showlegend=True,
-                        height=398,
+                        height=500,  # Increased height for dual subplots
                         plot_bgcolor='white',
-                        paper_bgcolor='white',
-                        xaxis=dict(
-                            showgrid=True,
-                            gridwidth=1,
-                            gridcolor='lightgray',
-                            showline=True,
-                            linewidth=1,
-                            linecolor='black', 
-                            tickfont=dict(color='black'),
-                            title=dict(text="Period", font=dict(color='black'))
-                        ),
-                        yaxis=dict(
-                            showgrid=True,
-                            gridwidth=1,
-                            gridcolor='lightgray',
-                            showline=True,
-                            linewidth=1,
-                            linecolor='black',
-                            tickfont=dict(color='black'),
-                            title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
-                        )
+                        paper_bgcolor='white'
                     )
                     
-                    # Update axes for subplots
-                    fig.update_xaxes(title_text="Period", row=1, col=1)
-                    fig.update_xaxes(title_text="Period", row=2, col=1)
-                    fig.update_yaxes(title_text="Relative Price (Baseline = 100)", row=1, col=1)
-                    fig.update_yaxes(title_text="Volume", row=2, col=1)
+                    # Update axes for subplots with synchronized x-axis
+                    fig.update_xaxes(
+                        title_text="Period", 
+                        row=1, col=1,
+                        range=[-5, 105],  # Set consistent x-axis range
+                        showgrid=True,
+                        gridwidth=1,
+                        gridcolor='lightgray',
+                        showline=True,
+                        linewidth=1,
+                        linecolor='black',
+                        tickfont=dict(color='black'),
+                        title=dict(text="Period", font=dict(color='black'))
+                    )
+                    fig.update_xaxes(
+                        title_text="Period", 
+                        row=2, col=1,
+                        range=[-5, 105],  # Same x-axis range as top subplot
+                        showgrid=True,
+                        gridwidth=1,
+                        gridcolor='lightgray',
+                        showline=True,
+                        linewidth=1,
+                        linecolor='black',
+                        tickfont=dict(color='black'),
+                        title=dict(text="Period", font=dict(color='black'))
+                    )
+                    fig.update_yaxes(
+                        title_text="Relative Price (Baseline = 100)", 
+                        row=1, col=1,
+                        showgrid=True,
+                        gridwidth=1,
+                        gridcolor='lightgray',
+                        showline=True,
+                        linewidth=1,
+                        linecolor='black',
+                        tickfont=dict(color='black'),
+                        title=dict(text="Relative Price (Baseline = 100)", font=dict(color='black'))
+                    )
+                    fig.update_yaxes(
+                        title_text="Volume", 
+                        row=2, col=1,
+                        showgrid=True,
+                        gridwidth=1,
+                        gridcolor='lightgray',
+                        showline=True,
+                        linewidth=1,
+                        linecolor='black',
+                        tickfont=dict(color='black'),
+                        title=dict(text="Volume", font=dict(color='black'))
+                    )
                     
                     # Display the plot
                     st.plotly_chart(fig, use_container_width=True)
