@@ -859,11 +859,17 @@ if page == "CD Analysis (抄底)":
                             try:
                                 import ast
                                 import re
-                                # Clean up numpy float64 references in the string
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                                # More comprehensive cleaning of the string
+                                cleaned_str = str(price_history)
+                                # Remove numpy function calls and other complex objects
+                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
+                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
+                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
+                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
+                                # Try to parse the cleaned string
                                 price_history = ast.literal_eval(cleaned_str)
-                            except Exception as e:
-                                print(f"Error parsing price_history: {e}")
+                            except Exception:
+                                # If parsing fails, silently set to empty dict to avoid spam
                                 price_history = {}
                         
                         if price_history and 0 in price_history and price_history[0] is not None:
@@ -915,10 +921,17 @@ if page == "CD Analysis (抄底)":
                             try:
                                 import ast
                                 import re
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(volume_history))
+                                # More comprehensive cleaning of the string
+                                cleaned_str = str(volume_history)
+                                # Remove numpy function calls and other complex objects
+                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
+                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
+                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
+                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
+                                # Try to parse the cleaned string
                                 volume_history = ast.literal_eval(cleaned_str)
-                            except Exception as e:
-                                print(f"Error parsing volume_history: {e}")
+                            except Exception:
+                                # If parsing fails, silently set to empty dict to avoid spam
                                 volume_history = {}
                         
                         if volume_history and 0 in volume_history and volume_history[0] is not None:
@@ -967,7 +980,14 @@ if page == "CD Analysis (抄底)":
                             try:
                                 import ast
                                 import re
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                                # More comprehensive cleaning of the string
+                                cleaned_str = str(price_history)
+                                # Remove numpy function calls and other complex objects
+                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
+                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
+                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
+                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
+                                # Try to parse the cleaned string
                                 price_history = ast.literal_eval(cleaned_str)
                             except:
                                 price_history = {}
@@ -1025,7 +1045,14 @@ if page == "CD Analysis (抄底)":
                             try:
                                 import ast
                                 import re
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(volume_history))
+                                # More comprehensive cleaning of the string
+                                cleaned_str = str(volume_history)
+                                # Remove numpy function calls and other complex objects
+                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
+                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
+                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
+                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
+                                # Try to parse the cleaned string
                                 volume_history = ast.literal_eval(cleaned_str)
                             except:
                                 volume_history = {}
@@ -1821,11 +1848,17 @@ if page == "CD Analysis (抄底)":
                                     try:
                                         import ast
                                         import re
-                                        # Clean up numpy float64 references in the string
-                                        cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                                        # More comprehensive cleaning of the string
+                                        cleaned_str = str(price_history)
+                                        # Remove numpy function calls and other complex objects
+                                        cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
+                                        cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
+                                        cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
+                                        cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
+                                        # Try to parse the cleaned string
                                         price_history = ast.literal_eval(cleaned_str)
-                                    except Exception as e:
-                                        print(f"Error parsing price_history: {e}")
+                                    except Exception:
+                                        # If parsing fails, silently set to empty dict to avoid spam
                                         price_history = {}
                                 
                                 if price_history and 0 in price_history and price_history[0] is not None:
@@ -1980,17 +2013,23 @@ if page == "CD Analysis (抄底)":
                             st.plotly_chart(fig, use_container_width=True)
 
                             # Add actual volume history if available
-                            if 'volume_history' in selected_ticker and selected_ticker['volume_history']:
-                                volume_history = selected_ticker['volume_history']
+                            if 'volume_history' in selected_ticker_data and selected_ticker_data['volume_history']:
+                                volume_history = selected_ticker_data['volume_history']
                                 if isinstance(volume_history, str):
                                     try:
                                         import ast
                                         import re
-                                        # Clean up numpy float64 references in the string
-                                        cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(volume_history))
+                                        # More comprehensive cleaning of the string
+                                        cleaned_str = str(volume_history)
+                                        # Remove numpy function calls and other complex objects
+                                        cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
+                                        cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
+                                        cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
+                                        cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
+                                        # Try to parse the cleaned string
                                         volume_history = ast.literal_eval(cleaned_str)
-                                    except Exception as e:
-                                        print(f"Error parsing volume_history: {e}")
+                                    except Exception:
+                                        # If parsing fails, silently set to empty dict to avoid spam
                                         volume_history = {}
                                 
                                 if volume_history and 0 in volume_history and volume_history[0] is not None:
@@ -2029,24 +2068,31 @@ if page == "CD Analysis (抄底)":
                                         ))
                     
                     # Add current price at current period (updated to avoid duplicate)
-                    if ('current_period' in selected_ticker and 'current_price' in selected_ticker and 
-                        'latest_signal_price' in selected_ticker):
-                        current_period = selected_ticker['current_period']
+                    if ('current_period' in selected_ticker_data and 'current_price' in selected_ticker_data and 
+                        'latest_signal_price' in selected_ticker_data):
+                        current_period = selected_ticker_data['current_period']
                         
                         # Calculate current price relative value
                         current_price_relative = None
-                        if selected_ticker['latest_signal_price']:
-                            price_change = ((selected_ticker['current_price'] - selected_ticker['latest_signal_price']) / 
-                                             selected_ticker['latest_signal_price'] * 100)
+                        if selected_ticker_data['latest_signal_price']:
+                            price_change = ((selected_ticker_data['current_price'] - selected_ticker_data['latest_signal_price']) / 
+                                             selected_ticker_data['latest_signal_price'] * 100)
                             current_price_relative = 100 + price_change
                         
                         # Parse price_history if it's a string for checking duplicates
-                        price_history = selected_ticker.get('price_history', {})
+                        price_history = selected_ticker_data.get('price_history', {})
                         if isinstance(price_history, str):
                             try:
                                 import ast
                                 import re
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', str(price_history))
+                                # More comprehensive cleaning of the string
+                                cleaned_str = str(price_history)
+                                # Remove numpy function calls and other complex objects
+                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
+                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
+                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
+                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
+                                # Try to parse the cleaned string
                                 price_history = ast.literal_eval(cleaned_str)
                             except:
                                 price_history = {}
@@ -2113,9 +2159,9 @@ if page == "CD Analysis (抄底)":
                     if first_period is None or first_value is None:
                         periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
                         for period in periods:
-                            if f'avg_return_{period}' in selected_ticker:
+                            if f'avg_return_{period}' in selected_ticker_data:
                                 first_period = period
-                                first_value = 100 + selected_ticker[f'avg_return_{period}']
+                                first_value = 100 + selected_ticker_data[f'avg_return_{period}']
                                 break
                     
                     # Add connecting line if we found a first data point
@@ -2134,18 +2180,18 @@ if page == "CD Analysis (抄底)":
                     best_period = None
                     periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
                     for period in periods:
-                        if f'avg_return_{period}' in selected_ticker and pd.notna(selected_ticker[f'avg_return_{period}']):
-                            if selected_ticker[f'avg_return_{period}'] < min_return:
-                                min_return = selected_ticker[f'avg_return_{period}']
+                        if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
+                            if selected_ticker_data[f'avg_return_{period}'] < min_return:
+                                min_return = selected_ticker_data[f'avg_return_{period}']
                                 best_period = period
                     
                     # Update layout
                     title_html = (
-                        f"<span style='font-size:24px'><b>{selected_ticker['ticker']} ({selected_ticker['interval']})</b></span><br>"
+                        f"<span style='font-size:24px'><b>{selected_ticker_data['ticker']} ({selected_ticker_data['interval']})</b></span><br>"
                         f"<span style='font-size:12px'>best period: {best_period}\t  "
                         f"best return: {min_return:.2f}%  "
-                        f"success rate: {selected_ticker[f'success_rate_{best_period}']:.2f}\t  "
-                        f"test count: {selected_ticker[f'test_count_{best_period}']}</span>"
+                        f"success rate: {selected_ticker_data[f'success_rate_{best_period}']:.2f}\t  "
+                        f"test count: {selected_ticker_data[f'test_count_{best_period}']}</span>"
                     )
                                     
                     fig.update_layout(
