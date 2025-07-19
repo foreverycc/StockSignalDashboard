@@ -720,7 +720,7 @@ if page == "CD Analysis (抄底)":
                                         boxpoints=False,  # Don't show individual points
                                         showlegend=False,
                                         marker=dict(color='lightgray'),
-                                        line=dict(color='gray')
+                                        line=dict(color='lightgray')
                                     ))
                                     
                                     # Store median for connecting line
