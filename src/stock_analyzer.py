@@ -22,7 +22,7 @@ best_intervals_columns = ['ticker', 'interval', 'hold_time',
                           'latest_mc_price_percentile', 'latest_mc_decline_after', 'latest_mc_criteria_met']
 
 # Define all periods for dynamic handling
-periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+periods = [0] + list(range(1, 101))  # Full range from 0 to 100
 
 # Define period ranges for different best intervals tables
 period_ranges = {

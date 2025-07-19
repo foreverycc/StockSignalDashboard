@@ -138,19 +138,21 @@ def evaluate_mc_at_top_price(data, mc_date, mc_price, cd_date):
             'is_at_top_price': False
         }
 
-def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100], max_signals=MAX_SIGNALS_THRESHOLD):
+def calculate_returns(data, cd_signals, periods=None, max_signals=MAX_SIGNALS_THRESHOLD):
     """
     Calculate returns after CD signals for specified periods.
     
     Args:
         data: DataFrame with price data
         cd_signals: Series with CD signals (boolean)
-        periods: List of periods to calculate returns for
+        periods: List of periods to calculate returns for (default: 0 to 100)
         max_signals: Maximum number of latest signals to process (default: MAX_SIGNALS_THRESHOLD)
     
     Returns:
         DataFrame with signal dates, returns, and volume data for each period
     """
+    if periods is None:
+        periods = [0] + list(range(1, 101))  # Full range from 0 to 100
     results = []
     # Handle NaN values by replacing them with False for boolean indexing
     cd_signals_bool = cd_signals.fillna(False).infer_objects(copy=False)
@@ -298,7 +300,7 @@ def evaluate_interval(ticker, interval, data=None):
                 'volume_history': {}
             }
             # Add zero values for all periods
-            periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+            periods = [0] + list(range(1, 101))  # Full range from 0 to 100
             for period in periods:
                 result[f'test_count_{period}'] = 0
                 result[f'success_rate_{period}'] = 0
@@ -342,7 +344,7 @@ def evaluate_interval(ticker, interval, data=None):
                 'volume_history': {}
             }
             # Add zero values for all periods
-            periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+            periods = [0] + list(range(1, 101))  # Full range from 0 to 100
             for period in periods:
                 result[f'test_count_{period}'] = 0
                 result[f'success_rate_{period}'] = 0
@@ -368,7 +370,7 @@ def evaluate_interval(ticker, interval, data=None):
             return result
         
         # Define all periods
-        periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+        periods = [0] + list(range(1, 101))  # Full range from 0 to 100
         
         # Initialize result dictionary with basic info
         result = {
