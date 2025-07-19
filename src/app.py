@@ -1764,9 +1764,8 @@ if page == "CD Analysis (抄底)":
                             last_price_period = None
                             last_price_value = None
                             
-                            # Use continuous range instead of boxplot data for better visualization
-                            # Skip boxplot data and use scatter plot with full continuous range
-                            if False:  # Disable boxplot visualization to force continuous range
+                            # Filter returns distribution data for boxplot visualization
+                            if returns_df is not None and not returns_df.empty:
                                 filtered_returns = returns_df[
                                     (returns_df['ticker'] == ticker) &
                                     (returns_df['interval'] == interval)
@@ -1800,7 +1799,7 @@ if page == "CD Analysis (抄底)":
                                                 boxpoints=False,  # Don't show individual points
                                                 showlegend=False,
                                                 marker=dict(color='lightgray'),
-                                                line=dict(color='gray')
+                                                line=dict(color='lightgray')
                                             ), row=1, col=1)
                                             
                                             # Store median for connecting line
@@ -1822,7 +1821,7 @@ if page == "CD Analysis (抄底)":
                                             y=median_price_values,
                                             mode='lines+markers',
                                             line=dict(color='gray', width=1),
-                                            marker=dict(color='gray', size=4),
+                                            marker=dict(color='gray', size=6),
                                             name='Median Returns',
                                             showlegend=False
                                         ), row=1, col=1)
