@@ -1580,7 +1580,7 @@ if page == "CD Analysis (抄底)":
 
             # Display 1234 breakout candidates
             with tab_1234_candidates:
-                df, message = load_results('breakout_candidates_summary_1234_', selected_file, 'date')
+                df, message = load_results('cd_breakout_candidates_summary_1234_', selected_file, 'date')
                 
                 if df is not None and '1234' in message:
                     if resonance_ticker_filter:
@@ -1623,7 +1623,7 @@ if page == "CD Analysis (抄底)":
 
             # Display 1234 detailed results
             with tab_1234_details:
-                df, message = load_results('breakout_candidates_details_1234_', selected_file, 'signal_date')
+                df, message = load_results('cd_breakout_candidates_details_1234_', selected_file, 'signal_date')
                 
                 if df is not None and '1234' in message:
                     if resonance_ticker_filter:
@@ -1650,7 +1650,7 @@ if page == "CD Analysis (抄底)":
 
             # Display 5230 breakout candidates
             with tab_5230_candidates:
-                df, message = load_results('breakout_candidates_summary_5230_', selected_file, 'date')
+                df, message = load_results('cd_breakout_candidates_summary_5230_', selected_file, 'date')
                 
                 if df is not None and '5230' in message:
                     if resonance_ticker_filter:
@@ -1681,7 +1681,7 @@ if page == "CD Analysis (抄底)":
 
             # Display 5230 detailed results
             with tab_5230_details:
-                df, message = load_results('breakout_candidates_details_5230_', selected_file, 'signal_date')
+                df, message = load_results('cd_breakout_candidates_details_5230_', selected_file, 'signal_date')
                 
                 if df is not None and '5230' in message:
                     if resonance_ticker_filter:
