@@ -758,7 +758,7 @@ if page == "CD Analysis (抄底)":
                                 ), row=2, col=1)
                         else:
                             # Fallback to original scatter plot if no returns distribution data
-                            periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                            periods = [0] + list(range(1, 101))  # Full range from 0 to 100
                             stock_returns = [(0, 100)]  # Start with (0, 100)
                             for period in periods[1:]:  # Skip 0 as we already added it
                                 if f'avg_return_{period}' in selected_ticker:
@@ -794,7 +794,7 @@ if page == "CD Analysis (抄底)":
                                 ), row=2, col=1)
                     else:
                         # Fallback to original scatter plot if no returns distribution data available
-                        periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                        periods = [0] + list(range(1, 101))  # Full range from 0 to 100
                         stock_returns = [(0, 100)]  # Start with (0, 100)
                         for period in periods[1:]:  # Skip 0 as we already added it
                             if f'avg_return_{period}' in selected_ticker:
@@ -1072,8 +1072,9 @@ if page == "CD Analysis (抄底)":
                     first_period = None
                     first_value = None
                     
-                    # Check if we have boxplot data
-                    if returns_df is not None and not returns_df.empty:
+                    # Use continuous range for consistent visualization
+                    # Skip boxplot data check and use scatter plot data
+                    if False:  # Disable boxplot data check to force continuous range
                         filtered_returns = returns_df[
                             (returns_df['ticker'] == ticker_filter) &
                             (returns_df['interval'] == selected_interval)
@@ -1088,7 +1089,7 @@ if page == "CD Analysis (抄底)":
                     
                     # If no boxplot data, use scatter plot data
                     if first_period is None or first_value is None:
-                        periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                        periods = list(range(1, 101))  # Full range from 1 to 100
                         for period in periods:
                             if f'avg_return_{period}' in selected_ticker:
                                 first_period = period
@@ -1109,7 +1110,7 @@ if page == "CD Analysis (抄底)":
                     # Find the period with maximum return
                     max_return = -float('inf')
                     best_period = None
-                    periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                    periods = list(range(1, 101))  # Full range from 1 to 100
                     for period in periods:
                         if f'avg_return_{period}' in selected_ticker:
                             if selected_ticker[f'avg_return_{period}'] > max_return:
@@ -1763,8 +1764,9 @@ if page == "CD Analysis (抄底)":
                             last_price_period = None
                             last_price_value = None
                             
-                            # Try to use boxplot data if available
-                            if returns_df is not None and not returns_df.empty:
+                            # Use continuous range instead of boxplot data for better visualization
+                            # Skip boxplot data and use scatter plot with full continuous range
+                            if False:  # Disable boxplot visualization to force continuous range
                                 filtered_returns = returns_df[
                                     (returns_df['ticker'] == ticker) &
                                     (returns_df['interval'] == interval)
@@ -1836,7 +1838,7 @@ if page == "CD Analysis (抄底)":
                                         ), row=2, col=1)
                                 else:
                                     # Fallback to scatter plot
-                                    periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                                    periods = [0] + list(range(1, 101))  # Full range from 0 to 100
                                     stock_returns = [(0, 100)]  # Start with (0, 100)
                                     for period in periods[1:]:  # Skip 0 as we already added it
                                         if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
@@ -1871,7 +1873,7 @@ if page == "CD Analysis (抄底)":
                                         ), row=2, col=1)
                             else:
                                 # Fallback to scatter plot if no returns distribution data
-                                periods = [0] + [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                                periods = [0] + list(range(1, 101))  # Full range from 0 to 100
                                 stock_returns = [(0, 100)]
                                 for period in periods[1:]:
                                     if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
@@ -2042,8 +2044,9 @@ if page == "CD Analysis (抄底)":
                             first_period = None
                             first_value = None
                             
-                            # Check if we have boxplot data
-                            if returns_df is not None and not returns_df.empty:
+                            # Use continuous range for consistent visualization
+                            # Skip boxplot data check and use scatter plot data
+                            if False:  # Disable boxplot data check to force continuous range
                                 filtered_returns = returns_df[
                                     (returns_df['ticker'] == ticker) &
                                     (returns_df['interval'] == interval)
@@ -2058,7 +2061,7 @@ if page == "CD Analysis (抄底)":
                             
                             # If no boxplot data, use scatter plot data
                             if first_period is None or first_value is None:
-                                periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                                periods = list(range(1, 101))  # Full range from 1 to 100
                                 for period in periods:
                                     if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
                                         first_period = period
@@ -2079,7 +2082,7 @@ if page == "CD Analysis (抄底)":
                             # Highlight best period
                             max_return = -float('inf')
                             best_period = None
-                            periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                            periods = list(range(1, 101))  # Full range from 1 to 100
                             for period in periods:
                                 if f'avg_return_{period}' in selected_ticker_data and pd.notna(selected_ticker_data[f'avg_return_{period}']):
                                     if selected_ticker_data[f'avg_return_{period}'] > max_return:
@@ -2235,8 +2238,9 @@ if page == "CD Analysis (抄底)":
                     first_period = None
                     first_value = None
                     
-                    # Check if we have boxplot data
-                    if returns_df is not None and not returns_df.empty:
+                    # Use continuous range for consistent visualization
+                    # Skip boxplot data check and use scatter plot data
+                    if False:  # Disable boxplot data check to force continuous range
                         filtered_returns = returns_df[
                             (returns_df['ticker'] == ticker_filter) &
                             (returns_df['interval'] == selected_interval)
@@ -2251,7 +2255,7 @@ if page == "CD Analysis (抄底)":
                     
                     # If no boxplot data, use scatter plot data
                     if first_period is None or first_value is None:
-                        periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+                        periods = list(range(1, 101))  # Full range from 1 to 100
                         for period in periods:
                             if f'avg_return_{period}' in selected_ticker_data:
                                 first_period = period
