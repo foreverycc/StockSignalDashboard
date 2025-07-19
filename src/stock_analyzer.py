@@ -1,7 +1,7 @@
 import pandas as pd
 import os
 from data_loader import load_stock_list, download_stock_data
-from get_resonance_signal import process_ticker_1234, process_ticker_5230, identify_1234, identify_5230
+from get_resonance_signal_CD import process_ticker_1234, process_ticker_5230, identify_1234, identify_5230
 from get_resonance_signal_MC import process_ticker_mc_1234, process_ticker_mc_5230, identify_mc_1234, identify_mc_5230
 from utils import save_results, save_breakout_candidates_1234, save_breakout_candidates_5230, save_mc_breakout_candidates_1234, save_mc_breakout_candidates_5230
 from get_best_CD_interval import evaluate_interval
@@ -207,14 +207,14 @@ def analyze_stocks(file_path, end_date=None):
     
     # 1. Save 1234 results and identify breakout candidates
     print("Saving 1234 breakout results...")
-    output_file_1234 = os.path.join(output_dir, f'breakout_candidates_details_1234_{output_base}.tab')
+    output_file_1234 = os.path.join(output_dir, f'cd_breakout_candidates_details_1234_{output_base}.tab')
     save_results(results_1234, output_file_1234)
     df_breakout_1234 = identify_1234(output_file_1234, all_ticker_data)
     save_breakout_candidates_1234(df_breakout_1234, output_file_1234)
     
     # 2. Save 5230 results and identify breakout candidates
     print("Saving 5230 breakout results...")
-    output_file_5230 = os.path.join(output_dir, f'breakout_candidates_details_5230_{output_base}.tab')
+    output_file_5230 = os.path.join(output_dir, f'cd_breakout_candidates_details_5230_{output_base}.tab')
     save_results(results_5230, output_file_5230)
     df_breakout_5230 = identify_5230(output_file_5230, all_ticker_data)
     save_breakout_candidates_5230(df_breakout_5230, output_file_5230)
