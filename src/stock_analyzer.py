@@ -1,8 +1,9 @@
 import pandas as pd
 import os
 from data_loader import load_stock_list, download_stock_data
-from get_resonance_signal import process_ticker_1234, process_ticker_5230, identify_1234, identify_5230
-from utils import save_results, save_breakout_candidates_1234, save_breakout_candidates_5230
+from get_resonance_signal_CD import process_ticker_1234, process_ticker_5230, identify_1234, identify_5230
+from get_resonance_signal_MC import process_ticker_mc_1234, process_ticker_mc_5230, identify_mc_1234, identify_mc_5230
+from utils import save_results, save_breakout_candidates_1234, save_breakout_candidates_5230, save_mc_breakout_candidates_1234, save_mc_breakout_candidates_5230
 from get_best_CD_interval import evaluate_interval
 from get_best_MC_interval import evaluate_interval as evaluate_mc_interval
 from multiprocessing import Pool, cpu_count
@@ -22,7 +23,7 @@ best_intervals_columns = ['ticker', 'interval', 'hold_time',
                           'latest_mc_price_percentile', 'latest_mc_decline_after', 'latest_mc_criteria_met']
 
 # Define all periods for dynamic handling
-periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+periods = [0] + list(range(1, 101))  # Full range from 0 to 100
 
 # Define period ranges for different best intervals tables
 period_ranges = {
@@ -101,11 +102,17 @@ def process_ticker_all(ticker, end_date=None):
             print(f"No data available for {ticker}")
             return None, None, [], [], None
         
-        # Process for 1234 breakout
+        # Process for 1234 breakout (CD signals)
         results_1234 = process_ticker_1234(ticker, data)
         
-        # Process for 5230 breakout
+        # Process for 5230 breakout (CD signals)
         results_5230 = process_ticker_5230(ticker, data)
+        
+        # Process for MC 1234 breakout (MC signals)
+        mc_results_1234 = process_ticker_mc_1234(ticker, data)
+        
+        # Process for MC 5230 breakout (MC signals)
+        mc_results_5230 = process_ticker_mc_5230(ticker, data)
         
         # Process for CD signal evaluation
         cd_results = []
@@ -122,11 +129,11 @@ def process_ticker_all(ticker, end_date=None):
             if result:
                 mc_results.append(result)
         
-        return results_1234, results_5230, cd_results, mc_results, data
+        return results_1234, results_5230, mc_results_1234, mc_results_5230, cd_results, mc_results, data
         
     except Exception as e:
         print(f"Error processing {ticker}: {e}")
-        return None, None, [], [], None
+        return None, None, [], [], [], [], None
 
 def analyze_stocks(file_path, end_date=None):
     """
@@ -161,6 +168,8 @@ def analyze_stocks(file_path, end_date=None):
     batch_size = 50
     results_1234 = []
     results_5230 = []
+    mc_results_1234 = []
+    mc_results_5230 = []
     cd_eval_results = []
     mc_eval_results = []
     all_ticker_data = {}
@@ -177,12 +186,16 @@ def analyze_stocks(file_path, end_date=None):
             batch_results = pool.map(process_ticker_with_end_date, batch)
         
         # Collect results from batch
-        for i, (r1234, r5230, cd_eval, mc_eval, data) in enumerate(batch_results):
+        for i, (r1234, r5230, mc_r1234, mc_r5230, cd_eval, mc_eval, data) in enumerate(batch_results):
             ticker = batch[i]
             if r1234:
                 results_1234.extend(r1234)
             if r5230:
                 results_5230.extend(r5230)
+            if mc_r1234:
+                mc_results_1234.extend(mc_r1234)
+            if mc_r5230:
+                mc_results_5230.extend(mc_r5230)
             if cd_eval:
                 cd_eval_results.extend(cd_eval)
             if mc_eval:
@@ -194,19 +207,33 @@ def analyze_stocks(file_path, end_date=None):
     
     # 1. Save 1234 results and identify breakout candidates
     print("Saving 1234 breakout results...")
-    output_file_1234 = os.path.join(output_dir, f'breakout_candidates_details_1234_{output_base}.tab')
+    output_file_1234 = os.path.join(output_dir, f'cd_breakout_candidates_details_1234_{output_base}.tab')
     save_results(results_1234, output_file_1234)
     df_breakout_1234 = identify_1234(output_file_1234, all_ticker_data)
     save_breakout_candidates_1234(df_breakout_1234, output_file_1234)
     
     # 2. Save 5230 results and identify breakout candidates
     print("Saving 5230 breakout results...")
-    output_file_5230 = os.path.join(output_dir, f'breakout_candidates_details_5230_{output_base}.tab')
+    output_file_5230 = os.path.join(output_dir, f'cd_breakout_candidates_details_5230_{output_base}.tab')
     save_results(results_5230, output_file_5230)
     df_breakout_5230 = identify_5230(output_file_5230, all_ticker_data)
     save_breakout_candidates_5230(df_breakout_5230, output_file_5230)
     
-    # 3. Save CD evaluation results
+    # 3. Save MC 1234 results and identify breakout candidates
+    print("Saving MC 1234 breakout results...")
+    output_file_mc_1234 = os.path.join(output_dir, f'mc_breakout_candidates_details_1234_{output_base}.tab')
+    save_results(mc_results_1234, output_file_mc_1234)
+    df_mc_breakout_1234 = identify_mc_1234(output_file_mc_1234, all_ticker_data)
+    save_mc_breakout_candidates_1234(df_mc_breakout_1234, output_file_mc_1234)
+    
+    # 4. Save MC 5230 results and identify breakout candidates
+    print("Saving MC 5230 breakout results...")
+    output_file_mc_5230 = os.path.join(output_dir, f'mc_breakout_candidates_details_5230_{output_base}.tab')
+    save_results(mc_results_5230, output_file_mc_5230)
+    df_mc_breakout_5230 = identify_mc_5230(output_file_mc_5230, all_ticker_data)
+    save_mc_breakout_candidates_5230(df_mc_breakout_5230, output_file_mc_5230)
+    
+    # 5. Save CD evaluation results
     print("Saving CD evaluation results...")
     # Convert CD evaluation results to DataFrame
     if cd_eval_results:
@@ -222,13 +249,24 @@ def analyze_stocks(file_path, end_date=None):
             interval = result['interval']
             for period in periods:
                 returns_key = f'returns_{period}'
+                volumes_key = f'volumes_{period}'
                 if returns_key in result and result[returns_key]:
-                    for return_value in result[returns_key]:
+                    # Get individual returns and volumes for this period
+                    individual_returns = result[returns_key]
+                    individual_volumes = result.get(volumes_key, [])
+                    
+                    # Ensure volumes list has same length as returns
+                    if len(individual_volumes) < len(individual_returns):
+                        individual_volumes.extend([None] * (len(individual_returns) - len(individual_volumes)))
+                    
+                    for i, return_value in enumerate(individual_returns):
+                        volume_value = individual_volumes[i] if i < len(individual_volumes) else None
                         returns_data.append({
                             'ticker': ticker,
                             'interval': interval,
                             'period': period,
-                            'return': return_value
+                            'return': return_value,
+                            'volume': volume_value
                         })
         
         if returns_data:
@@ -236,7 +274,7 @@ def analyze_stocks(file_path, end_date=None):
             df_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
         else:
             # Create empty returns distribution file
-            empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return'])
+            empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return', 'volume'])
             empty_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
 
         # Find the best interval for each ticker based on success rate and returns
@@ -367,7 +405,7 @@ def analyze_stocks(file_path, end_date=None):
         empty_detailed.to_csv(os.path.join(output_dir, f'cd_eval_custom_detailed_{output_base}.csv'), index=False)
         
         # Create empty returns distribution file
-        empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return'])
+        empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return', 'volume'])
         empty_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
         
         # Create empty files with proper headers for each range
@@ -378,7 +416,7 @@ def analyze_stocks(file_path, end_date=None):
         empty_good_signals = pd.DataFrame(columns=good_signals_columns)
         empty_good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
         
-    # 4. Save MC evaluation results
+    # 6. Save MC evaluation results
     print("Saving MC evaluation results...")
     # Convert MC evaluation results to DataFrame
     if mc_eval_results:
@@ -394,13 +432,24 @@ def analyze_stocks(file_path, end_date=None):
             interval = result['interval']
             for period in periods:
                 returns_key = f'returns_{period}'
+                volumes_key = f'volumes_{period}'
                 if returns_key in result and result[returns_key]:
-                    for return_value in result[returns_key]:
+                    # Get individual returns and volumes for this period
+                    individual_returns = result[returns_key]
+                    individual_volumes = result.get(volumes_key, [])
+                    
+                    # Ensure volumes list has same length as returns
+                    if len(individual_volumes) < len(individual_returns):
+                        individual_volumes.extend([None] * (len(individual_returns) - len(individual_volumes)))
+                    
+                    for i, return_value in enumerate(individual_returns):
+                        volume_value = individual_volumes[i] if i < len(individual_volumes) else None
                         returns_data.append({
                             'ticker': ticker,
                             'interval': interval,
                             'period': period,
-                            'return': return_value
+                            'return': return_value,
+                            'volume': volume_value
                         })
         
         if returns_data:
@@ -408,7 +457,7 @@ def analyze_stocks(file_path, end_date=None):
             df_returns.to_csv(os.path.join(output_dir, f'mc_eval_returns_distribution_{output_base}.csv'), index=False)
         else:
             # Create empty returns distribution file
-            empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return'])
+            empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return', 'volume'])
             empty_returns.to_csv(os.path.join(output_dir, f'mc_eval_returns_distribution_{output_base}.csv'), index=False)
 
         # Find the best interval for each ticker based on success rate and returns
@@ -536,7 +585,7 @@ def analyze_stocks(file_path, end_date=None):
         empty_detailed.to_csv(os.path.join(output_dir, f'mc_eval_custom_detailed_{output_base}.csv'), index=False)
         
         # Create empty returns distribution file
-        empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return'])
+        empty_returns = pd.DataFrame(columns=['ticker', 'interval', 'period', 'return', 'volume'])
         empty_returns.to_csv(os.path.join(output_dir, f'mc_eval_returns_distribution_{output_base}.csv'), index=False)
         
         # Create empty files with proper headers for each range

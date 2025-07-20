@@ -5,10 +5,10 @@ from indicators import compute_cd_indicator, compute_mc_indicator
 import yfinance as yf
 
 # EMA warmup period - should match the value in indicators.py
-EMA_WARMUP_PERIOD = 50
+EMA_WARMUP_PERIOD = 0
 
 # Maximum number of latest signals to process (to reduce noise from older signals)
-MAX_SIGNALS_THRESHOLD = 10
+MAX_SIGNALS_THRESHOLD = 7
 
 def find_latest_mc_signal_before_cd(data, cd_date, mc_signals):
     """
@@ -138,19 +138,21 @@ def evaluate_mc_at_top_price(data, mc_date, mc_price, cd_date):
             'is_at_top_price': False
         }
 
-def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100], max_signals=MAX_SIGNALS_THRESHOLD):
+def calculate_returns(data, cd_signals, periods=None, max_signals=MAX_SIGNALS_THRESHOLD):
     """
     Calculate returns after CD signals for specified periods.
     
     Args:
         data: DataFrame with price data
         cd_signals: Series with CD signals (boolean)
-        periods: List of periods to calculate returns for
+        periods: List of periods to calculate returns for (default: 0 to 100)
         max_signals: Maximum number of latest signals to process (default: MAX_SIGNALS_THRESHOLD)
     
     Returns:
-        DataFrame with signal dates and returns for each period
+        DataFrame with signal dates, returns, and volume data for each period
     """
+    if periods is None:
+        periods = [0] + list(range(1, 101))  # Full range from 0 to 100
     results = []
     # Handle NaN values by replacing them with False for boolean indexing
     cd_signals_bool = cd_signals.fillna(False).infer_objects(copy=False)
@@ -171,14 +173,19 @@ def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
             continue
             
         entry_price = data.loc[date, 'Close']
+        entry_volume = data.loc[date, 'Volume']
         returns = {}
+        volumes = {}
         
         for period in periods:
             if idx + period < len(data):
                 exit_price = data.iloc[idx + period]['Close']
+                exit_volume = data.iloc[idx + period]['Volume']
                 returns[f'return_{period}'] = (exit_price - entry_price) / entry_price * 100
+                volumes[f'volume_{period}'] = exit_volume
             else:
                 returns[f'return_{period}'] = np.nan
+                volumes[f'volume_{period}'] = np.nan
         
         # Find the latest MC signal before this CD signal
         latest_mc_date, latest_mc_price = find_latest_mc_signal_before_cd(data, date, mc_signals)
@@ -200,7 +207,9 @@ def calculate_returns(data, cd_signals, periods=[3, 5, 10, 15, 20, 25, 30, 40, 5
                 
         results.append({
             'date': date,
+            'entry_volume': entry_volume,
             **returns,
+            **volumes,
             **mc_info
         })
     
@@ -287,15 +296,17 @@ def evaluate_interval(ticker, interval, data=None):
                 'current_period': 0,
                 'max_return': 0,
                 'min_return': 0,
-                'price_history': {}
+                'price_history': {},
+                'volume_history': {}
             }
             # Add zero values for all periods
-            periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+            periods = [0] + list(range(1, 101))  # Full range from 0 to 100
             for period in periods:
                 result[f'test_count_{period}'] = 0
                 result[f'success_rate_{period}'] = 0
                 result[f'avg_return_{period}'] = 0
                 result[f'returns_{period}'] = []  # Store empty list for individual returns
+                result[f'volume_{period}'] = [] # Store empty list for individual volumes
             
             # Add MC signal analysis fields
             result['mc_signals_before_cd'] = 0
@@ -329,15 +340,17 @@ def evaluate_interval(ticker, interval, data=None):
                 'current_period': 0,
                 'max_return': 0,
                 'min_return': 0,
-                'price_history': {}
+                'price_history': {},
+                'volume_history': {}
             }
             # Add zero values for all periods
-            periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+            periods = [0] + list(range(1, 101))  # Full range from 0 to 100
             for period in periods:
                 result[f'test_count_{period}'] = 0
                 result[f'success_rate_{period}'] = 0
                 result[f'avg_return_{period}'] = 0
                 result[f'returns_{period}'] = []  # Store empty list for individual returns
+                result[f'volume_{period}'] = [] # Store empty list for individual volumes
             
             # Add MC signal analysis fields
             result['mc_signals_before_cd'] = 0
@@ -357,7 +370,7 @@ def evaluate_interval(ticker, interval, data=None):
             return result
         
         # Define all periods
-        periods = [3, 5, 10, 15, 20, 25, 30, 40, 50, 60, 80, 100]
+        periods = [0] + list(range(1, 101))  # Full range from 0 to 100
         
         # Initialize result dictionary with basic info
         result = {
@@ -378,47 +391,63 @@ def evaluate_interval(ticker, interval, data=None):
             # Calculate current period as the number of data points between signal and current time
             current_period = current_idx - signal_idx
             
-            # Calculate actual price history for the latest signal
+            # Calculate actual price history and volume history for the latest signal
             price_history = {}
+            volume_history = {}
             entry_price = data_frame.loc[latest_signal_date, 'Close']
+            entry_volume = data_frame.loc[latest_signal_date, 'Volume']
             price_history[0] = entry_price  # Entry price at period 0
+            volume_history[0] = entry_volume  # Entry volume at period 0
             
             for period in periods:
                 if signal_idx + period < len(data_frame):
                     actual_price = data_frame.iloc[signal_idx + period]['Close']
+                    actual_volume = data_frame.iloc[signal_idx + period]['Volume']
                     price_history[period] = actual_price
+                    volume_history[period] = actual_volume
                 else:
                     price_history[period] = None
+                    volume_history[period] = None
                     
-            # Add current price if we're beyond the latest period
+            # Add current price and volume if we're beyond the latest period
             if current_period > max(periods):
                 price_history[current_period] = current_price
+                volume_history[current_period] = data_frame.iloc[-1]['Volume']
         else:
             current_period = 0
             price_history = {}
+            volume_history = {}
             
         result['current_period'] = current_period
         result['price_history'] = price_history
+        result['volume_history'] = volume_history
         
         # Calculate metrics for each period dynamically
         for period in periods:
             return_col = f'return_{period}'
+            volume_col = f'volume_{period}'
             if return_col in returns_df:
-                # Get individual returns (excluding NaN values)
+                # Get individual returns and volumes (excluding NaN values)
                 individual_returns = returns_df[return_col].dropna().tolist()
+                individual_volumes = returns_df[volume_col].dropna().tolist() if volume_col in returns_df else []
                 test_count = len(individual_returns)
                 success_rate = (pd.Series(individual_returns) > 0).mean() * 100 if test_count > 0 else 0
                 avg_return = pd.Series(individual_returns).mean() if test_count > 0 else 0
+                avg_volume = pd.Series(individual_volumes).mean() if len(individual_volumes) > 0 else 0
             else:
                 individual_returns = []
+                individual_volumes = []
                 test_count = 0
                 success_rate = 0
                 avg_return = 0
+                avg_volume = 0
             
             result[f'test_count_{period}'] = test_count
             result[f'success_rate_{period}'] = success_rate
             result[f'avg_return_{period}'] = avg_return
+            result[f'avg_volume_{period}'] = avg_volume
             result[f'returns_{period}'] = individual_returns  # Store individual returns for boxplot
+            result[f'volumes_{period}'] = individual_volumes  # Store individual volumes for volume chart
         
         # Add MC signal analysis summary to the result
         if not returns_df.empty:
