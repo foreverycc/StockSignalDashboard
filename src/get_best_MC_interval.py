@@ -5,7 +5,7 @@ from indicators import compute_mc_indicator
 import yfinance as yf
 
 # Maximum number of latest signals to process (to reduce noise from older signals)
-MAX_SIGNALS_THRESHOLD = 10
+MAX_SIGNALS_THRESHOLD = 7
 
 def calculate_returns(data, mc_signals, periods=None, max_signals=MAX_SIGNALS_THRESHOLD):
     """
