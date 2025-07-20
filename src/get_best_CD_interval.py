@@ -306,7 +306,7 @@ def evaluate_interval(ticker, interval, data=None):
                 result[f'success_rate_{period}'] = 0
                 result[f'avg_return_{period}'] = 0
                 result[f'returns_{period}'] = []  # Store empty list for individual returns
-                result[f'volume_{period}'] = [] # Store empty list for individual volumes
+                result[f'volumes_{period}'] = [] # Store empty list for individual volumes
             
             # Add MC signal analysis fields
             result['mc_signals_before_cd'] = 0
@@ -350,7 +350,7 @@ def evaluate_interval(ticker, interval, data=None):
                 result[f'success_rate_{period}'] = 0
                 result[f'avg_return_{period}'] = 0
                 result[f'returns_{period}'] = []  # Store empty list for individual returns
-                result[f'volume_{period}'] = [] # Store empty list for individual volumes
+                result[f'volumes_{period}'] = [] # Store empty list for individual volumes
             
             # Add MC signal analysis fields
             result['mc_signals_before_cd'] = 0
