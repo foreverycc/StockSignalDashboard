@@ -18,7 +18,7 @@ def calculate_mc_score(data, interval, signal_date):
     
     # 获取信号当天的数据
     row = data.loc[signal_date]
-    candle_size = round(abs(row['Close'] - row['Open']) / row['Close'] * 100, 3)
+    candle_size = round(float(abs(row['Close'] - row['Open']) / row['Close'] * 100), 2)  # Convert to Python float
     
     # 计算过去20天的平均成交量
     avg_volume = data['Volume'].rolling(20).mean().loc[:signal_date].iloc[-1]

@@ -48,8 +48,8 @@ def calculate_returns(data, mc_signals, periods=None, max_signals=MAX_SIGNALS_TH
                 exit_price = data.iloc[idx + period]['Close']
                 exit_volume = data.iloc[idx + period]['Volume']
                 # For MC signals, we're looking at returns from selling (negative returns indicate profit)
-                returns[f'return_{period}'] = round((exit_price - entry_price) / entry_price * 100, 3)
-                volumes[f'volume_{period}'] = round(exit_volume, 0)  # Round volumes to whole numbers
+                returns[f'return_{period}'] = round(float((exit_price - entry_price) / entry_price * 100), 2)  # Convert to Python float
+                volumes[f'volume_{period}'] = round(int(exit_volume), 0)  # Convert to Python int
             else:
                 returns[f'return_{period}'] = np.nan
                 volumes[f'volume_{period}'] = np.nan
@@ -125,12 +125,12 @@ def evaluate_interval(ticker, interval, data=None):
         mc_signals_bool = mc_signals.fillna(False).infer_objects(copy=False)
         latest_signal_date = data_frame.index[mc_signals_bool].max() if signal_count > 0 else None
         latest_signal_str = latest_signal_date.strftime('%Y-%m-%d %H:%M:%S') if latest_signal_date else None
-        latest_signal_price = round(data_frame.loc[latest_signal_date, 'Close'], 2) if latest_signal_date is not None else None
+        latest_signal_price = round(float(data_frame.loc[latest_signal_date, 'Close']), 2) if latest_signal_date is not None else None  # Convert to Python float
         
         # Get current time and price
         current_time = data_frame.index[-1]
         current_time_str = current_time.strftime('%Y-%m-%d %H:%M:%S')
-        current_price = round(data_frame.iloc[-1]['Close'], 2)
+        current_price = round(float(data_frame.iloc[-1]['Close']), 2)  # Convert to Python float
         
         if signal_count == 0:
             result = {
@@ -214,23 +214,23 @@ def evaluate_interval(ticker, interval, data=None):
             volume_history = {}
             entry_price = data_frame.loc[latest_signal_date, 'Close']
             entry_volume = data_frame.loc[latest_signal_date, 'Volume']
-            price_history[0] = round(entry_price, 3)  # Entry price at period 0
-            volume_history[0] = round(entry_volume, 0)  # Entry volume at period 0
+            price_history[0] = round(float(entry_price), 2)  # Entry price at period 0, convert to Python float
+            volume_history[0] = round(int(entry_volume), 0)  # Entry volume at period 0, convert to Python int
             
             for period in periods:
                 if signal_idx + period < len(data_frame):
                     actual_price = data_frame.iloc[signal_idx + period]['Close']
                     actual_volume = data_frame.iloc[signal_idx + period]['Volume']
-                    price_history[period] = round(actual_price, 3)
-                    volume_history[period] = round(actual_volume, 0)
+                    price_history[period] = round(float(actual_price), 2)  # Convert to Python float
+                    volume_history[period] = round(int(actual_volume), 0)  # Convert to Python int
                 else:
                     price_history[period] = None
                     volume_history[period] = None
                     
             # Add current price and volume if we're beyond the latest period
             if current_period > max(periods):
-                price_history[current_period] = round(current_price, 3)
-                volume_history[current_period] = round(data_frame.iloc[-1]['Volume'], 0)
+                price_history[current_period] = round(float(current_price), 2)  # Convert to Python float
+                volume_history[current_period] = round(int(data_frame.iloc[-1]['Volume']), 0)  # Convert to Python int
         else:
             current_period = 0
             price_history = {}
@@ -249,17 +249,17 @@ def evaluate_interval(ticker, interval, data=None):
             if len(period_returns) > 0:
                 # For MC signals, negative returns indicate profit (price decline after sell signal)
                 # So we calculate success rate as percentage of negative returns
-                success_rate = round((period_returns < 0).mean() * 100, 3)
-                avg_return = round(period_returns.mean(), 3)
-                avg_volume = round(period_volumes.mean(), 0) if len(period_volumes) > 0 else 0
+                success_rate = round(float((period_returns < 0).mean() * 100), 2)  # Convert to Python float
+                avg_return = round(float(period_returns.mean()), 2)  # Convert to Python float
+                avg_volume = round(int(period_volumes.mean()), 0) if len(period_volumes) > 0 else 0  # Convert to Python int
                 
                 # Store aggregated metrics
                 result[f'test_count_{period}'] = len(period_returns)
                 result[f'success_rate_{period}'] = success_rate
                 result[f'avg_return_{period}'] = avg_return
                 result[f'avg_volume_{period}'] = avg_volume
-                result[f'returns_{period}'] = [round(x, 3) for x in period_returns.tolist()]
-                result[f'volumes_{period}'] = [round(x, 0) for x in period_volumes.tolist()]
+                result[f'returns_{period}'] = [round(float(x), 2) for x in period_returns.tolist()]  # Convert to Python float
+                result[f'volumes_{period}'] = [round(int(x), 0) for x in period_volumes.tolist()]  # Convert to Python int
                 
                 all_returns.extend(period_returns.tolist())
             else:
@@ -272,8 +272,8 @@ def evaluate_interval(ticker, interval, data=None):
         
         # Calculate overall min/max returns
         if all_returns:
-            result['max_return'] = round(max(all_returns), 3)
-            result['min_return'] = round(min(all_returns), 3)
+            result['max_return'] = round(float(max(all_returns)), 2)  # Convert to Python float
+            result['min_return'] = round(float(min(all_returns)), 2)  # Convert to Python float
         else:
             result['max_return'] = 0
             result['min_return'] = 0
