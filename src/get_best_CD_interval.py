@@ -86,7 +86,7 @@ def evaluate_mc_at_top_price(data, mc_date, mc_price, cd_date):
         # 2. Check if price declined after MC signal until CD signal (more stringent threshold)
         if len(lookahead_data) > 1:
             lookahead_min = lookahead_data['Low'].min()
-            price_decline_pct = (mc_price - lookahead_min) / mc_price * 100
+            price_decline_pct = round((mc_price - lookahead_min) / mc_price * 100, 3)
             metrics['price_decline_after_mc'] = price_decline_pct
             metrics['is_followed_by_decline'] = price_decline_pct >= 5.0  # At least 5% decline (increased from 2%)
         else:
@@ -181,8 +181,8 @@ def calculate_returns(data, cd_signals, periods=None, max_signals=MAX_SIGNALS_TH
             if idx + period < len(data):
                 exit_price = data.iloc[idx + period]['Close']
                 exit_volume = data.iloc[idx + period]['Volume']
-                returns[f'return_{period}'] = (exit_price - entry_price) / entry_price * 100
-                volumes[f'volume_{period}'] = exit_volume
+                returns[f'return_{period}'] = round((exit_price - entry_price) / entry_price * 100, 3)
+                volumes[f'volume_{period}'] = round(exit_volume, 0)  # Round volumes to whole numbers
             else:
                 returns[f'return_{period}'] = np.nan
                 volumes[f'volume_{period}'] = np.nan
@@ -396,23 +396,23 @@ def evaluate_interval(ticker, interval, data=None):
             volume_history = {}
             entry_price = data_frame.loc[latest_signal_date, 'Close']
             entry_volume = data_frame.loc[latest_signal_date, 'Volume']
-            price_history[0] = entry_price  # Entry price at period 0
-            volume_history[0] = entry_volume  # Entry volume at period 0
+            price_history[0] = round(entry_price, 3)  # Entry price at period 0
+            volume_history[0] = round(entry_volume, 0)  # Entry volume at period 0
             
             for period in periods:
                 if signal_idx + period < len(data_frame):
                     actual_price = data_frame.iloc[signal_idx + period]['Close']
                     actual_volume = data_frame.iloc[signal_idx + period]['Volume']
-                    price_history[period] = actual_price
-                    volume_history[period] = actual_volume
+                    price_history[period] = round(actual_price, 3)
+                    volume_history[period] = round(actual_volume, 0)
                 else:
                     price_history[period] = None
                     volume_history[period] = None
                     
             # Add current price and volume if we're beyond the latest period
             if current_period > max(periods):
-                price_history[current_period] = current_price
-                volume_history[current_period] = data_frame.iloc[-1]['Volume']
+                price_history[current_period] = round(current_price, 3)
+                volume_history[current_period] = round(data_frame.iloc[-1]['Volume'], 0)
         else:
             current_period = 0
             price_history = {}
@@ -428,12 +428,12 @@ def evaluate_interval(ticker, interval, data=None):
             volume_col = f'volume_{period}'
             if return_col in returns_df:
                 # Get individual returns and volumes (excluding NaN values)
-                individual_returns = returns_df[return_col].dropna().tolist()
-                individual_volumes = returns_df[volume_col].dropna().tolist() if volume_col in returns_df else []
+                individual_returns = [round(x, 3) for x in returns_df[return_col].dropna().tolist()]
+                individual_volumes = [round(x, 0) for x in returns_df[volume_col].dropna().tolist()] if volume_col in returns_df else []
                 test_count = len(individual_returns)
-                success_rate = (pd.Series(individual_returns) > 0).mean() * 100 if test_count > 0 else 0
-                avg_return = pd.Series(individual_returns).mean() if test_count > 0 else 0
-                avg_volume = pd.Series(individual_volumes).mean() if len(individual_volumes) > 0 else 0
+                success_rate = round((pd.Series(returns_df[return_col].dropna()) > 0).mean() * 100, 3) if test_count > 0 else 0
+                avg_return = round(pd.Series(returns_df[return_col].dropna()).mean(), 3) if test_count > 0 else 0
+                avg_volume = round(pd.Series(returns_df[volume_col].dropna()).mean(), 0) if volume_col in returns_df and len(returns_df[volume_col].dropna()) > 0 else 0
             else:
                 individual_returns = []
                 individual_volumes = []
@@ -454,12 +454,12 @@ def evaluate_interval(ticker, interval, data=None):
             # Calculate MC signal statistics
             mc_at_top_count = returns_df['mc_at_top_price'].sum() if 'mc_at_top_price' in returns_df else 0
             mc_total_count = len(returns_df[returns_df['prev_mc_date'].notna()]) if 'prev_mc_date' in returns_df else 0
-            mc_at_top_rate = (mc_at_top_count / mc_total_count * 100) if mc_total_count > 0 else 0
+            mc_at_top_rate = round((mc_at_top_count / mc_total_count * 100), 3) if mc_total_count > 0 else 0
             
             # Average MC evaluation metrics
-            avg_mc_percentile = returns_df['mc_price_percentile'].mean() if 'mc_price_percentile' in returns_df else 0
-            avg_mc_decline = returns_df['mc_decline_after'].mean() if 'mc_decline_after' in returns_df else 0
-            avg_mc_criteria = returns_df['mc_criteria_met'].mean() if 'mc_criteria_met' in returns_df else 0
+            avg_mc_percentile = round(returns_df['mc_price_percentile'].mean(), 3) if 'mc_price_percentile' in returns_df else 0
+            avg_mc_decline = round(returns_df['mc_decline_after'].mean(), 3) if 'mc_decline_after' in returns_df else 0
+            avg_mc_criteria = round(returns_df['mc_criteria_met'].mean(), 3) if 'mc_criteria_met' in returns_df else 0
             
             # Latest MC signal data (from the most recent CD signal)
             latest_cd_signal = returns_df[returns_df['prev_mc_date'].notna()].sort_values('date', ascending=False)
@@ -516,8 +516,8 @@ def evaluate_interval(ticker, interval, data=None):
             if col.startswith('return_'):
                 all_returns.extend(returns_df[col].dropna().tolist())
                 
-        result['max_return'] = max(all_returns) if all_returns else 0
-        result['min_return'] = min(all_returns) if all_returns else 0
+        result['max_return'] = round(max(all_returns) if all_returns else 0, 3)
+        result['min_return'] = round(min(all_returns) if all_returns else 0, 3)
         
         return result
         
