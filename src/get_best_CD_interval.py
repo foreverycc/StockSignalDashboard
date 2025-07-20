@@ -5,10 +5,10 @@ from indicators import compute_cd_indicator, compute_mc_indicator
 import yfinance as yf
 
 # EMA warmup period - should match the value in indicators.py
-EMA_WARMUP_PERIOD = 50
+EMA_WARMUP_PERIOD = 0
 
 # Maximum number of latest signals to process (to reduce noise from older signals)
-MAX_SIGNALS_THRESHOLD = 10
+MAX_SIGNALS_THRESHOLD = 7
 
 def find_latest_mc_signal_before_cd(data, cd_date, mc_signals):
     """
