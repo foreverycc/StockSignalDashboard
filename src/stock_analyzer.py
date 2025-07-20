@@ -239,6 +239,11 @@ def analyze_stocks(file_path, end_date=None):
     if cd_eval_results:
         df_cd_eval = pd.DataFrame(cd_eval_results)
         
+        # Round numeric columns to 3 decimal places to reduce file size and improve loading performance
+        for col in df_cd_eval.columns:
+            if df_cd_eval[col].dtype in ['float64', 'float32']:
+                df_cd_eval[col] = df_cd_eval[col].round(3)
+        
         # Save detailed results with ticker information
         df_cd_eval.to_csv(os.path.join(output_dir, f'cd_eval_custom_detailed_{output_base}.csv'), index=False)
         
@@ -271,6 +276,11 @@ def analyze_stocks(file_path, end_date=None):
         
         if returns_data:
             df_returns = pd.DataFrame(returns_data)
+            # Round numeric columns to 3 decimal places for returns and 0 decimal places for volumes
+            if 'return' in df_returns.columns:
+                df_returns['return'] = df_returns['return'].round(3)
+            if 'volume' in df_returns.columns:
+                df_returns['volume'] = df_returns['volume'].round(0)
             df_returns.to_csv(os.path.join(output_dir, f'cd_eval_returns_distribution_{output_base}.csv'), index=False)
         else:
             # Create empty returns distribution file
@@ -330,6 +340,12 @@ def analyze_stocks(file_path, end_date=None):
                 best_intervals = best_intervals[best_intervals['avg_return'] >= 5]
                 best_intervals = best_intervals[best_intervals['success_rate'] >= 50]
                 best_intervals = best_intervals[best_intervals['current_period'] <= best_intervals['best_period']]
+                
+                # Round numeric columns to 3 decimal places to reduce file size
+                for col in best_intervals.columns:
+                    if best_intervals[col].dtype in ['float64', 'float32']:
+                        best_intervals[col] = best_intervals[col].round(3)
+                        
                 best_intervals.to_csv(os.path.join(output_dir, f'cd_eval_best_intervals_{range_name}_{output_base}.csv'), index=False)
 
             # Good signals - all signals that meet criteria, sorted by date
@@ -360,6 +376,11 @@ def analyze_stocks(file_path, end_date=None):
             available_good_columns = [col for col in good_signals_columns if col in good_signals.columns]
             good_signals = good_signals[available_good_columns]
             good_signals = good_signals[good_signals['success_rate'] >= 50]
+            
+            # Round numeric columns to 3 decimal places to reduce file size
+            for col in good_signals.columns:
+                if good_signals[col].dtype in ['float64', 'float32']:
+                    good_signals[col] = good_signals[col].round(3)
             
             good_signals.to_csv(os.path.join(output_dir, f'cd_eval_good_signals_{output_base}.csv'), index=False)
         else:
@@ -422,6 +443,11 @@ def analyze_stocks(file_path, end_date=None):
     if mc_eval_results:
         df_mc_eval = pd.DataFrame(mc_eval_results)
         
+        # Round numeric columns to 3 decimal places to reduce file size and improve loading performance
+        for col in df_mc_eval.columns:
+            if df_mc_eval[col].dtype in ['float64', 'float32']:
+                df_mc_eval[col] = df_mc_eval[col].round(3)
+        
         # Save detailed results with ticker information
         df_mc_eval.to_csv(os.path.join(output_dir, f'mc_eval_custom_detailed_{output_base}.csv'), index=False)
         
@@ -454,6 +480,11 @@ def analyze_stocks(file_path, end_date=None):
         
         if returns_data:
             df_returns = pd.DataFrame(returns_data)
+            # Round numeric columns to 3 decimal places for returns and 0 decimal places for volumes
+            if 'return' in df_returns.columns:
+                df_returns['return'] = df_returns['return'].round(3)
+            if 'volume' in df_returns.columns:
+                df_returns['volume'] = df_returns['volume'].round(0)
             df_returns.to_csv(os.path.join(output_dir, f'mc_eval_returns_distribution_{output_base}.csv'), index=False)
         else:
             # Create empty returns distribution file
@@ -514,6 +545,12 @@ def analyze_stocks(file_path, end_date=None):
                 best_intervals = best_intervals[best_intervals['avg_return'] <= -5]
                 best_intervals = best_intervals[best_intervals['success_rate'] >= 50]
                 best_intervals = best_intervals[best_intervals['current_period'] <= best_intervals['best_period']]
+                
+                # Round numeric columns to 3 decimal places to reduce file size
+                for col in best_intervals.columns:
+                    if best_intervals[col].dtype in ['float64', 'float32']:
+                        best_intervals[col] = best_intervals[col].round(3)
+                        
                 best_intervals.to_csv(os.path.join(output_dir, f'mc_eval_best_intervals_{range_name}_{output_base}.csv'), index=False)
 
             # Good signals - all signals that meet criteria, sorted by date
@@ -544,6 +581,11 @@ def analyze_stocks(file_path, end_date=None):
             available_good_columns = [col for col in good_signals_columns if col in good_signals.columns]
             good_signals = good_signals[available_good_columns]
             good_signals = good_signals[good_signals['success_rate'] >= 50]
+            
+            # Round numeric columns to 3 decimal places to reduce file size
+            for col in good_signals.columns:
+                if good_signals[col].dtype in ['float64', 'float32']:
+                    good_signals[col] = good_signals[col].round(3)
             
             good_signals.to_csv(os.path.join(output_dir, f'mc_eval_good_signals_{output_base}.csv'), index=False)
         else:

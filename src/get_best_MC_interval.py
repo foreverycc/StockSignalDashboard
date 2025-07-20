@@ -48,8 +48,8 @@ def calculate_returns(data, mc_signals, periods=None, max_signals=MAX_SIGNALS_TH
                 exit_price = data.iloc[idx + period]['Close']
                 exit_volume = data.iloc[idx + period]['Volume']
                 # For MC signals, we're looking at returns from selling (negative returns indicate profit)
-                returns[f'return_{period}'] = (exit_price - entry_price) / entry_price * 100
-                volumes[f'volume_{period}'] = exit_volume
+                returns[f'return_{period}'] = round((exit_price - entry_price) / entry_price * 100, 3)
+                volumes[f'volume_{period}'] = round(exit_volume, 0)  # Round volumes to whole numbers
             else:
                 returns[f'return_{period}'] = np.nan
                 volumes[f'volume_{period}'] = np.nan
@@ -214,23 +214,23 @@ def evaluate_interval(ticker, interval, data=None):
             volume_history = {}
             entry_price = data_frame.loc[latest_signal_date, 'Close']
             entry_volume = data_frame.loc[latest_signal_date, 'Volume']
-            price_history[0] = entry_price  # Entry price at period 0
-            volume_history[0] = entry_volume  # Entry volume at period 0
+            price_history[0] = round(entry_price, 3)  # Entry price at period 0
+            volume_history[0] = round(entry_volume, 0)  # Entry volume at period 0
             
             for period in periods:
                 if signal_idx + period < len(data_frame):
                     actual_price = data_frame.iloc[signal_idx + period]['Close']
                     actual_volume = data_frame.iloc[signal_idx + period]['Volume']
-                    price_history[period] = actual_price
-                    volume_history[period] = actual_volume
+                    price_history[period] = round(actual_price, 3)
+                    volume_history[period] = round(actual_volume, 0)
                 else:
                     price_history[period] = None
                     volume_history[period] = None
                     
             # Add current price and volume if we're beyond the latest period
             if current_period > max(periods):
-                price_history[current_period] = current_price
-                volume_history[current_period] = data_frame.iloc[-1]['Volume']
+                price_history[current_period] = round(current_price, 3)
+                volume_history[current_period] = round(data_frame.iloc[-1]['Volume'], 0)
         else:
             current_period = 0
             price_history = {}
@@ -249,17 +249,17 @@ def evaluate_interval(ticker, interval, data=None):
             if len(period_returns) > 0:
                 # For MC signals, negative returns indicate profit (price decline after sell signal)
                 # So we calculate success rate as percentage of negative returns
-                success_rate = (period_returns < 0).mean() * 100
-                avg_return = period_returns.mean()
-                avg_volume = period_volumes.mean() if len(period_volumes) > 0 else 0
+                success_rate = round((period_returns < 0).mean() * 100, 3)
+                avg_return = round(period_returns.mean(), 3)
+                avg_volume = round(period_volumes.mean(), 0) if len(period_volumes) > 0 else 0
                 
                 # Store aggregated metrics
                 result[f'test_count_{period}'] = len(period_returns)
                 result[f'success_rate_{period}'] = success_rate
                 result[f'avg_return_{period}'] = avg_return
                 result[f'avg_volume_{period}'] = avg_volume
-                result[f'returns_{period}'] = period_returns.tolist()
-                result[f'volumes_{period}'] = period_volumes.tolist()
+                result[f'returns_{period}'] = [round(x, 3) for x in period_returns.tolist()]
+                result[f'volumes_{period}'] = [round(x, 0) for x in period_volumes.tolist()]
                 
                 all_returns.extend(period_returns.tolist())
             else:
@@ -272,8 +272,8 @@ def evaluate_interval(ticker, interval, data=None):
         
         # Calculate overall min/max returns
         if all_returns:
-            result['max_return'] = max(all_returns)
-            result['min_return'] = min(all_returns)
+            result['max_return'] = round(max(all_returns), 3)
+            result['min_return'] = round(min(all_returns), 3)
         else:
             result['max_return'] = 0
             result['min_return'] = 0
