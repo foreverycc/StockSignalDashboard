@@ -22,6 +22,16 @@ best_intervals_columns = ['ticker', 'interval', 'hold_time',
                           'latest_mc_date', 'latest_mc_price', 'latest_mc_at_top_price',
                           'latest_mc_price_percentile', 'latest_mc_decline_after', 'latest_mc_criteria_met']
 
+# Define MC column configurations with CD analysis columns (needed for symmetry with CD analysis)
+mc_best_intervals_columns = ['ticker', 'interval', 'hold_time',  
+                             'avg_return', 'latest_signal', 'latest_signal_price', 
+                             'current_time', 'current_price', 'current_period',
+                             'test_count', 'success_rate', 'best_period', 'signal_count',
+                             'cd_signals_before_mc', 'cd_at_bottom_price_count', 'cd_at_bottom_price_rate',
+                             'avg_cd_price_percentile', 'avg_cd_increase_after', 'avg_cd_criteria_met',
+                             'latest_cd_date', 'latest_cd_price', 'latest_cd_at_bottom_price',
+                             'latest_cd_price_percentile', 'latest_cd_increase_after', 'latest_cd_criteria_met']
+
 # Define all periods for dynamic handling
 periods = [0] + list(range(1, 101))  # Full range from 0 to 100
 
@@ -46,6 +56,21 @@ good_signals_columns = ['ticker', 'interval', 'hold_time',
 for period in periods:
     good_signals_columns.extend([f'test_count_{period}', f'success_rate_{period}', f'avg_return_{period}'])
 good_signals_columns.extend(['max_return', 'min_return'])
+
+# Build MC good_signals_columns dynamically with CD analysis columns (needed for symmetry with CD analysis)
+mc_good_signals_columns = ['ticker', 'interval', 'hold_time', 
+                           'exp_return', 'latest_signal', 'latest_signal_price',
+                           'current_time', 'current_price', 'current_period',
+                           'test_count', 'success_rate', 'best_period', 'signal_count',
+                           'cd_signals_before_mc', 'cd_at_bottom_price_count', 'cd_at_bottom_price_rate',
+                           'avg_cd_price_percentile', 'avg_cd_increase_after', 'avg_cd_criteria_met',
+                           'latest_cd_date', 'latest_cd_price', 'latest_cd_at_bottom_price',
+                           'latest_cd_price_percentile', 'latest_cd_increase_after', 'latest_cd_criteria_met']
+
+# Add all period-specific columns to MC good_signals_columns
+for period in periods:
+    mc_good_signals_columns.extend([f'test_count_{period}', f'success_rate_{period}', f'avg_return_{period}'])
+mc_good_signals_columns.extend(['max_return', 'min_return'])
 
 def parse_interval_to_minutes(interval_str):
     """
@@ -530,8 +555,8 @@ def analyze_stocks(file_path, end_date=None):
                     avg_return=best_intervals['min_return']
                 )
                 
-                # Keep all columns that are in best_intervals_columns
-                available_columns = [col for col in best_intervals_columns if col in best_intervals.columns]
+                # Keep all columns that are in mc_best_intervals_columns
+                available_columns = [col for col in mc_best_intervals_columns if col in best_intervals.columns]
                 best_intervals = best_intervals[available_columns].sort_values('latest_signal', ascending=False)
                 
                 # Calculate hold_time as interval * best_period
@@ -540,7 +565,7 @@ def analyze_stocks(file_path, end_date=None):
                 )
                 
                 # Reorder columns to put hold_time after interval
-                final_columns = [col for col in best_intervals_columns if col in best_intervals.columns]
+                final_columns = [col for col in mc_best_intervals_columns if col in best_intervals.columns]
                 best_intervals = best_intervals[final_columns]
                 best_intervals = best_intervals[best_intervals['avg_return'] <= -5]
                 best_intervals = best_intervals[best_intervals['success_rate'] >= 50]
@@ -578,7 +603,7 @@ def analyze_stocks(file_path, end_date=None):
             )
             
             # Reorder columns to put hold_time after interval and exp_return after signal_count
-            available_good_columns = [col for col in good_signals_columns if col in good_signals.columns]
+            available_good_columns = [col for col in mc_good_signals_columns if col in good_signals.columns]
             good_signals = good_signals[available_good_columns]
             good_signals = good_signals[good_signals['success_rate'] >= 50]
             
@@ -592,11 +617,11 @@ def analyze_stocks(file_path, end_date=None):
             print("Not enough data to determine best MC intervals (need at least 2 tests)")
             # Create empty files with proper headers for each range
             for range_name in period_ranges.keys():
-                empty_best_intervals = pd.DataFrame(columns=best_intervals_columns)
+                empty_best_intervals = pd.DataFrame(columns=mc_best_intervals_columns)
                 empty_best_intervals.to_csv(os.path.join(output_dir, f'mc_eval_best_intervals_{range_name}_{output_base}.csv'), index=False)
             
             # For good_signals, we need to include all the original columns plus hold_time after interval and exp_return after signal_count
-            empty_good_signals = pd.DataFrame(columns=good_signals_columns)
+            empty_good_signals = pd.DataFrame(columns=mc_good_signals_columns)
             empty_good_signals.to_csv(os.path.join(output_dir, f'mc_eval_good_signals_{output_base}.csv'), index=False)
             
         # Create a summary by interval (always create this if we have any MC results)
@@ -632,10 +657,10 @@ def analyze_stocks(file_path, end_date=None):
         
         # Create empty files with proper headers for each range
         for range_name in period_ranges.keys():
-            empty_best_intervals = pd.DataFrame(columns=best_intervals_columns)
+            empty_best_intervals = pd.DataFrame(columns=mc_best_intervals_columns)
             empty_best_intervals.to_csv(os.path.join(output_dir, f'mc_eval_best_intervals_{range_name}_{output_base}.csv'), index=False)
         
-        empty_good_signals = pd.DataFrame(columns=good_signals_columns)
+        empty_good_signals = pd.DataFrame(columns=mc_good_signals_columns)
         empty_good_signals.to_csv(os.path.join(output_dir, f'mc_eval_good_signals_{output_base}.csv'), index=False)
         
     print("All analyses completed successfully!")

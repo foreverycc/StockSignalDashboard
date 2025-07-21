@@ -1619,7 +1619,7 @@ if page == "CD Analysis (抄底)":
                                                 showlegend=False,
                                                 marker=dict(color='lightgray'),
                                                 line=dict(color='lightgray')
-                                            ), row=1, col=1)
+                                            ))
                                             
                                             # Store median for connecting line
                                             median_price_values.append(100 + np.median(period_returns))
@@ -2511,11 +2511,38 @@ elif page == "MC Analysis (卖出)":
                         'avg_return': 100,         # 10 chars: "avg_return"
                     }
                     
+                    # Add CD signal analysis column widths for MC analysis
+                    cd_column_widths = {
+                        'cd_signals_before_mc': 150,        # 18 chars: "cd_signals_before_mc"
+                        'cd_at_bottom_price_count': 160,    # 21 chars: "cd_at_bottom_price_count"
+                        'cd_at_bottom_price_rate': 150,     # 20 chars: "cd_at_bottom_price_rate"
+                        'avg_cd_price_percentile': 170,     # 21 chars: "avg_cd_price_percentile"
+                        'avg_cd_increase_after': 160,       # 18 chars: "avg_cd_increase_after"
+                        'avg_cd_criteria_met': 150,         # 16 chars: "avg_cd_criteria_met"
+                        'latest_cd_date': 160,              # 13 chars: "latest_cd_date"
+                        'latest_cd_price': 140,             # 14 chars: "latest_cd_price"
+                        'latest_cd_at_bottom_price': 180,   # 22 chars: "latest_cd_at_bottom_price"
+                        'latest_cd_price_percentile': 190,  # 24 chars: "latest_cd_price_percentile"
+                        'latest_cd_increase_after': 180,    # 21 chars: "latest_cd_increase_after"
+                        'latest_cd_criteria_met': 170,      # 18 chars: "latest_cd_criteria_met"
+                    }
+                    
                     # Configure columns with specific widths
                     for col_name, width in column_widths.items():
                         if col_name in df.columns:
                             if col_name in ['exp_return', 'latest_signal_price', 'current_price', 'success_rate', 'max_return', 'min_return', 'avg_return']:
                                 gb.configure_column(col_name, type=['numericColumn', 'numberColumnFilter'], precision=2, width=width)
+                            else:
+                                gb.configure_column(col_name, width=width)
+                    
+                    # Configure CD signal analysis columns for MC analysis
+                    for col_name, width in cd_column_widths.items():
+                        if col_name in df.columns:
+                            if col_name in ['cd_at_bottom_price_rate', 'avg_cd_price_percentile', 'avg_cd_increase_after', 'avg_cd_criteria_met', 
+                                          'latest_cd_price', 'latest_cd_price_percentile', 'latest_cd_increase_after']:
+                                gb.configure_column(col_name, type=['numericColumn', 'numberColumnFilter'], precision=2, width=width)
+                            elif col_name in ['latest_cd_date']:
+                                gb.configure_column(col_name, minWidth=width)
                             else:
                                 gb.configure_column(col_name, width=width)
                     
