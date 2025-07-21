@@ -1,11 +1,141 @@
 import pandas as pd
 import numpy as np
 from data_loader import download_stock_data
-from indicators import compute_mc_indicator
+from indicators import compute_mc_indicator, compute_cd_indicator
 import yfinance as yf
+
+# EMA warmup period - should match the value in indicators.py
+EMA_WARMUP_PERIOD = 0
 
 # Maximum number of latest signals to process (to reduce noise from older signals)
 MAX_SIGNALS_THRESHOLD = 7
+
+def find_latest_cd_signal_before_mc(data, mc_date, cd_signals):
+    """
+    Find the latest CD signal that occurred before a given MC signal date.
+    
+    Args:
+        data: DataFrame with price data
+        mc_date: Date of the MC signal
+        cd_signals: Series with CD signals (boolean)
+    
+    Returns:
+        Tuple of (cd_signal_date, cd_signal_price) or (None, None) if no CD signal found
+    """
+    # Get all CD signal dates before the MC signal date
+    # Handle NaN values by replacing them with False for boolean indexing
+    cd_signals_bool = cd_signals.fillna(False).infer_objects(copy=False)
+    cd_signal_dates = data.index[cd_signals_bool]
+    previous_cd_signals = cd_signal_dates[cd_signal_dates < mc_date]
+    
+    if len(previous_cd_signals) == 0:
+        return None, None
+    
+    # Get the latest CD signal before the MC signal
+    latest_cd_date = previous_cd_signals.max()
+    latest_cd_price = data.loc[latest_cd_date, 'Close']
+    
+    return latest_cd_date, latest_cd_price
+
+def evaluate_cd_at_bottom_price(data, cd_date, cd_price, mc_date):
+    """
+    Evaluate if a CD signal was at a "bottom price" by checking if it was near a local minimum.
+    
+    Args:
+        data: DataFrame with price data
+        cd_date: Date of the CD signal
+        cd_price: Price at the CD signal
+        mc_date: Date of the latest MC signal (used for range calculations)
+    
+    Returns:
+        Dictionary with evaluation metrics
+    """
+    try:
+        cd_idx = data.index.get_loc(cd_date)
+        mc_idx = data.index.get_loc(mc_date)
+        
+        # 1. Calculate lookback range: from EMA warmup period to latest MC time point
+        # Exclude unreliable early periods before EMA convergence
+        warmup_start = min(EMA_WARMUP_PERIOD, len(data) - 1)
+        lookback_data = data.iloc[warmup_start:mc_idx+1]  # Start from warmup period, include MC signal date
+        
+        # 2. Calculate lookahead range: from CD signal to latest MC time point
+        lookahead_data = data.iloc[cd_idx:mc_idx+1]  # Include MC signal date
+        
+        # Calculate metrics
+        metrics = {}
+        
+        # 1. Check if CD price is near the lowest price in the full historical range
+        if not lookback_data.empty:
+            lookback_max = lookback_data['High'].max()
+            lookback_min = lookback_data['Low'].min()
+            lookback_range = lookback_max - lookback_min
+            
+            # Calculate percentile position of CD price in full historical range (inverse for bottom)
+            if lookback_range > 0:
+                price_percentile = (cd_price - lookback_min) / lookback_range
+                metrics['lookback_price_percentile'] = price_percentile
+                metrics['is_near_lookback_low'] = price_percentile <= 0.2  # Bottom 20% of full range
+            else:
+                metrics['lookback_price_percentile'] = 0.5
+                metrics['is_near_lookback_low'] = False
+        else:
+            metrics['lookback_price_percentile'] = 0.5
+            metrics['is_near_lookback_low'] = False
+        
+        # 2. Check if price increased after CD signal until MC signal
+        if len(lookahead_data) > 1:
+            lookahead_max = lookahead_data['High'].max()
+            price_increase_pct = round(float((lookahead_max - cd_price) / cd_price * 100), 2)
+            metrics['price_increase_after_cd'] = price_increase_pct
+            metrics['is_followed_by_increase'] = price_increase_pct >= 5.0  # At least 5% increase
+        else:
+            metrics['price_increase_after_cd'] = 0
+            metrics['is_followed_by_increase'] = False
+        
+        # 3. Check if CD signal is at local minimum using relative method
+        # Use dynamic window size based on data availability and relative price position
+        total_length = len(data)
+        window_size = max(3, min(10, total_length // 20))  # 5% of data length, but between 3-10 periods
+        
+        window_start = max(0, cd_idx - window_size)
+        window_end = min(len(data), cd_idx + window_size + 1)
+        window_data = data.iloc[window_start:window_end]
+        
+        if not window_data.empty and len(window_data) > 1:
+            # Use relative ranking for local minimum (inverse logic from MC)
+            window_lows = window_data['Low'].values
+            cd_rank = sum(cd_price <= l for l in window_lows) / len(window_lows)
+            
+            # CD signal is local min if it's in bottom 30% of surrounding prices
+            is_local_min = cd_rank >= 0.7
+            metrics['is_local_minimum'] = is_local_min
+        else:
+            metrics['is_local_minimum'] = False
+        
+        # 4. Overall evaluation - CD signal is at "bottom price" if it meets multiple criteria
+        criteria_met = sum([
+            metrics['is_near_lookback_low'],
+            metrics['is_followed_by_increase'],
+            metrics['is_local_minimum']
+        ])
+        
+        metrics['criteria_met'] = criteria_met
+        metrics['is_at_bottom_price'] = criteria_met >= 2  # At least 2 out of 3 criteria
+        
+        return metrics
+        
+    except Exception as e:
+        print(f"Error evaluating CD signal at {cd_date}: {e}")
+        return {
+            'lookback_price_percentile': 0.5,
+            'is_near_lookback_low': False,
+            'price_increase_after_cd': 0,
+            'is_followed_by_increase': False,
+            'is_local_minimum': False,
+            'criteria_met': 0,
+            'is_at_bottom_price': False
+        }
 
 def calculate_returns(data, mc_signals, periods=None, max_signals=MAX_SIGNALS_THRESHOLD):
     """
@@ -31,6 +161,9 @@ def calculate_returns(data, mc_signals, periods=None, max_signals=MAX_SIGNALS_TH
     if len(signal_dates) > max_signals:
         signal_dates = signal_dates[-max_signals:]
     
+    # Also compute CD signals for analysis
+    cd_signals = compute_cd_indicator(data)
+    
     for date in signal_dates:
         idx = data.index.get_loc(date)
         
@@ -53,12 +186,31 @@ def calculate_returns(data, mc_signals, periods=None, max_signals=MAX_SIGNALS_TH
             else:
                 returns[f'return_{period}'] = np.nan
                 volumes[f'volume_{period}'] = np.nan
+        
+        # Find the latest CD signal before this MC signal
+        latest_cd_date, latest_cd_price = find_latest_cd_signal_before_mc(data, date, cd_signals)
+        
+        # Evaluate if the CD signal was at bottom price
+        cd_evaluation = {}
+        if latest_cd_date is not None:
+            cd_evaluation = evaluate_cd_at_bottom_price(data, latest_cd_date, latest_cd_price, date)
+            
+        # Add CD signal analysis to the results
+        cd_info = {
+            'prev_cd_date': latest_cd_date.strftime('%Y-%m-%d %H:%M:%S') if latest_cd_date else None,
+            'prev_cd_price': round(float(latest_cd_price), 2) if latest_cd_price else None,
+            'cd_at_bottom_price': cd_evaluation.get('is_at_bottom_price', False),
+            'cd_price_percentile': round(float(cd_evaluation.get('lookback_price_percentile', 0)), 2),
+            'cd_increase_after': round(float(cd_evaluation.get('price_increase_after_cd', 0)), 2),
+            'cd_criteria_met': cd_evaluation.get('criteria_met', 0)
+        }
                 
         results.append({
             'date': date,
             'entry_volume': entry_volume,
             **returns,
-            **volumes
+            **volumes,
+            **cd_info
         })
     
     return pd.DataFrame(results)
@@ -156,6 +308,22 @@ def evaluate_interval(ticker, interval, data=None):
                 result[f'avg_volume_{period}'] = 0
                 result[f'returns_{period}'] = []  # Store empty list for individual returns
                 result[f'volumes_{period}'] = []  # Store empty list for individual volumes
+            
+            # Add CD signal analysis fields
+            result['cd_signals_before_mc'] = 0
+            result['cd_at_bottom_price_count'] = 0
+            result['cd_at_bottom_price_rate'] = 0
+            result['avg_cd_price_percentile'] = 0
+            result['avg_cd_increase_after'] = 0
+            result['avg_cd_criteria_met'] = 0
+            
+            # Add latest CD signal data (all None/False when no data)
+            result['latest_cd_date'] = None
+            result['latest_cd_price'] = None
+            result['latest_cd_at_bottom_price'] = False
+            result['latest_cd_price_percentile'] = 0
+            result['latest_cd_increase_after'] = 0
+            result['latest_cd_criteria_met'] = 0
             return result
             
         # Calculate returns for each signal (limit to latest signals to reduce noise)
@@ -185,6 +353,22 @@ def evaluate_interval(ticker, interval, data=None):
                 result[f'avg_volume_{period}'] = 0
                 result[f'returns_{period}'] = []  # Store empty list for individual returns
                 result[f'volumes_{period}'] = []  # Store empty list for individual volumes
+            
+            # Add CD signal analysis fields
+            result['cd_signals_before_mc'] = 0
+            result['cd_at_bottom_price_count'] = 0
+            result['cd_at_bottom_price_rate'] = 0
+            result['avg_cd_price_percentile'] = 0
+            result['avg_cd_increase_after'] = 0
+            result['avg_cd_criteria_met'] = 0
+            
+            # Add latest CD signal data (all None/False when no data)
+            result['latest_cd_date'] = None
+            result['latest_cd_price'] = None
+            result['latest_cd_at_bottom_price'] = False
+            result['latest_cd_price_percentile'] = 0
+            result['latest_cd_increase_after'] = 0
+            result['latest_cd_criteria_met'] = 0
             return result
         
         # Define all periods
@@ -269,6 +453,67 @@ def evaluate_interval(ticker, interval, data=None):
                 result[f'avg_volume_{period}'] = 0
                 result[f'returns_{period}'] = []
                 result[f'volumes_{period}'] = []
+        
+        # Add CD signal analysis summary to the result
+        if not returns_df.empty:
+            # Calculate CD signal statistics
+            cd_at_bottom_count = returns_df['cd_at_bottom_price'].sum() if 'cd_at_bottom_price' in returns_df else 0
+            cd_total_count = len(returns_df[returns_df['prev_cd_date'].notna()]) if 'prev_cd_date' in returns_df else 0
+            cd_at_bottom_rate = round(float((cd_at_bottom_count / cd_total_count * 100)), 2) if cd_total_count > 0 else 0
+            
+            # Average CD evaluation metrics
+            avg_cd_percentile = round(float(returns_df['cd_price_percentile'].mean()), 2) if 'cd_price_percentile' in returns_df else 0  # Convert to Python float
+            avg_cd_increase = round(float(returns_df['cd_increase_after'].mean()), 2) if 'cd_increase_after' in returns_df else 0  # Convert to Python float
+            avg_cd_criteria = round(float(returns_df['cd_criteria_met'].mean()), 2) if 'cd_criteria_met' in returns_df else 0  # Convert to Python float
+            
+            # Latest CD signal data (from the most recent MC signal)
+            latest_mc_signal = returns_df[returns_df['prev_cd_date'].notna()].sort_values('date', ascending=False)
+            if not latest_mc_signal.empty:
+                latest_cd_data = latest_mc_signal.iloc[0]
+                latest_cd_price = latest_cd_data['prev_cd_price'] if 'prev_cd_price' in latest_cd_data else None
+                latest_cd_date = latest_cd_data['prev_cd_date'] if 'prev_cd_date' in latest_cd_data else None
+                latest_cd_at_bottom_price = latest_cd_data['cd_at_bottom_price'] if 'cd_at_bottom_price' in latest_cd_data else False
+                latest_cd_price_percentile = latest_cd_data['cd_price_percentile'] if 'cd_price_percentile' in latest_cd_data else 0
+                latest_cd_increase_after = latest_cd_data['cd_increase_after'] if 'cd_increase_after' in latest_cd_data else 0
+                latest_cd_criteria_met = latest_cd_data['cd_criteria_met'] if 'cd_criteria_met' in latest_cd_data else 0
+            else:
+                latest_cd_price = None
+                latest_cd_date = None
+                latest_cd_at_bottom_price = False
+                latest_cd_price_percentile = 0
+                latest_cd_increase_after = 0
+                latest_cd_criteria_met = 0
+            
+            # Add CD analysis to result
+            result['cd_signals_before_mc'] = cd_total_count
+            result['cd_at_bottom_price_count'] = cd_at_bottom_count
+            result['cd_at_bottom_price_rate'] = round(float(cd_at_bottom_rate), 2)  # Convert to Python float
+            result['avg_cd_price_percentile'] = round(float(avg_cd_percentile), 2)  # Convert to Python float
+            result['avg_cd_increase_after'] = round(float(avg_cd_increase), 2)  # Convert to Python float
+            result['avg_cd_criteria_met'] = round(float(avg_cd_criteria), 2)  # Convert to Python float
+            
+            # Add latest CD signal data
+            result['latest_cd_date'] = latest_cd_date
+            result['latest_cd_price'] = round(float(latest_cd_price), 2) if latest_cd_price else None  # Convert to Python float
+            result['latest_cd_at_bottom_price'] = latest_cd_at_bottom_price
+            result['latest_cd_price_percentile'] = round(float(latest_cd_price_percentile), 2)  # Convert to Python float
+            result['latest_cd_increase_after'] = round(float(latest_cd_increase_after), 2)  # Convert to Python float
+            result['latest_cd_criteria_met'] = latest_cd_criteria_met
+        else:
+            result['cd_signals_before_mc'] = 0
+            result['cd_at_bottom_price_count'] = 0
+            result['cd_at_bottom_price_rate'] = 0
+            result['avg_cd_price_percentile'] = 0
+            result['avg_cd_increase_after'] = 0
+            result['avg_cd_criteria_met'] = 0
+            
+            # Add latest CD signal data (all None/False when no data)
+            result['latest_cd_date'] = None
+            result['latest_cd_price'] = None
+            result['latest_cd_at_bottom_price'] = False
+            result['latest_cd_price_percentile'] = 0
+            result['latest_cd_increase_after'] = 0
+            result['latest_cd_criteria_met'] = 0
         
         # Calculate overall min/max returns
         if all_returns:
