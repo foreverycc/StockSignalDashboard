@@ -841,16 +841,7 @@ if page == "CD Analysis (抄底)":
                             # Handle case where price_history might be stored as string
                             try:
                                 import ast
-                                import re
-                                # More comprehensive cleaning of the string
-                                cleaned_str = str(price_history)
-                                # Remove numpy function calls and other complex objects
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                # Try to parse the cleaned string
-                                price_history = ast.literal_eval(cleaned_str)
+                                price_history = ast.literal_eval(str(price_history))
                             except Exception:
                                 # If parsing fails, silently set to empty dict to avoid spam
                                 price_history = {}
@@ -903,16 +894,7 @@ if page == "CD Analysis (抄底)":
                         if isinstance(volume_history, str):
                             try:
                                 import ast
-                                import re
-                                # More comprehensive cleaning of the string
-                                cleaned_str = str(volume_history)
-                                # Remove numpy function calls and other complex objects
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                # Try to parse the cleaned string
-                                volume_history = ast.literal_eval(cleaned_str)
+                                volume_history = ast.literal_eval(str(volume_history))
                             except Exception:
                                 # If parsing fails, silently set to empty dict to avoid spam
                                 volume_history = {}
@@ -962,16 +944,7 @@ if page == "CD Analysis (抄底)":
                         if isinstance(price_history, str):
                             try:
                                 import ast
-                                import re
-                                # More comprehensive cleaning of the string
-                                cleaned_str = str(price_history)
-                                # Remove numpy function calls and other complex objects
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                # Try to parse the cleaned string
-                                price_history = ast.literal_eval(cleaned_str)
+                                price_history = ast.literal_eval(str(price_history))
                             except:
                                 price_history = {}
                         
@@ -982,91 +955,20 @@ if page == "CD Analysis (抄底)":
                                              selected_ticker['latest_signal_price'] * 100)
                             current_price_relative = 100 + price_change
                         
-                        # Only add current price marker if it's not already in price_history
-                        if (isinstance(price_history, dict) and current_period not in price_history and 
-                            current_period > 0 and current_price_relative is not None):
-                            
-                            # Add connecting line from last price history point to current price
-                            if last_price_period is not None and last_price_value is not None:
-                                fig.add_trace(go.Scatter(
-                                    x=[last_price_period, current_period],
-                                    y=[last_price_value, current_price_relative],
-                                    mode='lines',
-                                    line=dict(color='red', width=1, dash='dot'),
-                                    name='Price Projection',
-                                    showlegend=False
-                                ))
-                            
-                            # Add current price star
-                            fig.add_trace(go.Scatter(
-                                x=[current_period],
-                                y=[current_price_relative],
-                                mode='markers',
-                                marker=dict(color='red', size=10, symbol='star'),
-                                name='Current Price',
-                                showlegend=True
-                            ))
-                        elif not price_history and current_period > 0 and current_price_relative is not None:
-                            # If no price_history at all, still show current price
-                            fig.add_trace(go.Scatter(
-                                x=[current_period],
-                                y=[current_price_relative],
-                                mode='markers',
-                                marker=dict(color='red', size=10, symbol='star'),
-                                name='Current Price',
-                                showlegend=True
-                            ))
-                    
-                    # Add current volume marker (red dot)
-                    if ('current_period' in selected_ticker and 'volume_history' in selected_ticker and 
-                        selected_ticker['volume_history']):
-                        current_period = selected_ticker['current_period']
-                        volume_history = selected_ticker['volume_history']
-                        
-                        # Parse volume_history if it's a string
-                        if isinstance(volume_history, str):
-                            try:
-                                import ast
-                                import re
-                                # More comprehensive cleaning of the string
-                                cleaned_str = str(volume_history)
-                                # Remove numpy function calls and other complex objects
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                # Try to parse the cleaned string
-                                volume_history = ast.literal_eval(cleaned_str)
-                            except:
-                                volume_history = {}
-                        
-                        # Add current volume marker if available
-                        if (isinstance(volume_history, dict) and current_period > 0 and 
-                            current_period in volume_history and volume_history[current_period] is not None):
-                            
-                            current_volume = volume_history[current_period]
-                            fig.add_trace(go.Scatter(
-                                x=[current_period],
-                                y=[current_volume],
-                                mode='markers',
-                                marker=dict(color='red', size=10, symbol='circle'),
-                                name='Current Volume',
-                                showlegend=True
-                            ), row=2, col=1)
                     
                     # Add baseline reference line at y=100 (add after all traces for visibility)
                     fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
                                  annotation_text="Entry Price (Baseline)", annotation_position="top right")
                     
-                    # Add gray dot at [0, 100] and connect to first data point
-                    fig.add_trace(go.Scatter(
-                        x=[0],
-                        y=[100],
-                        mode='markers',
-                        marker=dict(color='gray', size=8),
-                        name='Entry Point',
-                        showlegend=True
-                    ))
+                    # # Add gray dot at [0, 100] and connect to first data point
+                    # fig.add_trace(go.Scatter(
+                    #     x=[0],
+                    #     y=[100],
+                    #     mode='markers',
+                    #     marker=dict(color='gray', size=8),
+                    #     name='Entry Point',
+                    #     showlegend=True
+                    # ))
                     
                     # Add gray line from [0, 100] to first available data point
                     # Find the first period with data (usually period 3)
@@ -1915,16 +1817,7 @@ if page == "CD Analysis (抄底)":
                                     # Handle case where price_history might be stored as string
                                     try:
                                         import ast
-                                        import re
-                                        # More comprehensive cleaning of the string
-                                        cleaned_str = str(price_history)
-                                        # Remove numpy function calls and other complex objects
-                                        cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                        cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                        cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                        cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                        # Try to parse the cleaned string
-                                        price_history = ast.literal_eval(cleaned_str)
+                                        price_history = ast.literal_eval(str(price_history))
                                     except Exception:
                                         # If parsing fails, silently set to empty dict to avoid spam
                                         price_history = {}
@@ -1977,16 +1870,7 @@ if page == "CD Analysis (抄底)":
                                 if isinstance(volume_history, str):
                                     try:
                                         import ast
-                                        import re
-                                        # More comprehensive cleaning of the string
-                                        cleaned_str = str(volume_history)
-                                        # Remove numpy function calls and other complex objects
-                                        cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                        cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                        cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                        cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                        # Try to parse the cleaned string
-                                        volume_history = ast.literal_eval(cleaned_str)
+                                        volume_history = ast.literal_eval(str(volume_history))
                                     except Exception:
                                         # If parsing fails, silently set to empty dict to avoid spam
                                         volume_history = {}
@@ -2030,15 +1914,15 @@ if page == "CD Analysis (抄底)":
                             fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
                                          annotation_text="Entry Price (Baseline)", annotation_position="top right", row=1, col=1)
                             
-                            # Add gray dot at [0, 100] and connect to first data point
-                            fig.add_trace(go.Scatter(
-                                x=[0],
-                                y=[100],
-                                mode='markers',
-                                marker=dict(color='gray', size=8),
-                                name='Entry Point',
-                                showlegend=True
-                            ), row=1, col=1)
+                            # # Add gray dot at [0, 100] and connect to first data point
+                            # fig.add_trace(go.Scatter(
+                            #     x=[0],
+                            #     y=[100],
+                            #     mode='markers',
+                            #     marker=dict(color='gray', size=8),
+                            #     name='Entry Point',
+                            #     showlegend=True
+                            # ), row=1, col=1)
                             
                             # Add gray line from [0, 100] to first available data point
                             # Find the first period with data (usually period 3)
@@ -2377,16 +2261,7 @@ elif page == "MC Analysis (卖出)":
                             # Handle case where price_history might be stored as string
                             try:
                                 import ast
-                                import re
-                                # More comprehensive cleaning of the string
-                                cleaned_str = str(price_history)
-                                # Remove numpy function calls and other complex objects
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                # Try to parse the cleaned string
-                                price_history = ast.literal_eval(cleaned_str)
+                                price_history = ast.literal_eval(str(price_history))
                             except Exception:
                                 # If parsing fails, silently set to empty dict to avoid spam
                                 price_history = {}
@@ -2439,16 +2314,7 @@ elif page == "MC Analysis (卖出)":
                         if isinstance(volume_history, str):
                             try:
                                 import ast
-                                import re
-                                # More comprehensive cleaning of the string
-                                cleaned_str = str(volume_history)
-                                # Remove numpy function calls and other complex objects
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                # Try to parse the cleaned string
-                                volume_history = ast.literal_eval(cleaned_str)
+                                volume_history = ast.literal_eval(str(volume_history))
                             except Exception:
                                 # If parsing fails, silently set to empty dict to avoid spam
                                 volume_history = {}
@@ -2498,16 +2364,7 @@ elif page == "MC Analysis (卖出)":
                         if isinstance(price_history, str):
                             try:
                                 import ast
-                                import re
-                                # More comprehensive cleaning of the string
-                                cleaned_str = str(price_history)
-                                # Remove numpy function calls and other complex objects
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                # Try to parse the cleaned string
-                                price_history = ast.literal_eval(cleaned_str)
+                                price_history = ast.literal_eval(str(price_history))
                             except:
                                 price_history = {}
                         
@@ -2553,58 +2410,10 @@ elif page == "MC Analysis (卖出)":
                                 showlegend=True
                             ))
                     
-                    # Add current volume marker (red dot)
-                    if ('current_period' in mc_selected_ticker and 'volume_history' in mc_selected_ticker and 
-                        mc_selected_ticker['volume_history']):
-                        current_period = mc_selected_ticker['current_period']
-                        volume_history = mc_selected_ticker['volume_history']
-                        
-                        # Parse volume_history if it's a string
-                        if isinstance(volume_history, str):
-                            try:
-                                import ast
-                                import re
-                                # More comprehensive cleaning of the string
-                                cleaned_str = str(volume_history)
-                                # Remove numpy function calls and other complex objects
-                                cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                # Try to parse the cleaned string
-                                volume_history = ast.literal_eval(cleaned_str)
-                            except:
-                                volume_history = {}
-                        
-                        # Add current volume marker if available
-                        if (isinstance(volume_history, dict) and current_period > 0 and 
-                            current_period in volume_history and volume_history[current_period] is not None):
-                            
-                            current_volume = volume_history[current_period]
-                            fig.add_trace(go.Scatter(
-                                x=[current_period],
-                                y=[current_volume],
-                                mode='markers',
-                                marker=dict(color='red', size=10, symbol='circle'),
-                                name='Current Volume',
-                                showlegend=True
-                            ), row=2, col=1)
-                    
                     # Add baseline reference line at y=100 (add after all traces for visibility)
                     fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
-                                 annotation_text="Exit Price (Baseline)", annotation_position="top right")
+                                 annotation_text="Short Price (Baseline)", annotation_position="top right")
                     
-                    # Add gray dot at [0, 100] and connect to first data point
-                    fig.add_trace(go.Scatter(
-                        x=[0],
-                        y=[100],
-                        mode='markers',
-                        marker=dict(color='gray', size=8),
-                        name='Exit Point',
-                        showlegend=True
-                    ))
-                    
-                    # Add gray line from [0, 100] to first available data point
                     # Find the first period with data (usually period 3)
                     first_period = None
                     first_value = None
@@ -3338,16 +3147,7 @@ elif page == "MC Analysis (卖出)":
                                     # Handle case where price_history might be stored as string
                                     try:
                                         import ast
-                                        import re
-                                        # More comprehensive cleaning of the string
-                                        cleaned_str = str(price_history)
-                                        # Remove numpy function calls and other complex objects
-                                        cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                        cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                        cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                        cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                        # Try to parse the cleaned string
-                                        price_history = ast.literal_eval(cleaned_str)
+                                        price_history = ast.literal_eval(str(price_history))
                                     except Exception:
                                         # If parsing fails, silently set to empty dict to avoid spam
                                         price_history = {}
@@ -3400,16 +3200,7 @@ elif page == "MC Analysis (卖出)":
                                 if isinstance(volume_history, str):
                                     try:
                                         import ast
-                                        import re
-                                        # More comprehensive cleaning of the string
-                                        cleaned_str = str(volume_history)
-                                        # Remove numpy function calls and other complex objects
-                                        cleaned_str = re.sub(r'np\.float64\(([^)]+)\)', r'\1', cleaned_str)
-                                        cleaned_str = re.sub(r'np\.int64\(([^)]+)\)', r'\1', cleaned_str)
-                                        cleaned_str = re.sub(r'<ast\.[^>]+>', 'None', cleaned_str)
-                                        cleaned_str = re.sub(r'datetime\.[^(]+\([^)]+\)', 'None', cleaned_str)
-                                        # Try to parse the cleaned string
-                                        volume_history = ast.literal_eval(cleaned_str)
+                                        volume_history = ast.literal_eval(str(volume_history))
                                     except Exception:
                                         # If parsing fails, silently set to empty dict to avoid spam
                                         volume_history = {}
@@ -3451,19 +3242,8 @@ elif page == "MC Analysis (卖出)":
                         
                             # Add baseline reference line at y=100 (add after all traces for visibility)
                             fig.add_hline(y=100, line_dash="dash", line_color="gray", line_width=1, 
-                                         annotation_text="Exit Price (Baseline)", annotation_position="top right", row=1, col=1)
+                                         annotation_text="Short Price (Baseline)", annotation_position="top right", row=1, col=1)
                             
-                            # Add gray dot at [0, 100] and connect to first data point
-                            fig.add_trace(go.Scatter(
-                                x=[0],
-                                y=[100],
-                                mode='markers',
-                                marker=dict(color='gray', size=8),
-                                name='Exit Point',
-                                showlegend=True
-                            ), row=1, col=1)
-                            
-                            # Add gray line from [0, 100] to first available data point
                             # Find the first period with data (usually period 3)
                             first_period = None
                             first_value = None
