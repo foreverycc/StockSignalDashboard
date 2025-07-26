@@ -125,7 +125,7 @@ def process_ticker_all(ticker, end_date=None):
         # Skip if no data available
         if all(df.empty for df in data.values()):
             print(f"No data available for {ticker}")
-            return None, None, [], [], None
+            return None, None, [], [], [], [], None
         
         # Process for 1234 breakout (CD signals)
         results_1234 = process_ticker_1234(ticker, data)
