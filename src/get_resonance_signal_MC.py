@@ -262,7 +262,7 @@ def identify_mc_1234(file_path, all_ticker_data):
         return df_breakout_candidates  # Return empty DataFrame
     
     # add nx_1d to df_breakout_candidates according to ticker and date
-    df_breakout_candidates['nx_1d'] = df_breakout_candidates.apply(lambda row: dict_nx_1d[row['ticker']][row['date']], axis=1)
+    df_breakout_candidates['nx_1d'] = df_breakout_candidates.apply(lambda row: dict_nx_1d[row['ticker']].get(row['date'], None), axis=1)
     df_breakout_candidates_sel = df_breakout_candidates
     
     return df_breakout_candidates_sel
@@ -385,7 +385,7 @@ def identify_mc_5230(file_path, all_ticker_data):
         return df_breakout_candidates  # Return empty DataFrame
     
     # add nx_1h to df_breakout_candidates according to ticker and date
-    df_breakout_candidates['nx_1h'] = df_breakout_candidates.apply(lambda row: dict_nx_1h[row['ticker']][row['date']], axis=1)
+    df_breakout_candidates['nx_1h'] = df_breakout_candidates.apply(lambda row: dict_nx_1h[row['ticker']].get(row['date'], None), axis=1)
     df_breakout_candidates_sel = df_breakout_candidates
     
     return df_breakout_candidates_sel 
