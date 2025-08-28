@@ -2788,7 +2788,7 @@ elif page == "MC Analysis (卖出)":
                     if 'nx_1d_signal' in df.columns:
                         nx_1d_values = sorted(df['nx_1d_signal'].unique())
                         selected_nx_1d = st.multiselect("Filter by NX 1d Signal:", nx_1d_values, 
-                                                       default=[True] if True in nx_1d_values else nx_1d_values,
+                                                       default=[False] if False in nx_1d_values else nx_1d_values,
                                                        key=f"mc_nx_1d_filter_1234_{selected_file}")
                         if selected_nx_1d:
                             df = df[df['nx_1d_signal'].isin(selected_nx_1d)]
@@ -2864,7 +2864,7 @@ elif page == "MC Analysis (卖出)":
                     if 'nx_1h_signal' in df.columns:
                         nx_values = sorted(df['nx_1h_signal'].unique())
                         selected_nx = st.multiselect("Filter by NX 1h Signal:", nx_values, 
-                                                   default=[True] if True in nx_values else nx_values,
+                                                   default=[False] if False in nx_values else nx_values,
                                                    key=f"mc_nx_filter_5230_{selected_file}")
                         if selected_nx:
                             df = df[df['nx_1h_signal'].isin(selected_nx)]
