@@ -110,7 +110,7 @@ def save_mc_breakout_candidates_1234(df, file_path):
     if df.empty:
         print("No MC 1234 breakout candidates to save")
         # Create empty file with headers
-        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1d_signal', 'nx_1d', 'nx_1h', 'nx_30m'])
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1d_signal', 'nx_30m_signal', 'nx_1d', 'nx_1h', 'nx_30m'])
         empty_df.to_csv(output_path, sep='\t', index=False)
         return
     
@@ -124,13 +124,15 @@ def save_mc_breakout_candidates_1234(df, file_path):
         available_columns.append('current_time')
     if 'nx_1d_signal' in df.columns:
         available_columns.append('nx_1d_signal')
+    if 'nx_30m_signal' in df.columns:
+        available_columns.append('nx_30m_signal')
     if 'nx_1d' in df.columns:
         available_columns.append('nx_1d')
     if 'nx_1h' in df.columns:
         available_columns.append('nx_1h')
     if 'nx_30m' in df.columns:
         available_columns.append('nx_30m')
-
+ 
     
     df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
