@@ -390,6 +390,7 @@ def analyze_stocks(file_path, end_date=None):
             good_signals['exp_return'] = good_signals.apply(
                 lambda row: row[f'avg_return_{int(row.best_period)}'], axis=1
             )
+            good_signals['avg_return'] = good_signals['exp_return']  # Add avg_return column for High Return Intervals
             good_signals['test_count'] = good_signals.apply(
                 lambda row: row[f'test_count_{int(row.best_period)}'], axis=1
             )
@@ -595,6 +596,7 @@ def analyze_stocks(file_path, end_date=None):
             good_signals['exp_return'] = good_signals.apply(
                 lambda row: row[f'avg_return_{int(row.best_period)}'], axis=1
             )
+            good_signals['avg_return'] = good_signals['exp_return']  # Add avg_return column for High Return Intervals
             good_signals['test_count'] = good_signals.apply(
                 lambda row: row[f'test_count_{int(row.best_period)}'], axis=1
             )
