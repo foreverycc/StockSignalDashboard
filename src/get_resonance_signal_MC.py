@@ -1,5 +1,6 @@
 import pandas as pd
 from indicators import compute_mc_indicator, compute_nx_break_through
+from utils import calculate_current_nx_values
     
 def calculate_mc_score(data, interval, signal_date):
     """Calculate score for MC signals - adapted for sell signals"""
@@ -263,6 +264,20 @@ def identify_mc_1234(file_path, all_ticker_data):
     
     # add nx_1d to df_breakout_candidates according to ticker and date
     df_breakout_candidates['nx_1d'] = df_breakout_candidates.apply(lambda row: dict_nx_1d[row['ticker']].get(row['date'], None), axis=1)
+    
+    # Add current nx values
+    # Prefer previously computed NX series to avoid recomputation
+    current_nx_data = df_breakout_candidates['ticker'].apply(
+        lambda ticker: calculate_current_nx_values(
+            ticker,
+            all_ticker_data,
+            precomputed_series={
+                '1d': dict_nx_1d.get(ticker),
+            }
+        )
+    )
+    df_breakout_candidates[['nx_1d_current', 'nx_30m_current', 'nx_1h_current']] = pd.DataFrame(current_nx_data.tolist(), index=df_breakout_candidates.index)
+    
     df_breakout_candidates_sel = df_breakout_candidates
     
     return df_breakout_candidates_sel
@@ -386,6 +401,20 @@ def identify_mc_5230(file_path, all_ticker_data):
     
     # add nx_1h to df_breakout_candidates according to ticker and date
     df_breakout_candidates['nx_1h'] = df_breakout_candidates.apply(lambda row: dict_nx_1h[row['ticker']].get(row['date'], None), axis=1)
+    
+    # Add current nx values
+    # Prefer previously computed NX series to avoid recomputation
+    current_nx_data = df_breakout_candidates['ticker'].apply(
+        lambda ticker: calculate_current_nx_values(
+            ticker,
+            all_ticker_data,
+            precomputed_series={
+                '1h': dict_nx_1h.get(ticker),
+            }
+        )
+    )
+    df_breakout_candidates[['nx_1d_current', 'nx_30m_current', 'nx_1h_current']] = pd.DataFrame(current_nx_data.tolist(), index=df_breakout_candidates.index)
+    
     df_breakout_candidates_sel = df_breakout_candidates
     
     return df_breakout_candidates_sel 
