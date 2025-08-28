@@ -263,7 +263,7 @@ def identify_mc_1234(file_path, all_ticker_data):
         return df_breakout_candidates  # Return empty DataFrame
     
     # add nx_1d to df_breakout_candidates according to ticker and date
-    df_breakout_candidates['nx_1d'] = df_breakout_candidates.apply(lambda row: dict_nx_1d[row['ticker']].get(row['date'], None), axis=1)
+    df_breakout_candidates['nx_1d_signal'] = df_breakout_candidates.apply(lambda row: dict_nx_1d[row['ticker']].get(row['date'], None), axis=1)
     
     # Add current nx values
     # Prefer previously computed NX series to avoid recomputation
@@ -278,10 +278,10 @@ def identify_mc_1234(file_path, all_ticker_data):
     )
     # Assign columns individually to avoid duplicate column issues
     current_nx_df = pd.DataFrame(current_nx_data.tolist(), index=df_breakout_candidates.index)
-    df_breakout_candidates['nx_1d_current'] = current_nx_df['nx_1d_current']
-    df_breakout_candidates['nx_30m_current'] = current_nx_df['nx_30m_current']  
-    df_breakout_candidates['nx_1h_current'] = current_nx_df['nx_1h_current']
-    
+    df_breakout_candidates['nx_1d'] = current_nx_df['nx_1d']
+    df_breakout_candidates['nx_1h'] = current_nx_df['nx_1h']
+    df_breakout_candidates['nx_30m'] = current_nx_df['nx_30m']  
+   
     df_breakout_candidates_sel = df_breakout_candidates
     
     return df_breakout_candidates_sel
@@ -378,24 +378,41 @@ def identify_mc_5230(file_path, all_ticker_data):
 
     # Add NX indicator data for 1h timeframe
     dict_nx_1h = {}
-    print("Computing NX 1h for MC breakout candidates...")
+    dict_nx_5m = {}
+    print("Computing NX 1h and 5m for MC breakout candidates...")
     for ticker in df_breakout_candidates['ticker'].unique():
         print(f"MC NX calculation for {ticker}")
-        if ticker not in all_ticker_data or '1h' not in all_ticker_data[ticker] or all_ticker_data[ticker]['1h'].empty:
-            print(f"No 1h data found for {ticker} in pre-downloaded data, skipping MC nx_1h calculation.")
-            continue
-        
-        df_stock = all_ticker_data[ticker]['1h']
-        close = df_stock['Close']
-        short_close = close.ewm(span = 24, adjust=False).mean()
-        long_close = close.ewm(span = 89, adjust=False).mean()
-        nx_1h = (short_close > long_close) 
+        # Calculate nx_1h from 1h data
+        if ticker in all_ticker_data and '1h' in all_ticker_data[ticker] and not all_ticker_data[ticker]['1h'].empty:
+            df_stock_1h = all_ticker_data[ticker]['1h']
+            close = df_stock_1h['Close']
+            short_close = close.ewm(span = 24, adjust=False).mean()
+            long_close = close.ewm(span = 89, adjust=False).mean()
+            nx_1h = (short_close > long_close) 
 
-        nx_1h.index = nx_1h.index.date
-        dict_nx_1h[ticker] = nx_1h.to_dict()
+            nx_1h.index = nx_1h.index.date
+            dict_nx_1h[ticker] = nx_1h.to_dict()
+        else:
+            print(f"No 1h data found for {ticker} in pre-downloaded data, skipping MC nx_1h calculation.")
+        
+        # Calculate nx_5m from 5m data
+        if ticker in all_ticker_data and '5m' in all_ticker_data[ticker] and not all_ticker_data[ticker]['5m'].empty:
+            df_stock_5m = all_ticker_data[ticker]['5m']
+            
+            close_5m = df_stock_5m['Close']
+            short_close_5m = close_5m.ewm(span = 24, adjust=False).mean()
+            long_close_5m = close_5m.ewm(span = 89, adjust=False).mean()
+            nx_5m = (short_close_5m > long_close_5m) 
+
+            # Convert to date and take the last value for each date (end of day value)
+            nx_5m_daily = nx_5m.groupby(nx_5m.index.date).last()
+            dict_nx_5m[ticker] = nx_5m_daily.to_dict()
+        else:
+            print(f"No 5m data found for {ticker} in pre-downloaded data, skipping MC nx_5m calculation.")
     
     print("MC dict_nx_1h:", dict_nx_1h)
-    # remove tickers that failed to get data
+    print("MC dict_nx_5m:", dict_nx_5m)
+    # remove tickers that failed to get data (must have at least 1h data)
     df_breakout_candidates = df_breakout_candidates[df_breakout_candidates['ticker'].isin(dict_nx_1h.keys())]
     
     # Check if DataFrame is empty after filtering
@@ -404,7 +421,9 @@ def identify_mc_5230(file_path, all_ticker_data):
         return df_breakout_candidates  # Return empty DataFrame
     
     # add nx_1h to df_breakout_candidates according to ticker and date
-    df_breakout_candidates['nx_1h'] = df_breakout_candidates.apply(lambda row: dict_nx_1h[row['ticker']].get(row['date'], None), axis=1)
+    df_breakout_candidates['nx_1h_signal'] = df_breakout_candidates.apply(lambda row: dict_nx_1h[row['ticker']].get(row['date'], None), axis=1)
+    # add nx_5m to df_breakout_candidates according to ticker and date (optional - may be None if no 5m data)
+    df_breakout_candidates['nx_5m_signal'] = df_breakout_candidates.apply(lambda row: dict_nx_5m[row['ticker']].get(row['date'], None) if row['ticker'] in dict_nx_5m else None, axis=1)
     
     # Add current nx values
     # Prefer previously computed NX series to avoid recomputation
@@ -419,9 +438,9 @@ def identify_mc_5230(file_path, all_ticker_data):
     )
     # Assign columns individually to avoid duplicate column issues
     current_nx_df = pd.DataFrame(current_nx_data.tolist(), index=df_breakout_candidates.index)
-    df_breakout_candidates['nx_1d_current'] = current_nx_df['nx_1d_current']
-    df_breakout_candidates['nx_30m_current'] = current_nx_df['nx_30m_current']  
-    df_breakout_candidates['nx_1h_current'] = current_nx_df['nx_1h_current']
+    df_breakout_candidates['nx_1d'] = current_nx_df['nx_1d']
+    df_breakout_candidates['nx_1h'] = current_nx_df['nx_1h']
+    df_breakout_candidates['nx_30m'] = current_nx_df['nx_30m']  
     
     df_breakout_candidates_sel = df_breakout_candidates
     

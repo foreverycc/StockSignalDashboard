@@ -45,10 +45,8 @@ page = st.sidebar.radio("Select Page", ["CD Analysis (抄底)", "MC Analysis (�
 # Main title
 if page == "CD Analysis (抄底)":
     st.title("📈 CD Signal Analysis Dashboard (抄底)")
-    st.markdown("**Comprehensive analysis of CD (抄底) signals across multiple timeframes**")
 elif page == "MC Analysis (卖出)":
     st.title("📉 MC Signal Analysis Dashboard (卖出)")
-    st.markdown("**Comprehensive analysis of MC (卖出) signals across multiple timeframes**")
 
 # Load data helper function
 def load_data_from_file(file_path):
@@ -1405,7 +1403,8 @@ if page == "CD Analysis (抄底)":
                         df['date'] = pd.to_datetime(df['date'])
                         cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=60)
                         df = df[df['date'] >= cutoff_date]
-                        df['nx_30m'] = df['nx_30m'].astype(bool)
+                        if 'nx_30m_signal' in df.columns:
+                            df['nx_30m_signal'] = df['nx_30m_signal'].astype(bool)
                         df['date'] = df['date'].dt.strftime('%Y-%m-%d')
                     
                     if resonance_ticker_filter:
@@ -1413,13 +1412,13 @@ if page == "CD Analysis (抄底)":
                     
                     # Add NX filtering if available
                     nx_filters_applied = False
-                    if 'nx_1d' in df.columns:
-                        nx_1d_values = sorted(df['nx_1d'].unique())
-                        selected_nx_1d = st.multiselect("Filter by NX 1d:", nx_1d_values, 
+                    if 'nx_1d_signal' in df.columns:
+                        nx_1d_values = sorted(df['nx_1d_signal'].unique())
+                        selected_nx_1d = st.multiselect("Filter by NX 1d Signal:", nx_1d_values, 
                                                        default=[True] if True in nx_1d_values else nx_1d_values,
                                                        key=f"nx_1d_filter_1234_{selected_file}")
                         if selected_nx_1d:
-                            df = df[df['nx_1d'].isin(selected_nx_1d)]
+                            df = df[df['nx_1d_signal'].isin(selected_nx_1d)]
                             nx_filters_applied = True
                     
                     df_sorted = df.sort_values(by='date', ascending=False)
@@ -1489,13 +1488,13 @@ if page == "CD Analysis (抄底)":
                         df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
                     
                     # Add NX filtering if available
-                    if 'nx_1h' in df.columns:
-                        nx_values = sorted(df['nx_1h'].unique())
-                        selected_nx = st.multiselect("Filter by NX 1h:", nx_values, 
+                    if 'nx_1h_signal' in df.columns:
+                        nx_values = sorted(df['nx_1h_signal'].unique())
+                        selected_nx = st.multiselect("Filter by NX 1h Signal:", nx_values, 
                                                    default=[True] if True in nx_values else nx_values,
                                                    key=f"nx_filter_5230_{selected_file}")
                         if selected_nx:
-                            df = df[df['nx_1h'].isin(selected_nx)]
+                            df = df[df['nx_1h_signal'].isin(selected_nx)]
                     
                     # Display the dataframe
                     grid_response = resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_5230')
@@ -2774,10 +2773,11 @@ elif page == "MC Analysis (卖出)":
                 if df is not None and '1234' in message:
                     # Truncate to most recent 60 days
                     if 'date' in df.columns:
-                        df['date'] = pd.to_datetime(df['signal_date'])
+                        df['date'] = pd.to_datetime(df['date'])
                         cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=60)
                         df = df[df['date'] >= cutoff_date]
-                        df['nx_30m'] = df['nx_30m'].astype(bool)
+                        if 'nx_30m_signal' in df.columns:
+                            df['nx_30m_signal'] = df['nx_30m_signal'].astype(bool)
                         df['date'] = df['date'].dt.strftime('%Y-%m-%d')
 
                     if mc_resonance_ticker_filter:
@@ -2785,13 +2785,13 @@ elif page == "MC Analysis (卖出)":
                     
                     # Add NX filtering if available
                     nx_filters_applied = False
-                    if 'nx_1d' in df.columns:
-                        nx_1d_values = sorted(df['nx_1d'].unique())
-                        selected_nx_1d = st.multiselect("Filter by NX 1d:", nx_1d_values, 
+                    if 'nx_1d_signal' in df.columns:
+                        nx_1d_values = sorted(df['nx_1d_signal'].unique())
+                        selected_nx_1d = st.multiselect("Filter by NX 1d Signal:", nx_1d_values, 
                                                        default=[True] if True in nx_1d_values else nx_1d_values,
                                                        key=f"mc_nx_1d_filter_1234_{selected_file}")
                         if selected_nx_1d:
-                            df = df[df['nx_1d'].isin(selected_nx_1d)]
+                            df = df[df['nx_1d_signal'].isin(selected_nx_1d)]
                             nx_filters_applied = True
                     
                     df_sorted = df.sort_values(by='date', ascending=False)
@@ -2861,13 +2861,13 @@ elif page == "MC Analysis (卖出)":
                         df = df[df['ticker'].str.contains(mc_resonance_ticker_filter, case=False)]
                     
                     # Add NX filtering if available
-                    if 'nx_1h' in df.columns:
-                        nx_values = sorted(df['nx_1h'].unique())
-                        selected_nx = st.multiselect("Filter by NX 1h:", nx_values, 
+                    if 'nx_1h_signal' in df.columns:
+                        nx_values = sorted(df['nx_1h_signal'].unique())
+                        selected_nx = st.multiselect("Filter by NX 1h Signal:", nx_values, 
                                                    default=[True] if True in nx_values else nx_values,
                                                    key=f"mc_nx_filter_5230_{selected_file}")
                         if selected_nx:
-                            df = df[df['nx_1h'].isin(selected_nx)]
+                            df = df[df['nx_1h_signal'].isin(selected_nx)]
                     
                     # Display the dataframe
                     grid_response = mc_resonance_aggrid_editor(df.sort_values(by='date', ascending=False), 'summary_5230')
