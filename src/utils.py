@@ -30,7 +30,7 @@ def save_breakout_candidates_1234(df, file_path):
     if df.empty:
         print("No 1234 breakout candidates to save")
         # Create empty file with headers
-        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1d', 'nx_30m', 'nx_1d_current', 'nx_30m_current', 'nx_1h_current'])
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1d_signal', 'nx_30m_signal', 'nx_1d', 'nx_1h', 'nx_30m'])
         empty_df.to_csv(output_path, sep='\t', index=False)
         return
     
@@ -42,16 +42,16 @@ def save_breakout_candidates_1234(df, file_path):
         available_columns.append('current_price')
     if 'current_time' in df.columns:
         available_columns.append('current_time')
+    if 'nx_1d_signal' in df.columns:
+        available_columns.append('nx_1d_signal')
+    if 'nx_30m_signal' in df.columns:
+        available_columns.append('nx_30m_signal')
     if 'nx_1d' in df.columns:
         available_columns.append('nx_1d')
+    if 'nx_1h' in df.columns:
+        available_columns.append('nx_1h')
     if 'nx_30m' in df.columns:
         available_columns.append('nx_30m')
-    if 'nx_1d_current' in df.columns:
-        available_columns.append('nx_1d_current')
-    if 'nx_30m_current' in df.columns:
-        available_columns.append('nx_30m_current')
-    if 'nx_1h_current' in df.columns:
-        available_columns.append('nx_1h_current')
     
     df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
@@ -69,7 +69,7 @@ def save_breakout_candidates_5230(df, file_path):
     if df.empty:
         print("No 5230 breakout candidates to save")
         # Create empty file with headers
-        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1h', 'nx_1d_current', 'nx_30m_current', 'nx_1h_current'])
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1h_signal', 'nx_5m_signal', 'nx_1d', 'nx_1h', 'nx_30m'])
         empty_df.to_csv(output_path, sep='\t', index=False)
         return
     
@@ -81,14 +81,17 @@ def save_breakout_candidates_5230(df, file_path):
         available_columns.append('current_price')
     if 'current_time' in df.columns:
         available_columns.append('current_time')
+    if 'nx_1h_signal' in df.columns:
+        available_columns.append('nx_1h_signal')
+    if 'nx_5m_signal' in df.columns:
+        available_columns.append('nx_5m_signal')
+    if 'nx_1d' in df.columns:
+        available_columns.append('nx_1d')
     if 'nx_1h' in df.columns:
         available_columns.append('nx_1h')
-    if 'nx_1d_current' in df.columns:
-        available_columns.append('nx_1d_current')
-    if 'nx_30m_current' in df.columns:
-        available_columns.append('nx_30m_current')
-    if 'nx_1h_current' in df.columns:
-        available_columns.append('nx_1h_current')
+    if 'nx_30m' in df.columns:
+        available_columns.append('nx_30m')
+
     
     df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
@@ -107,7 +110,7 @@ def save_mc_breakout_candidates_1234(df, file_path):
     if df.empty:
         print("No MC 1234 breakout candidates to save")
         # Create empty file with headers
-        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1d', 'nx_1d_current', 'nx_30m_current', 'nx_1h_current'])
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1d_signal', 'nx_1d', 'nx_1h', 'nx_30m'])
         empty_df.to_csv(output_path, sep='\t', index=False)
         return
     
@@ -119,14 +122,15 @@ def save_mc_breakout_candidates_1234(df, file_path):
         available_columns.append('current_price')
     if 'current_time' in df.columns:
         available_columns.append('current_time')
+    if 'nx_1d_signal' in df.columns:
+        available_columns.append('nx_1d_signal')
     if 'nx_1d' in df.columns:
         available_columns.append('nx_1d')
-    if 'nx_1d_current' in df.columns:
-        available_columns.append('nx_1d_current')
-    if 'nx_30m_current' in df.columns:
-        available_columns.append('nx_30m_current')
-    if 'nx_1h_current' in df.columns:
-        available_columns.append('nx_1h_current')
+    if 'nx_1h' in df.columns:
+        available_columns.append('nx_1h')
+    if 'nx_30m' in df.columns:
+        available_columns.append('nx_30m')
+
     
     df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
@@ -145,7 +149,7 @@ def save_mc_breakout_candidates_5230(df, file_path):
     if df.empty:
         print("No MC 5230 breakout candidates to save")
         # Create empty file with headers
-        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1h', 'nx_1d_current', 'nx_30m_current', 'nx_1h_current'])
+        empty_df = pd.DataFrame(columns=['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1h_signal', 'nx_5m_signal', 'nx_1d', 'nx_1h', 'nx_30m'])
         empty_df.to_csv(output_path, sep='\t', index=False)
         return
     
@@ -157,14 +161,16 @@ def save_mc_breakout_candidates_5230(df, file_path):
         available_columns.append('current_price')
     if 'current_time' in df.columns:
         available_columns.append('current_time')
+    if 'nx_1h_signal' in df.columns:
+        available_columns.append('nx_1h_signal')
+    if 'nx_5m_signal' in df.columns:
+        available_columns.append('nx_5m_signal')
+    if 'nx_1d' in df.columns:
+        available_columns.append('nx_1d')
     if 'nx_1h' in df.columns:
         available_columns.append('nx_1h')
-    if 'nx_1d_current' in df.columns:
-        available_columns.append('nx_1d_current')
-    if 'nx_30m_current' in df.columns:
-        available_columns.append('nx_30m_current')
-    if 'nx_1h_current' in df.columns:
-        available_columns.append('nx_1h_current')
+    if 'nx_30m' in df.columns:
+        available_columns.append('nx_30m')
     
     df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
@@ -186,12 +192,12 @@ def calculate_current_nx_values(ticker, all_ticker_data, precomputed_series=None
             pandas Series/DataFrame convertible to the same.
 
     Returns:
-        dict: Dictionary with keys 'nx_1d_current', 'nx_30m_current', 'nx_1h_current'
+        dict: Dictionary with keys 'nx_1d', 'nx_30m', 'nx_1h'
     """
     current_nx = {
-        'nx_1d_current': None,
-        'nx_30m_current': None,
-        'nx_1h_current': None,
+        'nx_1d': None,
+        'nx_1h': None,
+        'nx_30m': None,
     }
 
     def latest_bool_from_series(series_like):
@@ -222,34 +228,34 @@ def calculate_current_nx_values(ticker, all_ticker_data, precomputed_series=None
     # 1d
     nx_1d_pre = latest_bool_from_series(pre.get('1d'))
     if nx_1d_pre is not None:
-        current_nx['nx_1d_current'] = nx_1d_pre
+        current_nx['nx_1d'] = nx_1d_pre
     elif ticker in all_ticker_data and '1d' in all_ticker_data[ticker] and not all_ticker_data[ticker]['1d'].empty:
         df_stock = all_ticker_data[ticker]['1d']
         close = df_stock['Close']
         short_close = close.ewm(span=24, adjust=False).mean()
         long_close = close.ewm(span=89, adjust=False).mean()
-        current_nx['nx_1d_current'] = short_close.iloc[-1] > long_close.iloc[-1]
+        current_nx['nx_1d'] = short_close.iloc[-1] > long_close.iloc[-1]
 
     # 30m
     nx_30m_pre = latest_bool_from_series(pre.get('30m'))
     if nx_30m_pre is not None:
-        current_nx['nx_30m_current'] = nx_30m_pre
+        current_nx['nx_30m'] = nx_30m_pre
     elif ticker in all_ticker_data and '30m' in all_ticker_data[ticker] and not all_ticker_data[ticker]['30m'].empty:
         df_stock_30m = all_ticker_data[ticker]['30m']
         close_30m = df_stock_30m['Close']
         short_close_30m = close_30m.ewm(span=24, adjust=False).mean()
         long_close_30m = close_30m.ewm(span=89, adjust=False).mean()
-        current_nx['nx_30m_current'] = short_close_30m.iloc[-1] > long_close_30m.iloc[-1]
+        current_nx['nx_30m'] = short_close_30m.iloc[-1] > long_close_30m.iloc[-1]
 
     # 1h
     nx_1h_pre = latest_bool_from_series(pre.get('1h'))
     if nx_1h_pre is not None:
-        current_nx['nx_1h_current'] = nx_1h_pre
+        current_nx['nx_1h'] = nx_1h_pre
     elif ticker in all_ticker_data and '1h' in all_ticker_data[ticker] and not all_ticker_data[ticker]['1h'].empty:
         df_stock_1h = all_ticker_data[ticker]['1h']
         close_1h = df_stock_1h['Close']
         short_close_1h = close_1h.ewm(span=24, adjust=False).mean()
         long_close_1h = close_1h.ewm(span=89, adjust=False).mean()
-        current_nx['nx_1h_current'] = short_close_1h.iloc[-1] > long_close_1h.iloc[-1]
+        current_nx['nx_1h'] = short_close_1h.iloc[-1] > long_close_1h.iloc[-1]
 
     return current_nx
