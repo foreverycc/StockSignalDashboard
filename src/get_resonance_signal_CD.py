@@ -1,5 +1,6 @@
 import pandas as pd
 from indicators import compute_cd_indicator, compute_nx_break_through
+from utils import calculate_current_nx_values
     
 def calculate_score(data, interval, signal_date):
     interval_weights = {
@@ -302,6 +303,21 @@ def identify_1234(file_path, all_ticker_data):
     df_breakout_candidates['nx_1d'] = df_breakout_candidates.apply(lambda row: dict_nx_1d[row['ticker']].get(row['date'], None), axis=1)
     # add nx_30m to df_breakout_candidates according to ticker and date
     df_breakout_candidates['nx_30m'] = df_breakout_candidates.apply(lambda row: dict_nx_30m[row['ticker']].get(row['date'], None), axis=1)
+    
+    # Add current nx values
+    # Prefer previously computed NX series to avoid recomputation
+    current_nx_data = df_breakout_candidates['ticker'].apply(
+        lambda ticker: calculate_current_nx_values(
+            ticker,
+            all_ticker_data,
+            precomputed_series={
+                '1d': dict_nx_1d.get(ticker),
+                '30m': dict_nx_30m.get(ticker),
+            }
+        )
+    )
+    df_breakout_candidates[['nx_1d_current', 'nx_30m_current', 'nx_1h_current']] = pd.DataFrame(current_nx_data.tolist(), index=df_breakout_candidates.index)
+    
     # filter df_breakout_candidates to only include rows where nx_1d is True
     # df_breakout_candidates_sel = df_breakout_candidates[df_breakout_candidates['nx_1d'] == True]
     df_breakout_candidates_sel = df_breakout_candidates
@@ -432,6 +448,20 @@ def identify_5230(file_path, all_ticker_data):
     
     # add nx_1d to df_breakout_candidates according to ticker and date
     df_breakout_candidates['nx_1h'] = df_breakout_candidates.apply(lambda row: dict_nx_1h[row['ticker']].get(row['date'], None), axis=1)
+    
+    # Add current nx values
+    # Prefer previously computed NX series to avoid recomputation
+    current_nx_data = df_breakout_candidates['ticker'].apply(
+        lambda ticker: calculate_current_nx_values(
+            ticker,
+            all_ticker_data,
+            precomputed_series={
+                '1h': dict_nx_1h.get(ticker),
+            }
+        )
+    )
+    df_breakout_candidates[['nx_1d_current', 'nx_30m_current', 'nx_1h_current']] = pd.DataFrame(current_nx_data.tolist(), index=df_breakout_candidates.index)
+    
     # filter df_breakout_candidates to only include rows where nx_1h is True
     # df_breakout_candidates_sel = df_breakout_candidates[df_breakout_candidates['nx_1h'] == True]
     df_breakout_candidates_sel = df_breakout_candidates
