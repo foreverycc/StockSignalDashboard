@@ -89,12 +89,6 @@ def save_breakout_candidates_5230(df, file_path):
         available_columns.append('nx_30m_current')
     if 'nx_1h_current' in df.columns:
         available_columns.append('nx_1h_current')
-    if 'nx_1d_current' in df.columns:
-        available_columns.append('nx_1d_current')
-    if 'nx_30m_current' in df.columns:
-        available_columns.append('nx_30m_current')
-    if 'nx_1h_current' in df.columns:
-        available_columns.append('nx_1h_current')
     
     df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 

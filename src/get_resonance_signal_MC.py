@@ -276,7 +276,11 @@ def identify_mc_1234(file_path, all_ticker_data):
             }
         )
     )
-    df_breakout_candidates[['nx_1d_current', 'nx_30m_current', 'nx_1h_current']] = pd.DataFrame(current_nx_data.tolist(), index=df_breakout_candidates.index)
+    # Assign columns individually to avoid duplicate column issues
+    current_nx_df = pd.DataFrame(current_nx_data.tolist(), index=df_breakout_candidates.index)
+    df_breakout_candidates['nx_1d_current'] = current_nx_df['nx_1d_current']
+    df_breakout_candidates['nx_30m_current'] = current_nx_df['nx_30m_current']  
+    df_breakout_candidates['nx_1h_current'] = current_nx_df['nx_1h_current']
     
     df_breakout_candidates_sel = df_breakout_candidates
     
@@ -413,7 +417,11 @@ def identify_mc_5230(file_path, all_ticker_data):
             }
         )
     )
-    df_breakout_candidates[['nx_1d_current', 'nx_30m_current', 'nx_1h_current']] = pd.DataFrame(current_nx_data.tolist(), index=df_breakout_candidates.index)
+    # Assign columns individually to avoid duplicate column issues
+    current_nx_df = pd.DataFrame(current_nx_data.tolist(), index=df_breakout_candidates.index)
+    df_breakout_candidates['nx_1d_current'] = current_nx_df['nx_1d_current']
+    df_breakout_candidates['nx_30m_current'] = current_nx_df['nx_30m_current']  
+    df_breakout_candidates['nx_1h_current'] = current_nx_df['nx_1h_current']
     
     df_breakout_candidates_sel = df_breakout_candidates
     
