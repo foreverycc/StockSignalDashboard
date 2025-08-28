@@ -1400,6 +1400,14 @@ if page == "CD Analysis (抄底)":
                 df, message = load_results('cd_breakout_candidates_summary_1234_', selected_file, 'date')
                 
                 if df is not None and '1234' in message:
+                    # Truncate to most recent 60 days
+                    if 'date' in df.columns:
+                        df['date'] = pd.to_datetime(df['date'])
+                        cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=60)
+                        df = df[df['date'] >= cutoff_date]
+                        df['nx_30m'] = df['nx_30m'].astype(bool)
+                        df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+                    
                     if resonance_ticker_filter:
                         df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
                     
@@ -1443,6 +1451,13 @@ if page == "CD Analysis (抄底)":
                 df, message = load_results('cd_breakout_candidates_details_1234_', selected_file, 'signal_date')
                 
                 if df is not None and '1234' in message:
+                    # Truncate to most recent 60 days
+                    if 'signal_date' in df.columns:
+                        df['signal_date'] = pd.to_datetime(df['signal_date'])
+                        cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=60)
+                        df = df[df['signal_date'] >= cutoff_date]
+                        df['signal_date'] = df['signal_date'].dt.strftime('%Y-%m-%d')
+
                     if resonance_ticker_filter:
                         df = df[df['ticker'].str.contains(resonance_ticker_filter, case=False)]
                     
@@ -2757,6 +2772,14 @@ elif page == "MC Analysis (卖出)":
                 df, message = load_results('mc_breakout_candidates_summary_1234_', selected_file, 'date')
                 
                 if df is not None and '1234' in message:
+                    # Truncate to most recent 60 days
+                    if 'date' in df.columns:
+                        df['date'] = pd.to_datetime(df['signal_date'])
+                        cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=60)
+                        df = df[df['date'] >= cutoff_date]
+                        df['nx_30m'] = df['nx_30m'].astype(bool)
+                        df['date'] = df['date'].dt.strftime('%Y-%m-%d')
+
                     if mc_resonance_ticker_filter:
                         df = df[df['ticker'].str.contains(mc_resonance_ticker_filter, case=False)]
                     
@@ -2800,6 +2823,13 @@ elif page == "MC Analysis (卖出)":
                 df, message = load_results('mc_breakout_candidates_details_1234_', selected_file, 'signal_date')
                 
                 if df is not None and '1234' in message:
+                    # Truncate to most recent 60 days
+                    if 'signal_date' in df.columns:
+                        df['signal_date'] = pd.to_datetime(df['signal_date'])
+                        cutoff_date = pd.Timestamp.now() - pd.Timedelta(days=60)
+                        df = df[df['signal_date'] >= cutoff_date]
+                        df['signal_date'] = df['signal_date'].dt.strftime('%Y-%m-%d')
+
                     if mc_resonance_ticker_filter:
                         df = df[df['ticker'].str.contains(mc_resonance_ticker_filter, case=False)]
                     
