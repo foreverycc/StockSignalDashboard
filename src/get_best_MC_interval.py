@@ -324,6 +324,30 @@ def evaluate_interval(ticker, interval, data=None):
             result['latest_cd_price_percentile'] = 0
             result['latest_cd_increase_after'] = 0
             result['latest_cd_criteria_met'] = 0
+            
+            # Add NX values (both signal and current values)
+            result['nx_1d_signal'] = None
+            result['nx_30m_signal'] = None  
+            result['nx_1h_signal'] = None
+            result['nx_5m_signal'] = None
+            result['nx_1d'] = None
+            result['nx_30m'] = None
+            result['nx_1h'] = None
+            result['nx_5m'] = None
+            result['nx_4h'] = None
+            
+            # Calculate current NX values using pre-downloaded data
+            if data:
+                for timeframe in ['1d', '30m', '1h', '5m', '4h']:
+                    if timeframe in data and not data[timeframe].empty:
+                        df_nx = data[timeframe]
+                        if len(df_nx) >= 89:  # Need at least 89 periods for long EMA
+                            close = df_nx['Close']
+                            short_close = close.ewm(span=24, adjust=False).mean()
+                            long_close = close.ewm(span=89, adjust=False).mean()
+                            current_nx = short_close.iloc[-1] > long_close.iloc[-1]
+                            result[f'nx_{timeframe}'] = bool(current_nx)
+            
             return result
             
         # Calculate returns for each signal (limit to latest signals to reduce noise)
@@ -522,6 +546,37 @@ def evaluate_interval(ticker, interval, data=None):
         else:
             result['max_return'] = 0
             result['min_return'] = 0
+        
+        # Add NX values (both signal and current values)
+        # Signal NX values (at signal dates) - using the latest signal date if available
+        result['nx_1d_signal'] = None
+        result['nx_30m_signal'] = None  
+        result['nx_1h_signal'] = None
+        result['nx_5m_signal'] = None
+        
+        # Current NX values (at current time)
+        result['nx_1d'] = None
+        result['nx_30m'] = None
+        result['nx_1h'] = None
+        result['nx_5m'] = None
+        result['nx_4h'] = None
+        
+        # Calculate current NX values using pre-downloaded data
+        if data:
+            # Calculate NX for different timeframes
+            for timeframe in ['1d', '30m', '1h', '5m', '4h']:
+                if timeframe in data and not data[timeframe].empty:
+                    df_nx = data[timeframe]
+                    if len(df_nx) >= 89:  # Need at least 89 periods for long EMA
+                        close = df_nx['Close']
+                        short_close = close.ewm(span=24, adjust=False).mean()
+                        long_close = close.ewm(span=89, adjust=False).mean()
+                        current_nx = short_close.iloc[-1] > long_close.iloc[-1]
+                        result[f'nx_{timeframe}'] = bool(current_nx)
+        
+        # For signal NX values, we would need the signal date to calculate NX at that time
+        # This is more complex and would require storing historical NX calculations
+        # For now, setting to None as placeholder
             
         return result
         

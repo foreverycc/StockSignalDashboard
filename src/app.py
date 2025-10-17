@@ -1150,6 +1150,16 @@ if page == "CD Analysis (抄底)":
                         'max_return': 100,         # 10 chars: "max_return"
                         'min_return': 100,         # 10 chars: "min_return"
                         'avg_return': 100,         # 10 chars: "avg_return"
+                        # NX columns
+                        'nx_1d_signal': 100,      # 12 chars: "nx_1d_signal"
+                        'nx_30m_signal': 110,     # 13 chars: "nx_30m_signal"
+                        'nx_1h_signal': 100,      # 12 chars: "nx_1h_signal"
+                        'nx_5m_signal': 100,      # 12 chars: "nx_5m_signal"
+                        'nx_1d': 80,              # 6 chars: "nx_1d"
+                        'nx_30m': 90,             # 7 chars: "nx_30m"
+                        'nx_1h': 80,              # 6 chars: "nx_1h"
+                        'nx_5m': 80,              # 6 chars: "nx_5m"
+                        'nx_4h': 80,              # 6 chars: "nx_4h"
                     }
                     
                     # Add MC signal analysis column widths
@@ -1173,6 +1183,8 @@ if page == "CD Analysis (抄底)":
                         if col_name in df.columns:
                             if col_name in ['exp_return', 'latest_signal_price', 'current_price', 'success_rate', 'max_return', 'min_return', 'avg_return']:
                                 gb.configure_column(col_name, type=['numericColumn', 'numberColumnFilter'], precision=2, width=width)
+                            elif col_name in ['nx_1d_signal', 'nx_30m_signal', 'nx_1h_signal', 'nx_5m_signal', 'nx_1d', 'nx_30m', 'nx_1h', 'nx_5m', 'nx_4h']:
+                                gb.configure_column(col_name, type=['booleanColumn'], width=width)
                             else:
                                 gb.configure_column(col_name, width=width)
                     
@@ -2523,6 +2535,16 @@ elif page == "MC Analysis (卖出)":
                         'max_return': 100,         # 10 chars: "max_return"
                         'min_return': 100,         # 10 chars: "min_return"
                         'avg_return': 100,         # 10 chars: "avg_return"
+                        # NX columns
+                        'nx_1d_signal': 100,      # 12 chars: "nx_1d_signal"
+                        'nx_30m_signal': 110,     # 13 chars: "nx_30m_signal"
+                        'nx_1h_signal': 100,      # 12 chars: "nx_1h_signal"
+                        'nx_5m_signal': 100,      # 12 chars: "nx_5m_signal"
+                        'nx_1d': 80,              # 6 chars: "nx_1d"
+                        'nx_30m': 90,             # 7 chars: "nx_30m"
+                        'nx_1h': 80,              # 6 chars: "nx_1h"
+                        'nx_5m': 80,              # 6 chars: "nx_5m"
+                        'nx_4h': 80,              # 6 chars: "nx_4h"
                     }
                     
                     # Add CD signal analysis column widths for MC analysis
@@ -2546,6 +2568,8 @@ elif page == "MC Analysis (卖出)":
                         if col_name in df.columns:
                             if col_name in ['exp_return', 'latest_signal_price', 'current_price', 'success_rate', 'max_return', 'min_return', 'avg_return']:
                                 gb.configure_column(col_name, type=['numericColumn', 'numberColumnFilter'], precision=2, width=width)
+                            elif col_name in ['nx_1d_signal', 'nx_30m_signal', 'nx_1h_signal', 'nx_5m_signal', 'nx_1d', 'nx_30m', 'nx_1h', 'nx_5m', 'nx_4h']:
+                                gb.configure_column(col_name, type=['booleanColumn'], width=width)
                             else:
                                 gb.configure_column(col_name, width=width)
                     
