@@ -1,0 +1,128 @@
+/**
+ * Parse array string from CSV - handles both "[1.5, 2.3]" and "{0: 1.5, 1: 2.3}" formats
+ */
+export function parseArrayString(str: string | null | undefined): number[] {
+    if (!str) return [];
+    try {
+        const cleaned = str.trim();
+        if (!cleaned) return [];
+
+        // Handle Python dict format: {0: 1.5, 1: 2.3, ...}
+        if (cleaned.startsWith('{')) {
+            const dictMatch = cleaned.match(/\{([^}]+)\}/);
+            if (!dictMatch) return [];
+            const entries = dictMatch[1].split(',').map(entry => {
+                const parts = entry.split(':');
+                if (parts.length !== 2) return NaN;
+                return parseFloat(parts[1].trim());
+            });
+            return entries.filter(n => !isNaN(n));
+        }
+
+        // Handle array format: [1.5, 2.3, ...]
+        const arrayMatch = cleaned.replace(/[\[\]]/g, '').trim();
+        if (!arrayMatch) return [];
+        return arrayMatch.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+    } catch {
+        return [];
+    }
+}
+
+/**
+ * Calculate boxplot statistics for an array of values
+ */
+export function calculateBoxplotStats(values: number[]) {
+    if (values.length === 0) return null;
+
+    const sorted = [...values].sort((a, b) => a - b);
+    const n = sorted.length;
+
+    const min = sorted[0];
+    const max = sorted[n - 1];
+
+    // Calculate quartiles
+    const q1Index = Math.floor(n * 0.25);
+    const q2Index = Math.floor(n * 0.5);
+    const q3Index = Math.floor(n * 0.75);
+
+    const q1 = sorted[q1Index];
+    const median = sorted[q2Index];
+    const q3 = sorted[q3Index];
+
+    return {
+        min,
+        q1,
+        median,
+        q3,
+        max,
+        count: n
+    };
+}
+
+/**
+ * Process row data from custom_detailed CSV into boxplot format
+ * Input: Selected row object with returns_N, volumes_N, price_history, volume_history columns
+ * Output: Array of boxplot data per period
+ */
+export function processRowDataForChart(rowData: any, maxPeriod: number = 100) {
+    const chartData = [];
+
+    // Check if this is a detailed file (has returns_0 column)
+    if (!('returns_0' in rowData)) {
+        console.log('Not a detailed file, returning empty array');
+        return [];
+    }
+
+    for (let period = 0; period <= maxPeriod; period++) {
+        const returnsKey = `returns_${period}`;
+        const volumesKey = `volumes_${period}`;
+        const avgVolumeKey = `avg_volume_${period}`;
+
+        // Skip if this period doesn't have data
+        if (!(returnsKey in rowData)) break;
+
+        // Parse historical returns and volumes for this period
+        const returns = parseArrayString(rowData[returnsKey]);
+        const volumes = parseArrayString(rowData[volumesKey]);
+
+        if (returns.length === 0) continue;
+
+        // Calculate boxplot stats from historical data only
+        const stats = calculateBoxplotStats(returns);
+        const avgVolume = rowData[avgVolumeKey] || (volumes.reduce((a, b) => a + b, 0) / volumes.length);
+
+        chartData.push({
+            period,
+            ...stats,
+            avgVolume: Math.round(avgVolume)
+        });
+    }
+
+    console.log(`processRowDataForChart: processed ${chartData.length} periods`);
+    return chartData;
+}
+
+/**
+ * Extract current signal trajectory from row data
+ */
+export function extractCurrentTrajectory(rowData: any) {
+    const priceHistory = parseArrayString(rowData.price_history);
+    const volumeHistory = parseArrayString(rowData.volume_history);
+
+    // Calculate returns from price history
+    const returns = [];
+    if (priceHistory.length > 0) {
+        const signalPrice = parseFloat(rowData.latest_signal_price) || priceHistory[0];
+        returns.push(0); // Period 0 always returns 0
+
+        for (let i = 1; i < priceHistory.length; i++) {
+            const ret = ((priceHistory[i] - signalPrice) / signalPrice) * 100;
+            returns.push(ret);
+        }
+    }
+
+    return {
+        returns,
+        volumes: volumeHistory
+    };
+}

@@ -1,0 +1,225 @@
+import React from 'react';
+import {
+    ComposedChart,
+    Bar,
+    Line,
+    XAxis,
+    YAxis,
+    CartesianGrid,
+    Tooltip,
+    Legend,
+    ResponsiveContainer,
+    ReferenceLine
+} from 'recharts';
+import { processRowDataForChart, extractCurrentTrajectory } from '../utils/chartUtils';
+
+interface BoxplotChartProps {
+    selectedRow: any | null;
+    title?: string;
+}
+
+export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title }) => {
+    console.log('BoxplotChart received selectedRow:', selectedRow);
+
+    if (!selectedRow) {
+        return <div className="flex items-center justify-center h-full text-muted-foreground">No data available</div>;
+    }
+
+    // Process historical data for boxplot
+    const boxplotData = processRowDataForChart(selectedRow);
+    console.log('BoxplotChart boxplotData:', boxplotData);
+
+    if (boxplotData.length === 0) {
+        console.log('BoxplotChart: No boxplot data - this file type does not have detailed historical data');
+        return (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-4 text-center">
+                Detailed charts are only available for "Custom Detailed" analysis results.
+                <br />
+                Please switch to a detailed analysis file or use the summary view.
+            </div>
+        );
+    }
+
+    // Extract current signal trajectory
+    const currentTrajectory = extractCurrentTrajectory(selectedRow);
+    const currentPeriod = parseInt(selectedRow.current_period) || 0;
+
+    // Combine data for chart
+    const chartData = boxplotData.map(d => ({
+        ...d,
+        iqrBase: d.q1 || 0,
+        iqrRange: (d.q3 || 0) - (d.q1 || 0),
+        currentReturn: (d.period <= currentPeriod && currentTrajectory.returns[d.period] !== undefined)
+            ? currentTrajectory.returns[d.period]
+            : null,
+        currentVolume: (d.period <= currentPeriod && currentTrajectory.volumes[d.period] !== undefined)
+            ? currentTrajectory.volumes[d.period]
+            : null
+    }));
+
+    // Create data for volume chart (separate)
+    const volumeData = chartData.map(d => ({
+        period: d.period,
+        volume: d.avgVolume,
+        currentVolume: d.currentVolume
+    }));
+
+    return (
+        <div className="w-full h-full flex flex-col">
+            {title && <h3 className="text-sm font-semibold mb-2">{title}</h3>}
+
+            {/* Returns Chart - Top */}
+            <div className="w-full mb-1" style={{ height: '200px' }}>
+                <ResponsiveContainer width="100%" height={200}>
+                    <ComposedChart
+                        data={chartData}
+                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                    >
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis
+                            dataKey="period"
+                            stroke="hsl(var(--muted-foreground))"
+                            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                        />
+                        <YAxis
+                            stroke="hsl(var(--muted-foreground))"
+                            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                            label={{ value: 'Return (%)', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }}
+                        />
+                        <Tooltip
+                            contentStyle={{
+                                backgroundColor: 'hsl(var(--card))',
+                                borderColor: 'hsl(var(--border))',
+                                color: 'hsl(var(--card-foreground))',
+                                fontSize: '11px'
+                            }}
+                            formatter={(value: any, name: string) => [typeof value === 'number' ? value.toFixed(2) + '%' : value, name]}
+                        />
+                        <Legend wrapperStyle={{ fontSize: '11px' }} />
+                        <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+
+                        {/* Q1-Q3 Interquartile Range - light blue fill using stacked bar */}
+                        <Bar
+                            dataKey="iqrBase"
+                            fill="transparent"
+                            stackId="iqr"
+                        />
+                        <Bar
+                            dataKey="iqrRange"
+                            fill="hsl(var(--primary))"
+                            fillOpacity={0.2}
+                            stackId="iqr"
+                            name="IQR"
+                        />
+
+                        {/* Min/Max - light gray super small dots only */}
+                        <Line
+                            type="monotone"
+                            dataKey="max"
+                            stroke="transparent"
+                            strokeWidth={0}
+                            dot={{ r: 1.5, fill: 'hsl(var(--muted-foreground))', opacity: 0.4 }}
+                            name="Max"
+                        />
+                        <Line
+                            type="monotone"
+                            dataKey="min"
+                            stroke="transparent"
+                            strokeWidth={0}
+                            dot={{ r: 1.5, fill: 'hsl(var(--muted-foreground))', opacity: 0.4 }}
+                            name="Min"
+                        />
+
+                        {/* Q1 and Q3 lines - blue dashed */}
+                        <Line
+                            type="monotone"
+                            dataKey="q3"
+                            stroke="hsl(var(--primary))"
+                            strokeWidth={1}
+                            strokeDasharray="3 3"
+                            dot={false}
+                            name="Q3"
+                        />
+                        <Line
+                            type="monotone"
+                            dataKey="q1"
+                            stroke="hsl(var(--primary))"
+                            strokeWidth={1}
+                            strokeDasharray="3 3"
+                            dot={false}
+                            name="Q1"
+                        />
+
+                        {/* Median - small blue dots only */}
+                        <Line
+                            type="monotone"
+                            dataKey="median"
+                            stroke="hsl(var(--primary))"
+                            strokeWidth={1}
+                            dot={{ r: 1, fill: 'hsl(var(--primary))' }}
+                            name="Median"
+                        />
+
+                        {/* Current return - red solid line */}
+                        <Line
+                            type="monotone"
+                            dataKey="currentReturn"
+                            stroke="#ef4444"
+                            strokeWidth={1}
+                            dot={{ r: 1, fill: '#ef4444' }}
+                            name="Current"
+                        />
+                    </ComposedChart>
+                </ResponsiveContainer>
+            </div>
+
+            {/* Volume Chart - Bottom */}
+            <div className="w-full" style={{ height: '100px' }}>
+                <ResponsiveContainer width="100%" height={100}>
+                    <ComposedChart
+                        data={volumeData}
+                        margin={{ top: 0, right: 30, left: 20, bottom: 20 }}
+                    >
+                        <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                        <XAxis
+                            dataKey="period"
+                            stroke="hsl(var(--muted-foreground))"
+                            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                            label={{ value: 'Period', position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))' }}
+                        />
+                        <YAxis
+                            stroke="hsl(var(--muted-foreground))"
+                            tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                            label={{ value: 'Volume', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }}
+                        />
+                        <Tooltip
+                            contentStyle={{
+                                backgroundColor: 'hsl(var(--card))',
+                                borderColor: 'hsl(var(--border))',
+                                color: 'hsl(var(--card-foreground))',
+                                fontSize: '11px'
+                            }}
+                            formatter={(value: any) => [Math.round(value).toLocaleString(), 'Avg Volume']}
+                        />
+                        <Bar
+                            dataKey="volume"
+                            fill="hsl(var(--muted-foreground))"
+                            opacity={0.5}
+                            name="Avg Volume"
+                        />
+
+                        {/* Current volume - red solid line */}
+                        <Line
+                            type="monotone"
+                            dataKey="currentVolume"
+                            stroke="#ef4444"
+                            strokeWidth={1}
+                            dot={{ r: 1, fill: '#ef4444' }}
+                            name="Current Volume"
+                        />
+                    </ComposedChart>
+                </ResponsiveContainer>
+            </div>
+        </div>
+    );
+};
