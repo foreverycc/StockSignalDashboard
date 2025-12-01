@@ -314,14 +314,21 @@ def analyze_stocks(file_path, end_date=None):
     save_breakout_candidates_5230(df_breakout_5230, output_file_5230)
     logger.info("Saving 5230 breakout results...")
 
-    # 3. Save MC results
-    logger.info("Saving MC breakout results...")
-    save_breakout_candidates(mc_results_1234, output_dir, f'mc_breakout_candidates_details_1234_{output_base}.tab')
-    save_breakout_candidates_summary(mc_results_1234, output_dir, f'mc_breakout_candidates_summary_1234_{output_base}.tab')
-    save_breakout_candidates(mc_results_5230, output_dir, f'mc_breakout_candidates_details_5230_{output_base}.tab')
-    save_breakout_candidates_summary(mc_results_5230, output_dir, f'mc_breakout_candidates_summary_5230_{output_base}.tab')
+    # 3. Save MC 1234 results and identify breakout candidates
+    logger.info("Saving MC 1234 breakout results...")
+    output_file_mc_1234 = os.path.join(output_dir, f'mc_breakout_candidates_details_1234_{output_base}.tab')
+    save_results(mc_results_1234, output_file_mc_1234)
+    df_mc_breakout_1234 = identify_1234(output_file_mc_1234, all_ticker_data)
+    save_breakout_candidates_1234(df_mc_breakout_1234, output_file_mc_1234)
+    
+    # 4. Save MC 5230 results and identify breakout candidates
+    logger.info("Saving MC 5230 breakout results...")
+    output_file_mc_5230 = os.path.join(output_dir, f'mc_breakout_candidates_details_5230_{output_base}.tab')
+    save_results(mc_results_5230, output_file_mc_5230)
+    df_mc_breakout_5230 = identify_5230(output_file_mc_5230, all_ticker_data)
+    save_breakout_candidates_5230(df_mc_breakout_5230, output_file_mc_5230)
 
-    # 4. Save CD evaluation results
+    # 5. Save CD evaluation results
     logger.info("Saving CD evaluation results...")
     if cd_eval_results:
         df_cd_eval = pd.DataFrame(cd_eval_results)
