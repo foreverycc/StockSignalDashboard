@@ -389,7 +389,7 @@ export const Dashboard: React.FC = () => {
                                         </div>
                                         <div className="p-3 bg-muted/30 rounded-lg">
                                             <span className="block text-xs text-muted-foreground">Signal Count</span>
-                                            <span className="font-mono font-medium">{selectedRow.signal_count}</span>
+                                            <span className="font-mono font-medium">{selectedRow.test_count || selectedRow.test_count_0 || 'N/A'}</span>
                                         </div>
                                         <div className="p-3 bg-muted/30 rounded-lg">
                                             <span className="block text-xs text-muted-foreground">Latest Signal</span>
