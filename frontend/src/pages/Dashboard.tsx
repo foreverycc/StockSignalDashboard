@@ -63,11 +63,22 @@ export const Dashboard: React.FC = () => {
         enabled: !!selectedStockList
     });
 
-    // Determine current file to show based on tabs
+    // Determine which file to load based on active tabs
     const currentFileName = React.useMemo(() => {
         if (!resultFiles) return null;
-        const prefix = activeTab === 'cd' ? 'cd_eval_' : 'mc_eval_';
-        const pattern = prefix + activeSubTab;
+
+        let pattern: string;
+
+        // Handle 1234 and 5230 resonance models
+        if (activeSubTab === '1234' || activeSubTab === '5230') {
+            const prefix = activeTab === 'cd' ? 'cd_breakout_candidates_summary_' : 'mc_breakout_candidates_summary_';
+            pattern = prefix + activeSubTab;
+        } else {
+            // Handle Best Intervals and Custom Detailed
+            const prefix = activeTab === 'cd' ? 'cd_eval_' : 'mc_eval_';
+            pattern = prefix + activeSubTab;
+        }
+
         return resultFiles.find(f => f.startsWith(pattern));
     }, [resultFiles, activeTab, activeSubTab]);
 
@@ -105,14 +116,34 @@ export const Dashboard: React.FC = () => {
         enabled: !!detailedFileName
     });
 
-    // Find matching detailed row for the selected row
-    const detailedRow = React.useMemo(() => {
-        if (!selectedRow || !detailedData) return null;
-        // Match by ticker and interval
-        return detailedData.find((d: any) =>
+    // Find matching detailed row(s) for the selected row
+    const detailedRows = React.useMemo(() => {
+        if (!selectedRow || !detailedData) return [];
+
+        // For 1234/5230 models, the intervals column contains multiple intervals (e.g., "1,2,3")
+        if (activeSubTab === '1234' || activeSubTab === '5230') {
+            const intervalsStr = selectedRow.intervals;
+            if (!intervalsStr) return [];
+
+            // Parse intervals: "1,2,3" -> ["1h", "2h", "3h"] or "10,15,30" -> ["10m", "15m", "30m"]
+            const intervalNumbers = intervalsStr.split(',').map((s: string) => s.trim());
+            const suffix = activeSubTab === '1234' ? 'h' : 'm';
+            const intervals = intervalNumbers.map((n: string) => n + suffix);
+
+            // Find detailed rows for each interval
+            return intervals.map(interval =>
+                detailedData.find((d: any) =>
+                    d.ticker === selectedRow.ticker && d.interval === interval
+                )
+            ).filter(Boolean); // Remove any undefined entries
+        }
+
+        // For other tabs, match by ticker and interval
+        const match = detailedData.find((d: any) =>
             d.ticker === selectedRow.ticker && d.interval === selectedRow.interval
         );
-    }, [selectedRow, detailedData]);
+        return match ? [match] : [];
+    }, [selectedRow, detailedData, activeSubTab]);
 
     // Process chart data
     useEffect(() => {
@@ -231,29 +262,32 @@ export const Dashboard: React.FC = () => {
                 </div>
 
                 {/* Subtabs */}
-                <div className="flex gap-2 p-4 bg-muted/30 border-b border-border overflow-x-auto">
-                    {[
-                        { id: 'best_intervals_50', label: 'Best Intervals (50)' },
-                        { id: 'best_intervals_20', label: 'Best Intervals (20)' },
-                        { id: 'best_intervals_100', label: 'Best Intervals (100)' },
-                        { id: 'good_signals', label: 'Good Signals' },
-                        { id: 'custom_detailed', label: 'Detailed Results' },
-                        { id: 'interval_summary', label: 'Summary by Interval' },
-                    ].map(tab => (
-                        <button
-                            key={tab.id}
-                            onClick={() => setActiveSubTab(tab.id)}
-                            className={cn(
-                                "px-3 py-1.5 rounded-full text-xs font-medium transition-colors whitespace-nowrap",
-                                activeSubTab === tab.id
-                                    ? "bg-primary text-primary-foreground"
-                                    : "bg-background border border-border text-muted-foreground hover:bg-muted hover:text-foreground"
-                            )}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
+                {activeTab === 'cd' && (
+                    <div className="flex gap-1 border-b border-border">
+                        {[
+                            { value: 'best_intervals_50', label: 'Best Intervals (50)' },
+                            { value: 'best_intervals_20', label: 'Best Intervals (20)' },
+                            { value: 'best_intervals_100', label: 'Best Intervals (100)' },
+                            { value: 'best_intervals_0h', label: 'Best Intervals (0h)' },
+                            { value: 'custom_detailed', label: 'Detailed Results' },
+                            { value: '1234', label: '1234 Model' },
+                            { value: '5230', label: '5230 Model' },
+                        ].map((tab) => (
+                            <button
+                                key={tab.value}
+                                onClick={() => setActiveSubTab(tab.value)}
+                                className={cn(
+                                    "px-4 py-2 text-sm font-medium transition-colors relative",
+                                    activeSubTab === tab.value
+                                        ? "text-primary border-b-2 border-primary"
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
 
                 {/* Content Area */}
                 <div className="flex-1 flex overflow-hidden">
@@ -297,13 +331,23 @@ export const Dashboard: React.FC = () => {
                                 </button>
                             </div>
                             <div className="flex-1 p-4 overflow-y-auto">
-                                {/* Returns Distribution Boxplot */}
-                                <div style={{ height: '350px' }}>
-                                    <BoxplotChart
-                                        selectedRow={detailedRow}
-                                        title="Returns Distribution"
-                                    />
-                                </div>
+                                {/* Returns Distribution Boxplot(s) */}
+                                {detailedRows.length > 0 ? (
+                                    <div className="space-y-6">
+                                        {detailedRows.map((row, index) => (
+                                            <div key={index} style={{ height: '350px' }}>
+                                                <BoxplotChart
+                                                    selectedRow={row}
+                                                    title={`Returns Distribution - ${row.ticker} (${row.interval})`}
+                                                />
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                                        No detailed data available for this selection
+                                    </div>
+                                )}
 
                                 <div className="space-y-4">
                                     <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Details</h4>
@@ -330,7 +374,7 @@ export const Dashboard: React.FC = () => {
                         </div>
                     )}
                 </div>
-            </div>
-        </div>
+            </div >
+        </div >
     );
 };
