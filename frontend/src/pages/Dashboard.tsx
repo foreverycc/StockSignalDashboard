@@ -123,19 +123,26 @@ export const Dashboard: React.FC = () => {
         // For 1234/5230 models, the intervals column contains multiple intervals (e.g., "1,2,3")
         if (activeSubTab === '1234' || activeSubTab === '5230') {
             const intervalsStr = selectedRow.intervals;
+            console.log('Processing intervals for row:', selectedRow.ticker, intervalsStr);
             if (!intervalsStr) return [];
 
             // Parse intervals: "1,2,3" -> ["1h", "2h", "3h"] or "10,15,30" -> ["10m", "15m", "30m"]
             const intervalNumbers = intervalsStr.split(',').map((s: string) => s.trim());
             const suffix = activeSubTab === '1234' ? 'h' : 'm';
             const intervals = intervalNumbers.map((n: string) => n + suffix);
+            console.log('Looking for intervals:', intervals);
 
             // Find detailed rows for each interval
-            return intervals.map(interval =>
-                detailedData.find((d: any) =>
+            const results = intervals.map((interval: any) => {
+                const match = detailedData.find((d: any) =>
                     d.ticker === selectedRow.ticker && d.interval === interval
-                )
-            ).filter(Boolean); // Remove any undefined entries
+                );
+                console.log(`Match for ${selectedRow.ticker} ${interval}:`, match ? 'Found' : 'NOT FOUND');
+                return match;
+            }).filter(Boolean); // Remove any undefined entries
+
+            console.log('Final results count:', results.length);
+            return results;
         }
 
         // For other tabs, match by ticker and interval

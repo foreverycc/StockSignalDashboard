@@ -32,10 +32,9 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title }
     if (boxplotData.length === 0) {
         console.log('BoxplotChart: No boxplot data - this file type does not have detailed historical data');
         return (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-4 text-center">
-                Detailed charts are only available for "Custom Detailed" analysis results.
-                <br />
-                Please switch to a detailed analysis file or use the summary view.
+            <div className="flex flex-col items-center justify-center h-full text-muted-foreground text-sm p-4 text-center">
+                <p className="mb-2">No historical data available for this interval.</p>
+                <p className="text-xs">For details, please go to <span className="font-semibold">Detailed Results</span> tab.</p>
             </div>
         );
     }
