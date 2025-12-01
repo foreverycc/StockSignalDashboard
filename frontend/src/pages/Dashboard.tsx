@@ -289,6 +289,33 @@ export const Dashboard: React.FC = () => {
                     </div>
                 )}
 
+                {activeTab === 'mc' && (
+                    <div className="flex gap-1 border-b border-border">
+                        {[
+                            { value: 'best_intervals_50', label: 'Best Intervals (50)' },
+                            { value: 'best_intervals_20', label: 'Best Intervals (20)' },
+                            { value: 'best_intervals_100', label: 'Best Intervals (100)' },
+                            { value: 'best_intervals_0h', label: 'Best Intervals (0h)' },
+                            { value: 'custom_detailed', label: 'Detailed Results' },
+                            { value: '1234', label: '1234 Model' },
+                            { value: '5230', label: '5230 Model' },
+                        ].map((tab) => (
+                            <button
+                                key={tab.value}
+                                onClick={() => setActiveSubTab(tab.value)}
+                                className={cn(
+                                    "px-4 py-2 text-sm font-medium transition-colors relative",
+                                    activeSubTab === tab.value
+                                        ? "text-primary border-b-2 border-primary"
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                {tab.label}
+                            </button>
+                        ))}
+                    </div>
+                )}
+
                 {/* Content Area */}
                 <div className="flex-1 flex overflow-hidden">
                     {/* Table */}
