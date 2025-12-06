@@ -8,11 +8,17 @@ const queryClient = new QueryClient();
 
 function App() {
   const [activePage, setActivePage] = useState<'dashboard' | 'configuration'>('dashboard');
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   return (
     <QueryClientProvider client={queryClient}>
       <div className="flex h-screen bg-background text-foreground overflow-hidden">
-        <Sidebar activePage={activePage} onNavigate={setActivePage} />
+        <Sidebar
+          activePage={activePage}
+          onNavigate={setActivePage}
+          isCollapsed={isSidebarCollapsed}
+          onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        />
 
         <main className="flex-1 overflow-auto bg-secondary/30 flex flex-col">
           {activePage === 'dashboard' ? <Dashboard /> : <Configuration />}
