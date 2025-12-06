@@ -172,6 +172,46 @@ export const Dashboard: React.FC = () => {
         }
     };
 
+    const [chartPanelWidth, setChartPanelWidth] = useState(33); // Default 33%
+    const [isResizing, setIsResizing] = useState(false);
+
+    // Handle resizing
+    const startResizing = React.useCallback((mouseDownEvent: React.MouseEvent) => {
+        setIsResizing(true);
+    }, []);
+
+    const stopResizing = React.useCallback(() => {
+        setIsResizing(false);
+    }, []);
+
+    const resize = React.useCallback((mouseMoveEvent: MouseEvent) => {
+        if (isResizing) {
+            // Calculate new width percentage based on mouse position
+            // We are resizing the right panel, so we calculate from the right edge or relative to container
+            // Easier: Calculate percentage of container width
+            const container = document.getElementById('dashboard-content-container');
+            if (container) {
+                const containerRect = container.getBoundingClientRect();
+                const newWidthPx = containerRect.right - mouseMoveEvent.clientX;
+                const newWidthPercent = (newWidthPx / containerRect.width) * 100;
+
+                // Limit width between 20% and 80%
+                if (newWidthPercent >= 20 && newWidthPercent <= 80) {
+                    setChartPanelWidth(newWidthPercent);
+                }
+            }
+        }
+    }, [isResizing]);
+
+    useEffect(() => {
+        window.addEventListener("mousemove", resize);
+        window.addEventListener("mouseup", stopResizing);
+        return () => {
+            window.removeEventListener("mousemove", resize);
+            window.removeEventListener("mouseup", stopResizing);
+        };
+    }, [resize, stopResizing]);
+
     return (
         <div className="p-6 h-full flex flex-col space-y-6">
             {/* Header & Controls */}
@@ -324,9 +364,12 @@ export const Dashboard: React.FC = () => {
                 )}
 
                 {/* Content Area */}
-                <div className="flex-1 flex overflow-hidden">
+                <div id="dashboard-content-container" className="flex-1 flex overflow-hidden relative">
                     {/* Table */}
-                    <div className={cn("flex-1 border-r border-border", selectedRow ? "w-2/3" : "w-full")}>
+                    <div
+                        className={cn("flex-1 border-r border-border overflow-hidden flex flex-col")}
+                        style={{ width: selectedRow ? `${100 - chartPanelWidth}%` : '100%' }}
+                    >
                         {isLoadingTable || isLoadingFiles ? (
                             <div className="h-full flex items-center justify-center text-muted-foreground">Loading data...</div>
                         ) : tableData ? (
@@ -352,14 +395,27 @@ export const Dashboard: React.FC = () => {
                         )}
                     </div>
 
+                    {/* Resizer Handle */}
+                    {selectedRow && (
+                        <div
+                            className="w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors z-10 flex items-center justify-center"
+                            onMouseDown={startResizing}
+                        >
+                            <div className="h-8 w-0.5 bg-muted-foreground/30 rounded-full" />
+                        </div>
+                    )}
+
                     {/* Chart / Details Panel */}
                     {selectedRow && (
-                        <div className="w-1/3 flex flex-col bg-card">
+                        <div
+                            className="flex flex-col bg-card overflow-hidden"
+                            style={{ width: `${chartPanelWidth}%` }}
+                        >
                             <div className="p-4 border-b border-border flex justify-between items-center bg-muted/10">
-                                <h3 className="font-semibold">{selectedRow.ticker} ({selectedRow.interval})</h3>
+                                <h3 className="font-semibold truncate pr-2">{selectedRow.ticker} ({selectedRow.interval})</h3>
                                 <button
                                     onClick={() => setSelectedRow(null)}
-                                    className="text-muted-foreground hover:text-foreground"
+                                    className="text-muted-foreground hover:text-foreground shrink-0"
                                 >
                                     Close
                                 </button>
@@ -383,7 +439,7 @@ export const Dashboard: React.FC = () => {
                                     </div>
                                 )}
 
-                                <div className="space-y-4">
+                                <div className="space-y-4 mt-6">
                                     <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Details</h4>
                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                         <div className="p-3 bg-muted/30 rounded-lg">
