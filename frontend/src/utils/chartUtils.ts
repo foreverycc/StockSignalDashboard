@@ -30,6 +30,10 @@ export function parseArrayString(str: string | null | undefined): number[] {
 
 /**
  * Calculate boxplot statistics for an array of values
+ * Uses the "Median of lower/upper halves" method (excluding median if n is odd)
+ * This matches the user's requirement:
+ * n=2 {a,b}: Median=(a+b)/2, Q1=a, Q3=b
+ * n=3 {a,b,c}: Median=b, Q1=a, Q3=c
  */
 export function calculateBoxplotStats(values: number[]) {
     if (values.length === 0) return null;
@@ -40,14 +44,35 @@ export function calculateBoxplotStats(values: number[]) {
     const min = sorted[0];
     const max = sorted[n - 1];
 
-    // Calculate quartiles
-    const q1Index = Math.floor(n * 0.25);
-    const q2Index = Math.floor(n * 0.5);
-    const q3Index = Math.floor(n * 0.75);
+    // Helper to calculate median of an array
+    const getMedian = (arr: number[]) => {
+        if (arr.length === 0) return 0;
+        const mid = Math.floor(arr.length / 2);
+        if (arr.length % 2 === 0) {
+            return (arr[mid - 1] + arr[mid]) / 2;
+        } else {
+            return arr[mid];
+        }
+    };
 
-    const q1 = sorted[q1Index];
-    const median = sorted[q2Index];
-    const q3 = sorted[q3Index];
+    const median = getMedian(sorted);
+
+    let lowerHalf: number[] = [];
+    let upperHalf: number[] = [];
+
+    if (n % 2 === 0) {
+        // Even: Split down the middle
+        lowerHalf = sorted.slice(0, n / 2);
+        upperHalf = sorted.slice(n / 2);
+    } else {
+        // Odd: Exclude the median
+        const midIndex = Math.floor(n / 2);
+        lowerHalf = sorted.slice(0, midIndex);
+        upperHalf = sorted.slice(midIndex + 1);
+    }
+
+    const q1 = getMedian(lowerHalf);
+    const q3 = getMedian(upperHalf);
 
     return {
         min,
