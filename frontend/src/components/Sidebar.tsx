@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Settings, Activity, ChevronLeft, ChevronRight } from 'lucide-react';
+import { LayoutDashboard, Settings, Activity, ChevronLeft, ChevronRight, Play, RefreshCw, Clock, AlertCircle, Terminal } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 interface SidebarProps {
@@ -7,14 +7,37 @@ interface SidebarProps {
     onNavigate: (page: 'dashboard' | 'configuration') => void;
     isCollapsed: boolean;
     onToggle: () => void;
+
+    // New props
+    selectedStockList: string;
+    setSelectedStockList: (list: string) => void;
+    stockLists: string[] | undefined;
+    handleRunAnalysis: () => void;
+    jobStatus: any;
+    latestUpdate: any;
+    showLogs: boolean;
+    setShowLogs: (show: boolean) => void;
 }
 
-export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, isCollapsed, onToggle }) => {
+export const Sidebar: React.FC<SidebarProps> = ({
+    activePage,
+    onNavigate,
+    isCollapsed,
+    onToggle,
+    selectedStockList,
+    setSelectedStockList,
+    stockLists,
+    handleRunAnalysis,
+    jobStatus,
+    latestUpdate,
+    showLogs,
+    setShowLogs
+}) => {
     return (
         <div
             className={cn(
                 "bg-card border-r border-border h-screen flex flex-col transition-all duration-300 ease-in-out relative",
-                isCollapsed ? "w-20" : "w-64"
+                isCollapsed ? "w-20" : "w-72"
             )}
         >
             {/* Toggle Button */}
@@ -34,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, isColl
                 </div>
             </div>
 
-            <nav className="flex-1 p-4 space-y-2">
+            <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
                 <button
                     onClick={() => onNavigate('dashboard')}
                     className={cn(
@@ -68,6 +91,99 @@ export const Sidebar: React.FC<SidebarProps> = ({ activePage, onNavigate, isColl
                         Configuration
                     </span>
                 </button>
+
+                {/* Separator */}
+                <div className="my-4 border-t border-border" />
+
+                {/* Analysis Controls - Only show when expanded or show minimal icons when collapsed */}
+                <div className={cn("space-y-4", isCollapsed ? "flex flex-col items-center space-y-4" : "")}>
+
+                    {/* Stock List Selector */}
+                    {!isCollapsed ? (
+                        <div className="space-y-2">
+                            <label className="text-xs font-medium text-muted-foreground px-1">Stock List</label>
+                            <select
+                                value={selectedStockList}
+                                onChange={(e) => setSelectedStockList(e.target.value)}
+                                className="w-full px-3 py-2 rounded-md border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+                            >
+                                {stockLists?.map(f => <option key={f} value={f}>{f}</option>)}
+                            </select>
+                        </div>
+                    ) : (
+                        <div title={`Selected: ${selectedStockList}`} className="w-10 h-10 flex items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                            <span className="text-[10px] font-mono">{selectedStockList.slice(0, 2)}</span>
+                        </div>
+                    )}
+
+                    {/* Run Analysis Button */}
+                    {jobStatus?.status === 'running' ? (
+                        <div
+                            className={cn(
+                                "flex items-center gap-3 bg-primary/10 text-primary rounded-lg border border-primary/20 cursor-pointer hover:bg-primary/20 transition-colors",
+                                isCollapsed ? "p-2 justify-center" : "px-4 py-3"
+                            )}
+                            onClick={() => setShowLogs(true)}
+                            title="Analysis Running"
+                        >
+                            <RefreshCw className="w-4 h-4 animate-spin shrink-0" />
+                            {!isCollapsed && (
+                                <div className="flex flex-col overflow-hidden">
+                                    <span className="text-sm font-medium whitespace-nowrap">Running...</span>
+                                    <span className="text-xs opacity-80 whitespace-nowrap">{jobStatus.progress}%</span>
+                                </div>
+                            )}
+                        </div>
+                    ) : (
+                        <button
+                            onClick={handleRunAnalysis}
+                            disabled={!selectedStockList}
+                            className={cn(
+                                "flex items-center gap-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all shadow-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed",
+                                isCollapsed ? "p-3 justify-center" : "w-full px-4 py-3 justify-center"
+                            )}
+                            title="Run Analysis"
+                        >
+                            <Play className="w-4 h-4 shrink-0" />
+                            {!isCollapsed && <span>Run Analysis</span>}
+                        </button>
+                    )}
+
+                    {/* Logs Button */}
+                    <button
+                        onClick={() => setShowLogs(!showLogs)}
+                        className={cn(
+                            "flex items-center gap-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-all shadow-sm",
+                            isCollapsed ? "p-3 justify-center" : "w-full px-4 py-2 justify-center"
+                        )}
+                        title="View Logs"
+                    >
+                        <Terminal className="w-4 h-4 shrink-0" />
+                        {!isCollapsed && <span className="text-sm">View Logs</span>}
+                    </button>
+
+                    {/* Status Indicators */}
+                    {!isCollapsed && latestUpdate?.timestamp && (
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
+                            <Clock className="w-3 h-3" />
+                            <span>Updated: {(() => {
+                                const d = new Date(latestUpdate.timestamp * 1000);
+                                const year = d.getFullYear();
+                                const month = d.toLocaleString('en-US', { month: 'short' });
+                                const day = d.getDate().toString().padStart(2, '0');
+                                const time = d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit', second: '2-digit', hour12: true }).toLowerCase();
+                                return `${year} ${month} ${day} ${time}`;
+                            })()}</span>
+                        </div>
+                    )}
+
+                    {!isCollapsed && jobStatus?.status === 'failed' && (
+                        <div className="flex items-center gap-2 text-destructive text-xs font-medium bg-destructive/10 px-3 py-2 rounded-lg border border-destructive/20">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            <span className="truncate">Failed: {jobStatus.error || 'Error'}</span>
+                        </div>
+                    )}
+                </div>
             </nav>
 
             <div className="p-4 border-t border-border text-xs text-muted-foreground text-center overflow-hidden whitespace-nowrap">

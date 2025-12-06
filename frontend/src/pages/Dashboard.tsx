@@ -1,65 +1,35 @@
+
 import React, { useState, useEffect } from 'react';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { analysisApi, stocksApi } from '../services/api';
+import { useQuery } from '@tanstack/react-query';
+import { analysisApi } from '../services/api';
 import { AnalysisTable } from '../components/AnalysisTable';
 import { BoxplotChart } from '../components/BoxplotChart';
 import { LogViewer } from '../components/LogViewer';
-import { Play, RefreshCw, Clock, AlertCircle, Terminal } from 'lucide-react';
 import { cn } from '../utils/cn';
 
-export const Dashboard: React.FC = () => {
+interface DashboardProps {
+    selectedStockList: string;
+    setSelectedStockList: (list: string) => void;
+    showLogs: boolean;
+    setShowLogs: (show: boolean) => void;
+}
 
-    const [selectedStockList, setSelectedStockList] = useState<string>('');
+export const Dashboard: React.FC<DashboardProps> = ({
+    selectedStockList,
+    setSelectedStockList,
+    showLogs,
+    setShowLogs
+}) => {
+
     const [activeTab, setActiveTab] = useState<'cd' | 'mc'>('cd');
     const [activeSubTab, setActiveSubTab] = useState<string>('best_intervals_50');
     const [selectedRow, setSelectedRow] = useState<any>(null);
     const [chartData, setChartData] = useState<any[]>([]);
-    const [showLogs, setShowLogs] = useState(false);
-
-    // Fetch stock lists
-    const { data: stockLists } = useQuery({
-        queryKey: ['stockFiles'],
-        queryFn: stocksApi.list
-    });
-
-    // Set default stock list
-    useEffect(() => {
-        if (stockLists && stockLists.length > 0 && !selectedStockList) {
-            if (stockLists.includes('00-stocks_hot.tab')) {
-                setSelectedStockList('00-stocks_hot.tab');
-            } else {
-                setSelectedStockList(stockLists[0]);
-            }
-        }
-    }, [stockLists, selectedStockList]);
-
-    // Fetch job status
-    const { data: jobStatus, refetch: refetchStatus } = useQuery({
-        queryKey: ['jobStatus'],
-        queryFn: analysisApi.getStatus,
-        refetchInterval: (query) => (query.state.data?.status === 'running' ? 1000 : false)
-    });
-
-    // Run analysis mutation
-    const runAnalysisMutation = useMutation({
-        mutationFn: () => analysisApi.run(selectedStockList),
-        onSuccess: () => {
-            refetchStatus();
-        },
-        onError: (error) => alert(`Error starting analysis: ${error}`)
-    });
 
     // Fetch result files
     const { data: resultFiles, isLoading: isLoadingFiles } = useQuery({
         queryKey: ['resultFiles', selectedStockList],
         queryFn: () => analysisApi.listFiles(selectedStockList),
-        enabled: !!selectedStockList
-    });
-
-    // Fetch latest update time
-    const { data: latestUpdate } = useQuery({
-        queryKey: ['latestUpdate', selectedStockList],
-        queryFn: () => selectedStockList ? analysisApi.getLatestUpdate(selectedStockList) : null,
         enabled: !!selectedStockList
     });
 
@@ -137,7 +107,7 @@ export const Dashboard: React.FC = () => {
                 const match = detailedData.find((d: any) =>
                     d.ticker === selectedRow.ticker && d.interval === interval
                 );
-                console.log(`Match for ${selectedRow.ticker} ${interval}:`, match ? 'Found' : 'NOT FOUND');
+                console.log(`Match for ${selectedRow.ticker} ${interval}: `, match ? 'Found' : 'NOT FOUND');
                 return match;
             }).filter(Boolean); // Remove any undefined entries
 
@@ -165,12 +135,6 @@ export const Dashboard: React.FC = () => {
             setChartData([]);
         }
     }, [selectedRow, returnsData]);
-
-    const handleRunAnalysis = () => {
-        if (selectedStockList) {
-            runAnalysisMutation.mutate();
-        }
-    };
 
     const [chartPanelWidth, setChartPanelWidth] = useState(33); // Default 33%
     const [isResizing, setIsResizing] = useState(false);
@@ -214,68 +178,6 @@ export const Dashboard: React.FC = () => {
 
     return (
         <div className="p-6 h-full flex flex-col space-y-6">
-            {/* Header & Controls */}
-            <div className="flex justify-between items-center bg-card p-4 rounded-xl border border-border shadow-sm">
-                <div className="flex items-center gap-4">
-                    <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">Stock List</label>
-                        <select
-                            value={selectedStockList}
-                            onChange={(e) => setSelectedStockList(e.target.value)}
-                            className="px-3 py-2 rounded-md border border-input bg-background text-sm min-w-[200px] focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        >
-                            {stockLists?.map(f => <option key={f} value={f}>{f}</option>)}
-                        </select>
-                    </div>
-
-                    {latestUpdate?.timestamp && (
-                        <div className="flex flex-col justify-center">
-                            <span className="text-xs font-medium text-muted-foreground">Last Updated</span>
-                            <span className="text-sm flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {new Date(latestUpdate.timestamp * 1000).toLocaleString()}
-                            </span>
-                        </div>
-                    )}
-                </div>
-
-                <div className="flex items-center gap-4">
-                    {jobStatus?.status === 'failed' && (
-                        <div className="flex items-center gap-2 text-destructive text-sm font-medium bg-destructive/10 px-3 py-2 rounded-lg border border-destructive/20">
-                            <AlertCircle className="w-4 h-4" />
-                            Analysis Failed: {jobStatus.error || 'Unknown error'}
-                        </div>
-                    )}
-                    {jobStatus?.status === 'running' ? (
-                        <div className="flex items-center gap-3 px-4 py-2 bg-primary/10 text-primary rounded-lg border border-primary/20 cursor-pointer hover:bg-primary/20 transition-colors" onClick={() => setShowLogs(true)}>
-                            <RefreshCw className="w-4 h-4 animate-spin" />
-                            <div className="flex flex-col">
-                                <span className="text-sm font-medium">Running Analysis...</span>
-                                <span className="text-xs opacity-80">Progress: {jobStatus.progress}% (Click for logs)</span>
-                            </div>
-                        </div>
-                    ) : (
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setShowLogs(!showLogs)}
-                                className="p-2.5 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-all shadow-sm"
-                                title="View Logs"
-                            >
-                                <Terminal className="w-4 h-4" />
-                            </button>
-                            <button
-                                onClick={handleRunAnalysis}
-                                disabled={!selectedStockList}
-                                className="flex items-center gap-2 px-6 py-2.5 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-all shadow-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                <Play className="w-4 h-4" />
-                                Run Analysis
-                            </button>
-                        </div>
-                    )}
-                </div>
-            </div>
-
             <LogViewer isOpen={showLogs} onClose={() => setShowLogs(false)} />
 
             {/* Main Content */}
@@ -368,7 +270,7 @@ export const Dashboard: React.FC = () => {
                     {/* Table */}
                     <div
                         className={cn("flex-1 border-r border-border overflow-hidden flex flex-col")}
-                        style={{ width: selectedRow ? `${100 - chartPanelWidth}%` : '100%' }}
+                        style={{ width: selectedRow ? `${100 - chartPanelWidth}% ` : '100%' }}
                     >
                         {isLoadingTable || isLoadingFiles ? (
                             <div className="h-full flex items-center justify-center text-muted-foreground">Loading data...</div>
@@ -409,7 +311,7 @@ export const Dashboard: React.FC = () => {
                     {selectedRow && (
                         <div
                             className="flex flex-col bg-card overflow-hidden"
-                            style={{ width: `${chartPanelWidth}%` }}
+                            style={{ width: `${chartPanelWidth}% ` }}
                         >
                             <div className="p-4 border-b border-border flex justify-between items-center bg-muted/10">
                                 <h3 className="font-semibold truncate pr-2">{selectedRow.ticker} ({selectedRow.interval})</h3>
