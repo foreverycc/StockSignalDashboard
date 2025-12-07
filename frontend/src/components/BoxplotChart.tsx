@@ -16,9 +16,10 @@ import { processRowDataForChart, extractCurrentTrajectory } from '../utils/chart
 interface BoxplotChartProps {
     selectedRow: any | null;
     title?: string;
+    subtitle?: string;
 }
 
-export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title }) => {
+export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, subtitle }) => {
     console.log('BoxplotChart received selectedRow:', selectedRow);
 
     if (!selectedRow) {
@@ -65,7 +66,10 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title }
 
     return (
         <div className="w-full h-full flex flex-col">
-            {title && <h3 className="text-sm font-semibold mb-2">{title}</h3>}
+            <div className="mb-2">
+                {title && <h3 className="text-sm font-semibold">{title}</h3>}
+                {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
+            </div>
 
             {/* Returns Chart - Top */}
             <div className="w-full mb-1" style={{ height: '200px' }}>

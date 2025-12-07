@@ -73,6 +73,37 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const detailedRows = React.useMemo(() => {
         if (!selectedRow || !detailedData) return [];
 
+        // Helper to extract best metrics from detailed row
+        const extractBestMetrics = (row: any) => {
+            let bestPeriod = -1;
+            let maxSuccessRate = -1;
+            let bestReturn = -1;
+            let bestCount = 0;
+
+            // Iterate through periods 0-100 to find best stats
+            for (let i = 0; i <= 100; i++) {
+                const rate = row[`success_rate_${i}`];
+                const ret = row[`avg_return_${i}`];
+                const count = row[`test_count_${i}`];
+
+                if (rate !== undefined && ret !== undefined) {
+                    // Simple logic: maximize success rate, then return
+                    if (rate > maxSuccessRate || (rate === maxSuccessRate && ret > bestReturn)) {
+                        maxSuccessRate = rate;
+                        bestReturn = ret;
+                        bestCount = count;
+                        bestPeriod = i;
+                    }
+                }
+            }
+
+            return {
+                success_rate: maxSuccessRate !== -1 ? maxSuccessRate : 0,
+                avg_return: bestReturn !== -1 ? bestReturn : 0,
+                test_count: bestCount
+            };
+        };
+
         // For 1234/5230 models, the intervals column contains multiple intervals (e.g., "1,2,3")
         if (activeSubTab === '1234' || activeSubTab === '5230') {
             const intervalsStr = selectedRow.intervals;
@@ -91,6 +122,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     d.ticker === selectedRow.ticker && d.interval === interval
                 );
                 console.log(`Match for ${selectedRow.ticker} ${interval}:`, match ? 'Found' : 'NOT FOUND');
+
+                if (match) {
+                    // Calculate best metrics for this interval
+                    const metrics = extractBestMetrics(match);
+                    return { ...match, ...metrics };
+                }
                 return match;
             }).filter(Boolean); // Remove any undefined entries
 
@@ -102,7 +139,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
         const match = detailedData.find((d: any) =>
             d.ticker === selectedRow.ticker && d.interval === selectedRow.interval
         );
-        return match ? [match] : [];
+
+        if (match) {
+            // Merge metrics from selectedRow (summary) which has the correct values
+            return [{
+                ...match,
+                success_rate: selectedRow.success_rate,
+                avg_return: selectedRow.avg_return,
+                test_count: selectedRow.test_count || selectedRow.test_count_0
+            }];
+        }
+        return [];
     }, [selectedRow, detailedData, activeSubTab]);
 
     const [chartPanelWidth, setChartPanelWidth] = useState(33); // Default 33%
@@ -278,11 +325,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     {selectedRow && (
                         <div
                             className={cn(
-                                "flex flex-col bg-card overflow-hidden transition-all duration-300",
+                                "flex flex-col bg-card overflow-hidden transition-all duration-300 h-full",
                                 // Mobile: Fixed overlay
-                                "fixed inset-0 z-50 md:static md:z-auto",
-                                // Desktop: Dynamic width
-                                "md:block"
+                                "fixed inset-0 z-50 md:static md:z-auto"
                             )}
                             style={{
                                 width: window.innerWidth >= 768 ? `${chartPanelWidth}%` : '100%'
@@ -306,6 +351,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                                 <BoxplotChart
                                                     selectedRow={row}
                                                     title={`Returns Distribution - ${row.ticker} (${row.interval})`}
+                                                    subtitle={`Success Rate: ${row.success_rate}% | Avg Return: ${row.avg_return}% | Signal Count: ${row.test_count || row.test_count_0 || 'N/A'}`}
                                                 />
                                             </div>
                                         ))}
@@ -315,28 +361,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                         No detailed data available for this selection
                                     </div>
                                 )}
-
-                                <div className="space-y-4 mt-6">
-                                    <h4 className="text-sm font-medium text-muted-foreground uppercase tracking-wider">Details</h4>
-                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                        <div className="p-3 bg-muted/30 rounded-lg">
-                                            <span className="block text-xs text-muted-foreground">Success Rate</span>
-                                            <span className="font-mono font-medium">{selectedRow.success_rate}%</span>
-                                        </div>
-                                        <div className="p-3 bg-muted/30 rounded-lg">
-                                            <span className="block text-xs text-muted-foreground">Avg Return</span>
-                                            <span className="font-mono font-medium">{selectedRow.avg_return}%</span>
-                                        </div>
-                                        <div className="p-3 bg-muted/30 rounded-lg">
-                                            <span className="block text-xs text-muted-foreground">Signal Count</span>
-                                            <span className="font-mono font-medium">{selectedRow.test_count || selectedRow.test_count_0 || 'N/A'}</span>
-                                        </div>
-                                        <div className="p-3 bg-muted/30 rounded-lg">
-                                            <span className="block text-xs text-muted-foreground">Latest Signal</span>
-                                            <span className="font-mono font-medium">{selectedRow.latest_signal}</span>
-                                        </div>
-                                    </div>
-                                </div>
                             </div>
                         </div>
                     )}
