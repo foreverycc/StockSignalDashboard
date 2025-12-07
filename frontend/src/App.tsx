@@ -15,6 +15,21 @@ function AppContent() {
   const [selectedStockList, setSelectedStockList] = useState<string>('');
   const [showLogs, setShowLogs] = useState(false);
 
+  // Auto-collapse sidebar on mobile
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth < 768) {
+        setIsSidebarCollapsed(true);
+      }
+    };
+
+    // Initial check
+    handleResize();
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
   // Fetch stock lists
   const { data: stockLists } = useQuery({
     queryKey: ['stockFiles'],
@@ -84,7 +99,6 @@ function AppContent() {
         {activePage === 'dashboard' ? (
           <Dashboard
             selectedStockList={selectedStockList}
-            setSelectedStockList={setSelectedStockList}
             showLogs={showLogs}
             setShowLogs={setShowLogs}
           />

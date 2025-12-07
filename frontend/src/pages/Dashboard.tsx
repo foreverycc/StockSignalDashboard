@@ -9,14 +9,12 @@ import { cn } from '../utils/cn';
 
 interface DashboardProps {
     selectedStockList: string;
-    setSelectedStockList: (list: string) => void;
     showLogs: boolean;
     setShowLogs: (show: boolean) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
     selectedStockList,
-    setSelectedStockList,
     showLogs,
     setShowLogs
 }) => {
@@ -24,7 +22,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const [activeTab, setActiveTab] = useState<'cd' | 'mc'>('cd');
     const [activeSubTab, setActiveSubTab] = useState<string>('best_intervals_50');
     const [selectedRow, setSelectedRow] = useState<any>(null);
-    const [chartData, setChartData] = useState<any[]>([]);
 
     // Fetch result files
     const { data: resultFiles, isLoading: isLoadingFiles } = useQuery({
@@ -57,20 +54,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
         queryKey: ['tableData', currentFileName],
         queryFn: () => currentFileName ? analysisApi.getFileContent(currentFileName) : null,
         enabled: !!currentFileName
-    });
-
-    // Fetch chart data when row is selected
-    // We need to find the returns distribution file
-    const returnsFileName = React.useMemo(() => {
-        if (!resultFiles) return null;
-        const prefix = activeTab === 'cd' ? 'cd_eval_returns_distribution_' : 'mc_eval_returns_distribution_';
-        return resultFiles.find(f => f.startsWith(prefix));
-    }, [resultFiles, activeTab]);
-
-    const { data: returnsData } = useQuery({
-        queryKey: ['returnsData', returnsFileName],
-        queryFn: () => returnsFileName ? analysisApi.getFileContent(returnsFileName) : null,
-        enabled: !!returnsFileName
     });
 
     // Fetch custom_detailed file for chart data (always load this for charts)
@@ -107,7 +90,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 const match = detailedData.find((d: any) =>
                     d.ticker === selectedRow.ticker && d.interval === interval
                 );
-                console.log(`Match for ${selectedRow.ticker} ${interval}: `, match ? 'Found' : 'NOT FOUND');
+                console.log(`Match for ${selectedRow.ticker} ${interval}:`, match ? 'Found' : 'NOT FOUND');
                 return match;
             }).filter(Boolean); // Remove any undefined entries
 
@@ -122,25 +105,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
         return match ? [match] : [];
     }, [selectedRow, detailedData, activeSubTab]);
 
-    // Process chart data
-    useEffect(() => {
-        if (selectedRow && returnsData) {
-            const filtered = returnsData.filter((d: any) =>
-                d.ticker === selectedRow.ticker && d.interval === selectedRow.interval
-            );
-            // Sort by period
-            filtered.sort((a: any, b: any) => a.period - b.period);
-            setChartData(filtered);
-        } else {
-            setChartData([]);
-        }
-    }, [selectedRow, returnsData]);
-
     const [chartPanelWidth, setChartPanelWidth] = useState(33); // Default 33%
     const [isResizing, setIsResizing] = useState(false);
 
     // Handle resizing
-    const startResizing = React.useCallback((mouseDownEvent: React.MouseEvent) => {
+    const startResizing = React.useCallback(() => {
         setIsResizing(true);
     }, []);
 
@@ -150,16 +119,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     const resize = React.useCallback((mouseMoveEvent: MouseEvent) => {
         if (isResizing) {
-            // Calculate new width percentage based on mouse position
-            // We are resizing the right panel, so we calculate from the right edge or relative to container
-            // Easier: Calculate percentage of container width
             const container = document.getElementById('dashboard-content-container');
             if (container) {
                 const containerRect = container.getBoundingClientRect();
                 const newWidthPx = containerRect.right - mouseMoveEvent.clientX;
                 const newWidthPercent = (newWidthPx / containerRect.width) * 100;
 
-                // Limit width between 20% and 80%
                 if (newWidthPercent >= 20 && newWidthPercent <= 80) {
                     setChartPanelWidth(newWidthPercent);
                 }
@@ -177,17 +142,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }, [resize, stopResizing]);
 
     return (
-        <div className="p-6 h-full flex flex-col space-y-6">
+        <div className="p-4 md:p-6 h-full flex flex-col space-y-4 md:space-y-6">
             <LogViewer isOpen={showLogs} onClose={() => setShowLogs(false)} />
 
             {/* Main Content */}
             <div className="flex-1 flex flex-col bg-card rounded-xl border border-border shadow-sm overflow-hidden">
                 {/* Tabs */}
-                <div className="flex border-b border-border">
+                <div className="flex border-b border-border overflow-x-auto scrollbar-hide">
                     <button
                         onClick={() => setActiveTab('cd')}
                         className={cn(
-                            "px-6 py-3 text-sm font-medium transition-colors relative",
+                            "px-4 md:px-6 py-3 text-sm font-medium transition-colors relative whitespace-nowrap",
                             activeTab === 'cd'
                                 ? "text-primary"
                                 : "text-muted-foreground hover:text-foreground"
@@ -199,7 +164,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <button
                         onClick={() => setActiveTab('mc')}
                         className={cn(
-                            "px-6 py-3 text-sm font-medium transition-colors relative",
+                            "px-4 md:px-6 py-3 text-sm font-medium transition-colors relative whitespace-nowrap",
                             activeTab === 'mc'
                                 ? "text-primary"
                                 : "text-muted-foreground hover:text-foreground"
@@ -212,7 +177,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                 {/* Subtabs */}
                 {activeTab === 'cd' && (
-                    <div className="flex gap-1 border-b border-border">
+                    <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-hide p-1">
                         {[
                             { value: 'best_intervals_50', label: 'Best Intervals (50)' },
                             { value: 'best_intervals_20', label: 'Best Intervals (20)' },
@@ -226,10 +191,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 key={tab.value}
                                 onClick={() => setActiveSubTab(tab.value)}
                                 className={cn(
-                                    "px-4 py-2 text-sm font-medium transition-colors relative",
+                                    "px-3 md:px-4 py-2 text-xs md:text-sm font-medium transition-colors relative whitespace-nowrap rounded-md",
                                     activeSubTab === tab.value
-                                        ? "text-primary border-b-2 border-primary"
-                                        : "text-muted-foreground hover:text-foreground"
+                                        ? "text-primary bg-primary/10"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
                                 )}
                             >
                                 {tab.label}
@@ -239,7 +204,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 )}
 
                 {activeTab === 'mc' && (
-                    <div className="flex gap-1 border-b border-border">
+                    <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-hide p-1">
                         {[
                             { value: 'best_intervals_50', label: 'Best Intervals (50)' },
                             { value: 'best_intervals_20', label: 'Best Intervals (20)' },
@@ -253,10 +218,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 key={tab.value}
                                 onClick={() => setActiveSubTab(tab.value)}
                                 className={cn(
-                                    "px-4 py-2 text-sm font-medium transition-colors relative",
+                                    "px-3 md:px-4 py-2 text-xs md:text-sm font-medium transition-colors relative whitespace-nowrap rounded-md",
                                     activeSubTab === tab.value
-                                        ? "text-primary border-b-2 border-primary"
-                                        : "text-muted-foreground hover:text-foreground"
+                                        ? "text-primary bg-primary/10"
+                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
                                 )}
                             >
                                 {tab.label}
@@ -269,8 +234,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <div id="dashboard-content-container" className="flex-1 flex overflow-hidden relative">
                     {/* Table */}
                     <div
-                        className={cn("flex-1 border-r border-border overflow-hidden flex flex-col")}
-                        style={{ width: selectedRow ? `${100 - chartPanelWidth}% ` : '100%' }}
+                        className={cn("flex-1 border-r border-border overflow-hidden flex flex-col transition-all duration-300")}
+                        style={{
+                            width: selectedRow && window.innerWidth >= 768 ? `${100 - chartPanelWidth}%` : '100%'
+                        }}
                     >
                         {isLoadingTable || isLoadingFiles ? (
                             <div className="h-full flex items-center justify-center text-muted-foreground">Loading data...</div>
@@ -297,10 +264,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         )}
                     </div>
 
-                    {/* Resizer Handle */}
+                    {/* Resizer Handle (Desktop Only) */}
                     {selectedRow && (
                         <div
-                            className="w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors z-10 flex items-center justify-center"
+                            className="hidden md:flex w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors z-10 items-center justify-center"
                             onMouseDown={startResizing}
                         >
                             <div className="h-8 w-0.5 bg-muted-foreground/30 rounded-full" />
@@ -310,23 +277,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     {/* Chart / Details Panel */}
                     {selectedRow && (
                         <div
-                            className="flex flex-col bg-card overflow-hidden"
-                            style={{ width: `${chartPanelWidth}% ` }}
+                            className={cn(
+                                "flex flex-col bg-card overflow-hidden transition-all duration-300",
+                                // Mobile: Fixed overlay
+                                "fixed inset-0 z-50 md:static md:z-auto",
+                                // Desktop: Dynamic width
+                                "md:block"
+                            )}
+                            style={{
+                                width: window.innerWidth >= 768 ? `${chartPanelWidth}%` : '100%'
+                            }}
                         >
                             <div className="p-4 border-b border-border flex justify-between items-center bg-muted/10">
                                 <h3 className="font-semibold truncate pr-2">{selectedRow.ticker} ({selectedRow.interval})</h3>
                                 <button
                                     onClick={() => setSelectedRow(null)}
-                                    className="text-muted-foreground hover:text-foreground shrink-0"
+                                    className="p-2 -mr-2 text-muted-foreground hover:text-foreground shrink-0"
                                 >
                                     Close
                                 </button>
                             </div>
-                            <div className="flex-1 p-4 overflow-y-auto">
+                            <div className="flex-1 p-4 overflow-y-auto bg-background md:bg-transparent">
                                 {/* Returns Distribution Boxplot(s) */}
                                 {detailedRows.length > 0 ? (
                                     <div className="space-y-6">
-                                        {detailedRows.map((row, index) => (
+                                        {detailedRows.map((row: any, index: number) => (
                                             <div key={index} style={{ height: '350px' }}>
                                                 <BoxplotChart
                                                     selectedRow={row}
