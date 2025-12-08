@@ -161,6 +161,16 @@ def process_ticker_all(ticker, end_date=None):
         if all(df.empty for df in data.values()):
             print(f"No data available for {ticker}")
             return ticker, None, None, [], [], [], [], None
+            
+        # Save downloaded data to cache
+        cache_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'data', 'price_cache')
+        os.makedirs(cache_dir, exist_ok=True)
+        
+        for interval, df in data.items():
+            if not df.empty:
+                cache_file = os.path.join(cache_dir, f"{ticker}_{interval}.csv")
+                # Save just the necessary columns (OHLCV) and index
+                df.to_csv(cache_file)
         
         # Process for 1234 breakout (CD signals)
         results_1234 = process_ticker_1234(ticker, data)

@@ -79,4 +79,8 @@ export const analysisApi = {
         const response = await api.get<any[]>(`/analysis/price_data/${ticker}`, { params: { interval, days } });
         return response.data;
     },
+    getPriceHistory: async (ticker: string, interval: string) => {
+        const response = await api.get<any[]>(`/analysis/price_history/${ticker}/${interval}`);
+        return response.data;
+    },
 };

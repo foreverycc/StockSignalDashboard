@@ -143,12 +143,14 @@ async def get_latest_update(stock_list: str):
     
     return {"timestamp": latest_time if latest_time > 0 else None}
 
-@router.get("/price_data/{ticker}")
-async def get_price_data(
+@router.get("/price_history/{ticker}/{interval}")
+async def get_price_history(
     ticker: str,
-    interval: str = "1d",
-    days: int = 60
+    interval: str,
 ):
+    # Days logic moved inside or fixed
+    days = 60 # Default
+
     """Get OHLCV price data for a ticker."""
     try:
         # Map interval to yfinance format
@@ -162,31 +164,82 @@ async def get_price_data(
         # Calculate period
         period = f"{days}d" if days <= 730 else "2y"
         
-        # Fetch data
-        stock = yf.Ticker(ticker)
-        df = stock.history(period=period, interval=yf_interval)
+        # Define cache directory and file
+        CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../cache"))
         
-        if df.empty:
-            return []
+        # Fallback to 'data/price_cache' if 'cache' doesn't exist/work (to match stock_analyzer.py which used 'data/price_cache')
+        # Wait, stock_analyzer used 'backend/data/price_cache'.
+        # analysis.py in 'backend/app/api/endpoints/analysis.py'
+        # ../../../ => backend/app/
+        # ../../../.. => backend/ ? No.
+        # file is in backend/app/api/endpoints
+        # dirname = backend/app/api/endpoints
+        # ../ = backend/app/api
+        # ../../ = backend/app
+        # ../../../ = backend
+        # so os.path.join(backend, 'cache')
         
-        # Convert to list of dicts
-        df = df.reset_index()
-        df = df.replace({np.nan: None, np.inf: None, -np.inf: None})
+        # BUT stock_analyzer.py used: os.path.join(..., 'data', 'price_cache')
+        # Let's align them to 'backend/data/price_cache'
         
+        CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/price_cache"))
+        os.makedirs(CACHE_DIR, exist_ok=True)
+        
+        # Use simpler filename format matching stock_analyzer
+        # force ticker to upper to match cache
+        ticker_upper = ticker.upper()
+        # Use simple interval (from request, not mapped to YF if we want to match analyzer output exactly?)
+        # Analyzer uses '2h', '1d', etc. validationMap keys are same.
+        
+        cache_file = os.path.join(CACHE_DIR, f"{ticker_upper}_{interval}.csv")
+
+        df = None
+        # Try to load from cache first
+        if os.path.exists(cache_file):
+            try:
+                df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
+                # Ensure index is named Date
+                if df.index.name is None:
+                    df.index.name = 'Date'
+                
+                # We trust the analyzer's cache, but if it's super old maybe we care?
+                # For now, just load it.
+                logger.info(f"Loaded {ticker} data from cache: {cache_file}")
+            except Exception as e:
+                logger.warning(f"Error loading {ticker} from cache: {e}. Fetching new data.")
+                df = None
+
+        if df is None or df.empty:
+            # Fetch logic...
+            # If cache miss, download and save
+            stock = yf.Ticker(ticker)
+            df = stock.history(period=period, interval=yf_interval)
+            
+            if df.empty:
+                return []
+                
+            # Save to cache with standardized name
+            # Note: We overwrite the simple name, which is fine.
+            if not os.path.exists(cache_file): 
+                df.to_csv(cache_file)
+        
+        # Format response
         records = []
-        for _, row in df.iterrows():
+        for date, row in df.iterrows():
+            # Skip rows with missing data or handle NaNs
+            if pd.isna(row['Open']) or pd.isna(row['Close']):
+                continue
+                
             record = {
-                'date': row.get('Date', row.get('Datetime', None)),
-                'open': float(row['Open']) if pd.notna(row['Open']) else None,
-                'high': float(row['High']) if pd.notna(row['High']) else None,
-                'low': float(row['Low']) if pd.notna(row['Low']) else None,
-                'close': float(row['Close']) if pd.notna(row['Close']) else None,
+                'time': date.isoformat(),
+                'open': float(row['Open']),
+                'high': float(row['High']),
+                'low': float(row['Low']),
+                'close': float(row['Close']),
                 'volume': int(row['Volume']) if pd.notna(row['Volume']) else 0
             }
-            if record['date']:
-                record['date'] = record['date'].isoformat() if hasattr(record['date'], 'isoformat') else str(record['date'])
             records.append(record)
-        
+            
         return records
         
     except Exception as e:

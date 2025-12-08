@@ -1,9 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { analysisApi } from '../services/api';
 import { AnalysisTable } from '../components/AnalysisTable';
 import { BoxplotChart } from '../components/BoxplotChart';
+import { CandleChart } from '../components/CandleChart';
 import { LogViewer } from '../components/LogViewer';
 import { cn } from '../utils/cn';
 
@@ -13,12 +13,44 @@ interface DashboardProps {
     setShowLogs: (show: boolean) => void;
 }
 
+// Wrapper component to handle individual chart data fetching
+const DetailedChartRow = ({ row, activeSubTab }: { row: any, activeSubTab: string }) => {
+    const { data: priceHistory, isLoading } = useQuery({
+        queryKey: ['priceHistory', row.ticker, row.interval],
+        queryFn: () => analysisApi.getPriceHistory(row.ticker, row.interval),
+        staleTime: 1000 * 60 * 60 * 24, // 24 hours
+        enabled: !!row.ticker && !!row.interval
+    });
+
+    return (
+        <div className="flex flex-col space-y-4 p-4 border rounded-lg bg-card/50">
+            <div style={{ height: '350px' }}>
+                <BoxplotChart
+                    selectedRow={row}
+                    title={`Returns Distribution - ${row.ticker} (${row.interval})`}
+                    subtitle={`Success Rate: ${row.success_rate}% | Avg Return: ${row.avg_return}% | Signal Count: ${row.test_count || row.test_count_0 || 'N/A'}`}
+                />
+            </div>
+            <div style={{ height: '350px' }} className="mt-4 border-t pt-4 border-border/50">
+                {isLoading ? (
+                    <div className="h-full flex items-center justify-center text-muted-foreground">Loading price history...</div>
+                ) : (
+                    <CandleChart
+                        data={priceHistory || []}
+                        ticker={row.ticker}
+                        interval={row.interval}
+                    />
+                )}
+            </div>
+        </div>
+    );
+};
+
 export const Dashboard: React.FC<DashboardProps> = ({
     selectedStockList,
     showLogs,
     setShowLogs
 }) => {
-
     const [activeTab, setActiveTab] = useState<'cd' | 'mc'>('cd');
     const [activeSubTab, setActiveSubTab] = useState<string>('best_intervals_50');
     const [selectedRow, setSelectedRow] = useState<any>(null);
@@ -107,21 +139,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
         // For 1234/5230 models, the intervals column contains multiple intervals (e.g., "1,2,3")
         if (activeSubTab === '1234' || activeSubTab === '5230') {
             const intervalsStr = selectedRow.intervals;
-            console.log('Processing intervals for row:', selectedRow.ticker, intervalsStr);
             if (!intervalsStr) return [];
 
             // Parse intervals: "1,2,3" -> ["1h", "2h", "3h"] or "10,15,30" -> ["10m", "15m", "30m"]
             const intervalNumbers = intervalsStr.split(',').map((s: string) => s.trim());
             const suffix = activeSubTab === '1234' ? 'h' : 'm';
             const intervals = intervalNumbers.map((n: string) => n + suffix);
-            console.log('Looking for intervals:', intervals);
 
             // Find detailed rows for each interval
             const results = intervals.map((interval: any) => {
                 const match = detailedData.find((d: any) =>
                     d.ticker === selectedRow.ticker && d.interval === interval
                 );
-                console.log(`Match for ${selectedRow.ticker} ${interval}:`, match ? 'Found' : 'NOT FOUND');
 
                 if (match) {
                     // Calculate best metrics for this interval
@@ -131,7 +160,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 return match;
             }).filter(Boolean); // Remove any undefined entries
 
-            console.log('Final results count:', results.length);
             return results;
         }
 
@@ -343,17 +371,15 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 </button>
                             </div>
                             <div className="flex-1 p-4 overflow-y-auto bg-background md:bg-transparent">
-                                {/* Returns Distribution Boxplot(s) */}
+                                {/* Returns Distribution Boxplot(s) & Price History */}
                                 {detailedRows.length > 0 ? (
                                     <div className="space-y-6">
                                         {detailedRows.map((row: any, index: number) => (
-                                            <div key={index} style={{ height: '350px' }}>
-                                                <BoxplotChart
-                                                    selectedRow={row}
-                                                    title={`Returns Distribution - ${row.ticker} (${row.interval})`}
-                                                    subtitle={`Success Rate: ${row.success_rate}% | Avg Return: ${row.avg_return}% | Signal Count: ${row.test_count || row.test_count_0 || 'N/A'}`}
-                                                />
-                                            </div>
+                                            <DetailedChartRow
+                                                key={`${row.ticker}-${row.interval}-${index}`}
+                                                row={row}
+                                                activeSubTab={activeSubTab}
+                                            />
                                         ))}
                                     </div>
                                 ) : (
@@ -365,7 +391,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         </div>
                     )}
                 </div>
-            </div >
-        </div >
+            </div>
+        </div>
     );
 };
