@@ -6,8 +6,9 @@ import {
     YAxis,
     CartesianGrid,
     Tooltip,
+    Legend,
     ResponsiveContainer,
-    Cell
+    Scatter
 } from 'recharts';
 import { format } from 'date-fns';
 
@@ -18,6 +19,8 @@ interface CandleData {
     low: number;
     close: number;
     volume: number;
+    cd_signal?: boolean;
+    mc_signal?: boolean;
 }
 
 interface CandleChartProps {
@@ -28,15 +31,27 @@ interface CandleChartProps {
 
 const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
-        const { open, high, low, close, volume } = payload[0].payload;
+        // Find the main payload item (usually the candle or volume, we want all info)
+        // payload[0] might be volume or candle depending on order/hover
+        // But we can extract from payload[0].payload which is the full data object
+        const { open, high, low, close, volume, cd_signal, mc_signal } = payload[0].payload;
+
         return (
-            <div className="bg-card border border-border p-2 rounded shadow text-xs">
+            <div className="bg-card border border-border p-2 rounded shadow text-xs z-50">
                 <p className="font-semibold mb-1">{format(new Date(label), 'yyyy-MM-dd HH:mm')}</p>
-                <p className="text-muted-foreground">Open: <span className="text-foreground">{open.toFixed(2)}</span></p>
-                <p className="text-muted-foreground">High: <span className="text-foreground">{high.toFixed(2)}</span></p>
-                <p className="text-muted-foreground">Low: <span className="text-foreground">{low.toFixed(2)}</span></p>
-                <p className="text-muted-foreground">Close: <span className="text-foreground">{close.toFixed(2)}</span></p>
-                <p className="text-muted-foreground">Vol: <span className="text-foreground">{volume.toLocaleString()}</span></p>
+                <div className="grid grid-cols-2 gap-x-4">
+                    <span className="text-muted-foreground">Open:</span> <span className="text-foreground text-right">{open.toFixed(2)}</span>
+                    <span className="text-muted-foreground">High:</span> <span className="text-foreground text-right">{high.toFixed(2)}</span>
+                    <span className="text-muted-foreground">Low:</span> <span className="text-foreground text-right">{low.toFixed(2)}</span>
+                    <span className="text-muted-foreground">Close:</span> <span className="text-foreground text-right">{close.toFixed(2)}</span>
+                    <span className="text-muted-foreground">Vol:</span> <span className="text-foreground text-right">{volume.toLocaleString()}</span>
+                </div>
+                {(cd_signal || mc_signal) && (
+                    <div className="mt-2 pt-2 border-t border-border flex flex-col gap-1">
+                        {cd_signal && <span className="text-green-500 font-bold flex items-center gap-1">↑ CD BUY</span>}
+                        {mc_signal && <span className="text-red-500 font-bold flex items-center gap-1">↓ MC SELL</span>}
+                    </div>
+                )}
             </div>
         );
     }
@@ -45,45 +60,52 @@ const CustomTooltip = ({ active, payload, label }: any) => {
 
 const CandleShape = (props: any) => {
     const { x, y, width, height } = props;
-
     const { payload } = props;
     const { open: openVal, close: closeVal, high: highVal, low: lowVal } = payload;
 
     const isUp = closeVal >= openVal;
     const color = isUp ? '#22c55e' : '#ef4444';
 
-    if (!highVal || !lowVal || highVal === lowVal) return null;
+    if (highVal === undefined || lowVal === undefined) return null;
 
-    const pixelHeight = height;
-    const valueRange = highVal - lowVal;
-    if (valueRange === 0) return null;
+    // Y Axis is inverted (0 is top), but values are normal
+    // We need to map values to pixels. 
+    // Recharts passes us x,y,width,height which is the bar's bounding box.
+    // However, for candlestick, we need exact scaling.
+    // IMPORTANT: The 'Bar' component with dataKey={[min, max]} will calculate y and height 
+    // corresponding to 'min' and 'max' scaled to the axis.
+    // So 'y' is the top (max price), 'height' is the span (max - min).
+    // We can assume strict linear scaling within this box.
 
-    const pixelsPerUnit = pixelHeight / valueRange;
+    // BUT we need open/close pixel positions.
+    // height = (max - min) * scale
+    // scale = height / (max - min)
 
-    const yHigh = y;
-    const yLow = y + height;
+    const range = highVal - lowVal;
+    const scale = range === 0 ? 0 : height / range;
 
-    const yOpen = y + (highVal - openVal) * pixelsPerUnit;
-    const yClose = y + (highVal - closeVal) * pixelsPerUnit;
+    // y is the pixel position of the TOP (highVal)
+    // We calculate offsets from top (highVal)
 
-    const bodyTop = Math.min(yOpen, yClose);
-    const bodyHeight = Math.max(1, Math.abs(yOpen - yClose)); // Ensure at least 1px
+    const openOffset = (highVal - openVal) * scale;
+    const closeOffset = (highVal - closeVal) * scale;
 
-    // Center the wick
+    const bodyTop = Math.min(openOffset, closeOffset);
+    const bodyHeight = Math.max(1, Math.abs(openOffset - closeOffset));
+
+    // Center wick
     const wickX = x + width / 2;
 
     return (
         <g>
-            {/* Wick */}
-            <line x1={wickX} y1={yHigh} x2={wickX} y2={yLow} stroke={color} strokeWidth={1} />
-            {/* Body */}
+            <line x1={wickX} y1={y} x2={wickX} y2={y + height} stroke={color} strokeWidth={1} />
             <rect
                 x={x}
-                y={bodyTop}
+                y={y + bodyTop}
                 width={width}
                 height={bodyHeight}
                 fill={color}
-                stroke={color} // Stroke avoids gaps
+                stroke={color}
             />
         </g>
     );
@@ -91,16 +113,16 @@ const CandleShape = (props: any) => {
 
 export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval }) => {
 
-    // Filter invalid data
     const validData = useMemo(() => {
         if (!data) return [];
         return data.filter(d =>
             d.open != null && d.close != null && d.high != null && d.low != null
         ).map(d => ({
             ...d,
-            // Pre-calculate min/max for the Bar domain
-            barMin: d.low,
-            barMax: d.high
+            // Prepare signals for scatter plots
+            // We'll place signals slightly above high (sell) or below low (buy)
+            buySignal: d.cd_signal ? d.low * 0.999 : null,
+            sellSignal: d.mc_signal ? d.high * 1.001 : null
         }));
     }, [data]);
 
@@ -111,13 +133,17 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
     return (
         <div className="w-full h-full flex flex-col">
             <h3 className="text-sm font-semibold mb-2">Price History - {ticker} ({interval})</h3>
+
+            {/* Price Chart - Top Section */}
             <div className="flex-1 min-h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
                         data={validData}
-                        margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                        syncId="candleGraph"
+                        margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
                     >
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
+
                         <XAxis
                             dataKey="time"
                             tickFormatter={(tick) => {
@@ -128,21 +154,116 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                                 }
                             }}
                             stroke="hsl(var(--muted-foreground))"
-                            tick={{ fontSize: 11 }}
+                            tick={{ fontSize: 10 }}
                             minTickGap={30}
+                            hide // Hide XAxis on top chart to avoid clutter, user can see specific time in tooltip
                         />
+
                         <YAxis
                             domain={['auto', 'auto']}
                             stroke="hsl(var(--muted-foreground))"
-                            tick={{ fontSize: 11 }}
-                            tickFormatter={(val) => val.toFixed(1)}
+                            tick={{ fontSize: 10 }}
+                            tickFormatter={(val: number) => val.toFixed(1)}
+                            scale="linear"
+                            label={{ value: 'Price', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }}
                         />
-                        <Tooltip content={<CustomTooltip />} />
 
-                        {/* Candlestick using Custom Shape */}
+                        <Tooltip content={<CustomTooltip />} />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+
+                        {/* Candlestick - Using [low, high] with custom shape */}
                         <Bar
+                            name="Price"
                             dataKey={(d) => [d.low, d.high]}
                             shape={<CandleShape />}
+                            isAnimationActive={false}
+                            legendType="none" // Hide generic Candle bar from legend if preferred, or keep
+                        />
+
+                        {/* Buy Signals (CD) */}
+                        <Scatter
+                            name="CD Buy Signal"
+                            dataKey="buySignal"
+                            shape={(props: any) => {
+                                const { cx, cy } = props;
+                                if (!cx || !cy) return <g />;
+                                return (
+                                    <path
+                                        d={`M${cx},${cy} l-4,6 l8,0 z`}
+                                        fill="#22c55e"
+                                        stroke="#22c55e"
+                                        transform={`translate(0, 10)`} // Offset below
+                                    />
+                                );
+                            }}
+                            isAnimationActive={false}
+                            fill="#22c55e"
+                        />
+
+                        {/* Sell Signals (MC) */}
+                        <Scatter
+                            name="MC Sell Signal"
+                            dataKey="sellSignal"
+                            shape={(props: any) => {
+                                const { cx, cy } = props;
+                                if (!cx || !cy) return <g />;
+                                return (
+                                    <path
+                                        d={`M${cx},${cy} l-4,-6 l8,0 z`}
+                                        fill="#ef4444"
+                                        stroke="#ef4444"
+                                        transform={`translate(0, -10)`} // Offset above
+                                    />
+                                );
+                            }}
+                            isAnimationActive={false}
+                            fill="#ef4444"
+                        />
+                    </ComposedChart>
+                </ResponsiveContainer>
+            </div>
+
+            {/* Volume Chart - Bottom Section */}
+            <div className="h-[100px] mt-2">
+                <ResponsiveContainer width="100%" height="100%">
+                    <ComposedChart
+                        data={validData}
+                        syncId="candleGraph"
+                        margin={{ top: 0, right: 30, left: 10, bottom: 20 }}
+                    >
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
+
+                        <XAxis
+                            dataKey="time"
+                            tickFormatter={(tick) => {
+                                try {
+                                    return format(new Date(tick), 'MM-dd')
+                                } catch (e) {
+                                    return tick;
+                                }
+                            }}
+                            stroke="hsl(var(--muted-foreground))"
+                            tick={{ fontSize: 10 }}
+                            minTickGap={30}
+                            label={{ value: 'Date', position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                        />
+
+                        <YAxis
+                            domain={[0, 'auto']}
+                            stroke="hsl(var(--muted-foreground))"
+                            tick={{ fontSize: 10 }}
+                            tickFormatter={(val: number) => (val / 1000).toFixed(0) + 'k'}
+                            label={{ value: 'Volume', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }}
+                        />
+
+                        <Tooltip content={<CustomTooltip />} />
+
+                        <Bar
+                            dataKey="volume"
+                            fill="hsl(var(--muted-foreground))"
+                            opacity={0.3}
+                            barSize={30}
+                            name="Volume"
                             isAnimationActive={false}
                         />
                     </ComposedChart>

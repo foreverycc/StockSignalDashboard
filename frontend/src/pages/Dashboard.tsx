@@ -31,7 +31,7 @@ const DetailedChartRow = ({ row, activeSubTab }: { row: any, activeSubTab: strin
                     subtitle={`Success Rate: ${row.success_rate}% | Avg Return: ${row.avg_return}% | Signal Count: ${row.test_count || row.test_count_0 || 'N/A'}`}
                 />
             </div>
-            <div style={{ height: '350px' }} className="mt-4 border-t pt-4 border-border/50">
+            <div style={{ height: '500px' }} className="mt-4 border-t pt-4 border-border/50">
                 {isLoading ? (
                     <div className="h-full flex items-center justify-center text-muted-foreground">Loading price history...</div>
                 ) : (

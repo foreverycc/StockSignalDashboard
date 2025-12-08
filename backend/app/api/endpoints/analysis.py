@@ -3,10 +3,12 @@ import pandas as pd
 import numpy as np
 import yfinance as yf
 import logging
+import traceback
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
 from app.services.engine import job_manager
+from app.logic.indicators import compute_cd_indicator, compute_mc_indicator
 
 logger = logging.getLogger(__name__)
 
@@ -80,9 +82,6 @@ async def list_result_files(stock_list: Optional[str] = None):
     files.sort(key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)), reverse=True)
     return files
 
-import numpy as np
-import traceback
-
 @router.get("/results/content/{filename}")
 async def get_result_content(filename: str):
     """Get content of a result file as JSON."""
@@ -118,7 +117,6 @@ async def get_logs(lines: int = 100):
     try:
         with open(log_file, 'r') as f:
             # Efficiently read last N lines
-            # For simplicity, reading all and slicing (log file is rotated so shouldn't be huge)
             all_lines = f.readlines()
             return {"logs": [line.strip() for line in all_lines[-lines:]]}
     except Exception as e:
@@ -148,10 +146,9 @@ async def get_price_history(
     ticker: str,
     interval: str,
 ):
-    # Days logic moved inside or fixed
-    days = 60 # Default
-
-    """Get OHLCV price data for a ticker."""
+    """Get OHLCV price data for a ticker with calculated signals."""
+    days = 60 # Default period length
+    
     try:
         # Map interval to yfinance format
         interval_map = {
@@ -165,32 +162,12 @@ async def get_price_history(
         period = f"{days}d" if days <= 730 else "2y"
         
         # Define cache directory and file
-        CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../cache"))
-        
-        # Fallback to 'data/price_cache' if 'cache' doesn't exist/work (to match stock_analyzer.py which used 'data/price_cache')
-        # Wait, stock_analyzer used 'backend/data/price_cache'.
-        # analysis.py in 'backend/app/api/endpoints/analysis.py'
-        # ../../../ => backend/app/
-        # ../../../.. => backend/ ? No.
-        # file is in backend/app/api/endpoints
-        # dirname = backend/app/api/endpoints
-        # ../ = backend/app/api
-        # ../../ = backend/app
-        # ../../../ = backend
-        # so os.path.join(backend, 'cache')
-        
-        # BUT stock_analyzer.py used: os.path.join(..., 'data', 'price_cache')
-        # Let's align them to 'backend/data/price_cache'
-        
+        # Use backend/data/price_cache to match stock_analyzer.py
         CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/price_cache"))
         os.makedirs(CACHE_DIR, exist_ok=True)
         
-        # Use simpler filename format matching stock_analyzer
-        # force ticker to upper to match cache
+        # Standardized filename: TICKER_INTERVAL.csv (e.g. MARA_2h.csv)
         ticker_upper = ticker.upper()
-        # Use simple interval (from request, not mapped to YF if we want to match analyzer output exactly?)
-        # Analyzer uses '2h', '1d', etc. validationMap keys are same.
-        
         cache_file = os.path.join(CACHE_DIR, f"{ticker_upper}_{interval}.csv")
 
         df = None
@@ -202,41 +179,61 @@ async def get_price_history(
                 if df.index.name is None:
                     df.index.name = 'Date'
                 
-                # We trust the analyzer's cache, but if it's super old maybe we care?
-                # For now, just load it.
                 logger.info(f"Loaded {ticker} data from cache: {cache_file}")
             except Exception as e:
                 logger.warning(f"Error loading {ticker} from cache: {e}. Fetching new data.")
                 df = None
 
         if df is None or df.empty:
-            # Fetch logic...
-            # If cache miss, download and save
+            # Fetch data
             stock = yf.Ticker(ticker)
             df = stock.history(period=period, interval=yf_interval)
             
             if df.empty:
                 return []
                 
-            # Save to cache with standardized name
-            # Note: We overwrite the simple name, which is fine.
+            # Save to cache if it was downloaded
             if not os.path.exists(cache_file): 
                 df.to_csv(cache_file)
         
+        # Calculate Signals on-the-fly
+        try:
+            cd_signals = compute_cd_indicator(df)
+            mc_signals = compute_mc_indicator(df)
+        except Exception as e:
+            logger.warning(f"Error computing signals for {ticker}: {e}")
+            # Initialize with False if computation fails
+            cd_signals = pd.Series(False, index=df.index)
+            mc_signals = pd.Series(False, index=df.index)
+
         # Format response
         records = []
         for date, row in df.iterrows():
             # Skip rows with missing data or handle NaNs
             if pd.isna(row['Open']) or pd.isna(row['Close']):
                 continue
+            
+            # Get signal values for this date
+            # Handle potential duplicate indices or series access issues
+            try:
+                is_cd = bool(cd_signals.loc[date]) if date in cd_signals.index and pd.notna(cd_signals.loc[date]) else False
+            except Exception:
+                is_cd = False
                 
+            try:
+                is_mc = bool(mc_signals.loc[date]) if date in mc_signals.index and pd.notna(mc_signals.loc[date]) else False
+            except Exception:
+                is_mc = False
+
             record = {
                 'time': date.isoformat(),
                 'open': float(row['Open']),
                 'high': float(row['High']),
                 'low': float(row['Low']),
                 'close': float(row['Close']),
-                'volume': int(row['Volume']) if pd.notna(row['Volume']) else 0
+                'volume': int(row['Volume']) if pd.notna(row['Volume']) else 0,
+                'cd_signal': is_cd,
+                'mc_signal': is_mc
             }
             records.append(record)
             
@@ -244,5 +241,6 @@ async def get_price_history(
         
     except Exception as e:
         logger.error(f"Error fetching price data for {ticker}: {e}")
+        # print stack trace for debugging
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error fetching price data: {str(e)}")
-
