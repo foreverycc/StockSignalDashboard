@@ -196,6 +196,19 @@ async def get_price_history(
             if not os.path.exists(cache_file): 
                 df.to_csv(cache_file)
         
+        # Normalize timezone to Naive Eastern Time (Market Time) BEFORE computing signals
+        # This ensures both price data and signals share the same naive index, 
+        # avoiding mismatch and display discrepancies in frontend.
+        try:
+            # Force conversion to DatetimeIndex, handling mixed formats and timezone-aware strings safely
+            # utc=True ensures that if strings have offsets (e.g. -05:00), they are parsed correctly to UTC first.
+            df.index = pd.to_datetime(df.index, utc=True)
+            
+            # Now convert efficiently to Eastern Time (Market Time) and strip timezone info
+            df.index = df.index.tz_convert('America/New_York').tz_localize(None)
+        except Exception as e:
+            logger.warning(f"Timezone conversion failed for {ticker}: {e}")
+
         # Calculate Signals on-the-fly
         try:
             cd_signals = compute_cd_indicator(df)
@@ -214,8 +227,8 @@ async def get_price_history(
                 continue
             
             # Get signal values for this date
-            # Handle potential duplicate indices or series access issues
             try:
+                # Use .get() or simple index check for safety
                 is_cd = bool(cd_signals.loc[date]) if date in cd_signals.index and pd.notna(cd_signals.loc[date]) else False
             except Exception:
                 is_cd = False
