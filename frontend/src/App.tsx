@@ -4,6 +4,7 @@ import { Sidebar } from './components/Sidebar';
 import { Dashboard } from './pages/Dashboard';
 import { Configuration } from './pages/Configuration';
 import { analysisApi, stocksApi } from './services/api';
+import { subDays, subMonths, format } from 'date-fns';
 
 const queryClient = new QueryClient();
 
@@ -14,6 +15,12 @@ function AppContent() {
   // State lifted from Dashboard
   const [selectedStockList, setSelectedStockList] = useState<string>('');
   const [showLogs, setShowLogs] = useState(false);
+
+  // Date Range State (default: last 1 month)
+  const [dateRange, setDateRange] = useState<{ start: string; end: string }>({
+    start: format(subMonths(new Date(), 1), 'yyyy-MM-dd'),
+    end: format(new Date(), 'yyyy-MM-dd')
+  });
 
   // Auto-collapse sidebar on mobile
   useEffect(() => {
@@ -99,6 +106,8 @@ function AppContent() {
         latestUpdate={latestUpdate}
         showLogs={showLogs}
         setShowLogs={setShowLogs}
+        dateRange={dateRange}
+        setDateRange={setDateRange}
       />
 
       <main className="flex-1 overflow-auto bg-secondary/30 flex flex-col">
@@ -107,6 +116,7 @@ function AppContent() {
             selectedStockList={selectedStockList}
             showLogs={showLogs}
             setShowLogs={setShowLogs}
+            dateRange={dateRange}
           />
         ) : (
           <Configuration />

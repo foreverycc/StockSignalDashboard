@@ -11,6 +11,7 @@ interface DashboardProps {
     selectedStockList: string;
     showLogs: boolean;
     setShowLogs: (show: boolean) => void;
+    dateRange: { start: string; end: string };
 }
 
 // Wrapper component to handle individual chart data fetching
@@ -49,11 +50,14 @@ const DetailedChartRow = ({ row, activeSubTab }: { row: any, activeSubTab: strin
 export const Dashboard: React.FC<DashboardProps> = ({
     selectedStockList,
     showLogs,
-    setShowLogs
+    setShowLogs,
+    dateRange
 }) => {
     const [activeTab, setActiveTab] = useState<'cd' | 'mc'>('cd');
     const [activeSubTab, setActiveSubTab] = useState<string>('best_intervals_50');
     const [selectedRow, setSelectedRow] = useState<any>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchInput, setSearchInput] = useState('');
 
     // Fetch analysis runs
     const { data: runs, isLoading: isLoadingRuns } = useQuery({
@@ -85,30 +89,66 @@ export const Dashboard: React.FC<DashboardProps> = ({
         return transformResultType(activeTab, activeSubTab);
     }, [activeTab, activeSubTab]);
 
-    // Fetch table data
+    // Fetch table data - CONDITIONAL
+    // If "custom_detailed", we DO NOT fetch all results automatically. We use search.
+    // For other tabs, we fetch all results.
+    const isSearchMode = activeSubTab === 'custom_detailed';
+
     const { data: tableData, isLoading: isLoadingTable } = useQuery({
-        queryKey: ['tableData', currentRun?.id, currentResultType],
-        queryFn: () => currentRun ? analysisApi.getResult(currentRun.id, currentResultType) : null,
-        enabled: !!currentRun
+        queryKey: ['tableData', currentRun?.id, currentResultType, isSearchMode ? searchQuery : 'all'],
+        queryFn: () => {
+            if (!currentRun) return null;
+
+            if (isSearchMode) {
+                // Only fetch if we have a search query
+                if (!searchQuery) return [];
+                return analysisApi.getResult(currentRun.id, currentResultType, searchQuery.toUpperCase());
+            }
+
+            // For standard tabs, fetch all (the API supports "all" logic internally via blob)
+            return analysisApi.getResult(currentRun.id, currentResultType);
+        },
+        enabled: !!currentRun && (!isSearchMode || !!searchQuery)
     });
+
+    // Filter table data by date
+    const filteredTableData = React.useMemo(() => {
+        if (!tableData) return [];
+        // No filtering for search results (user explicitly asked for them)
+        if (isSearchMode) return tableData;
+
+        // Filter valid data
+        return tableData.filter((row: any) => {
+            // Check latest_signal or date (for 1234/5230 models)
+            const dateStr = row.latest_signal || row.date;
+            if (!dateStr) return false;
+
+            // Allow string comparison YYYY-MM-DD
+            const signalDate = String(dateStr).split(' ')[0]; // Extract YYYY-MM-DD
+            return signalDate >= dateRange.start && signalDate <= dateRange.end;
+        });
+    }, [tableData, dateRange, isSearchMode]);
+
 
     // Determine detailed result type for chart data
     const detailedResultType = React.useMemo(() => {
         const prefix = activeTab === 'cd' ? 'cd_eval_custom_detailed' : 'mc_eval_custom_detailed';
-        // Note: In DB we stored it as 'cd_eval_custom_detailed', without suffix_stocklistname
-        // So this constant string is correct if we query by run_id
         return prefix;
     }, [activeTab]);
 
-    const { data: detailedData } = useQuery({
-        queryKey: ['detailedData', currentRun?.id, detailedResultType],
-        queryFn: () => currentRun ? analysisApi.getResult(currentRun.id, detailedResultType) : null,
-        enabled: !!currentRun
+    // Targeted query for detailed chart data
+    const { data: detailedRowData, isLoading: isLoadingDetails } = useQuery({
+        queryKey: ['detailedRowData', currentRun?.id, detailedResultType, selectedRow?.ticker],
+        queryFn: () => {
+            if (!currentRun || !selectedRow?.ticker) return null;
+            return analysisApi.getResult(currentRun.id, detailedResultType, selectedRow.ticker);
+        },
+        enabled: !!currentRun && !!selectedRow?.ticker
     });
 
     // Find matching detailed row(s) for the selected row
     const detailedRows = React.useMemo(() => {
-        if (!selectedRow || !detailedData) return [];
+        if (!selectedRow || !detailedRowData || detailedRowData.length === 0) return [];
 
         // Helper to extract best metrics from detailed row
         const extractBestMetrics = (row: any) => {
@@ -117,14 +157,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
             let bestReturn = -1;
             let bestCount = 0;
 
-            // Iterate through periods 0-100 to find best stats
             for (let i = 0; i <= 100; i++) {
                 const rate = row[`success_rate_${i}`];
                 const ret = row[`avg_return_${i}`];
                 const count = row[`test_count_${i}`];
 
                 if (rate !== undefined && ret !== undefined) {
-                    // Simple logic: maximize success rate, then return
                     if (rate > maxSuccessRate || (rate === maxSuccessRate && ret > bestReturn)) {
                         maxSuccessRate = rate;
                         bestReturn = ret;
@@ -141,40 +179,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
             };
         };
 
-        // For 1234/5230 models, the intervals column contains multiple intervals (e.g., "1,2,3")
         if (activeSubTab === '1234' || activeSubTab === '5230') {
             const intervalsStr = selectedRow.intervals;
             if (!intervalsStr) return [];
 
-            // Parse intervals: "1,2,3" -> ["1h", "2h", "3h"] or "10,15,30" -> ["10m", "15m", "30m"]
             const intervalNumbers = intervalsStr.split(',').map((s: string) => s.trim());
             const suffix = activeSubTab === '1234' ? 'h' : 'm';
             const intervals = intervalNumbers.map((n: string) => n + suffix);
 
-            // Find detailed rows for each interval
             const results = intervals.map((interval: any) => {
-                const match = detailedData.find((d: any) =>
+                const match = detailedRowData.find((d: any) =>
                     d.ticker === selectedRow.ticker && d.interval === interval
                 );
 
                 if (match) {
-                    // Calculate best metrics for this interval
                     const metrics = extractBestMetrics(match);
                     return { ...match, ...metrics };
                 }
                 return match;
-            }).filter(Boolean); // Remove any undefined entries
+            }).filter(Boolean);
 
             return results;
         }
 
-        // For other tabs, match by ticker and interval
-        const match = detailedData.find((d: any) =>
+        const match = detailedRowData.find((d: any) =>
             d.ticker === selectedRow.ticker && d.interval === selectedRow.interval
         );
 
         if (match) {
-            // Merge metrics from selectedRow (summary) which has the correct values
             return [{
                 ...match,
                 success_rate: selectedRow.success_rate,
@@ -183,12 +215,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
             }];
         }
         return [];
-    }, [selectedRow, detailedData, activeSubTab]);
+    }, [selectedRow, detailedRowData, activeSubTab]);
 
-    const [chartPanelWidth, setChartPanelWidth] = useState(33); // Default 33%
+    const [chartPanelWidth, setChartPanelWidth] = useState(33);
     const [isResizing, setIsResizing] = useState(false);
 
-    // Handle resizing
     const startResizing = React.useCallback(() => {
         setIsResizing(true);
     }, []);
@@ -256,57 +287,56 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
 
                 {/* Subtabs */}
-                {activeTab === 'cd' && (
-                    <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-hide p-1">
-                        {[
-                            { value: 'best_intervals_50', label: 'Best Intervals (50)' },
-                            { value: 'best_intervals_20', label: 'Best Intervals (20)' },
-                            { value: 'best_intervals_100', label: 'Best Intervals (100)' },
-                            { value: 'good_signals', label: 'High Return Intervals' },
-                            { value: 'custom_detailed', label: 'Detailed Results' },
-                            { value: '1234', label: '1234 Model' },
-                            { value: '5230', label: '5230 Model' },
-                        ].map((tab) => (
-                            <button
-                                key={tab.value}
-                                onClick={() => setActiveSubTab(tab.value)}
-                                className={cn(
-                                    "px-3 md:px-4 py-2 text-xs md:text-sm font-medium transition-colors relative whitespace-nowrap rounded-md",
-                                    activeSubTab === tab.value
-                                        ? "text-primary bg-primary/10"
-                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                                )}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
-                    </div>
-                )}
+                <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-hide p-1">
+                    {[
+                        { value: 'best_intervals_50', label: 'Best Intervals (50)' },
+                        { value: 'best_intervals_20', label: 'Best Intervals (20)' },
+                        { value: 'best_intervals_100', label: 'Best Intervals (100)' },
+                        { value: 'good_signals', label: 'High Return Intervals' },
+                        { value: 'custom_detailed', label: 'Detailed Results' },
+                        { value: '1234', label: '1234 Model' },
+                        { value: '5230', label: '5230 Model' },
+                    ].map((tab) => (
+                        <button
+                            key={tab.value}
+                            onClick={() => {
+                                setActiveSubTab(tab.value);
+                                // Reset selection and search on tab change
+                                setSelectedRow(null);
+                                setSearchQuery('');
+                                setSearchInput('');
+                            }}
+                            className={cn(
+                                "px-3 md:px-4 py-2 text-xs md:text-sm font-medium transition-colors relative whitespace-nowrap rounded-md",
+                                activeSubTab === tab.value
+                                    ? "text-primary bg-primary/10"
+                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                            )}
+                        >
+                            {tab.label}
+                        </button>
+                    ))}
+                </div>
 
-                {activeTab === 'mc' && (
-                    <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-hide p-1">
-                        {[
-                            { value: 'best_intervals_50', label: 'Best Intervals (50)' },
-                            { value: 'best_intervals_20', label: 'Best Intervals (20)' },
-                            { value: 'best_intervals_100', label: 'Best Intervals (100)' },
-                            { value: 'good_signals', label: 'High Return Intervals' },
-                            { value: 'custom_detailed', label: 'Detailed Results' },
-                            { value: '1234', label: '1234 Model' },
-                            { value: '5230', label: '5230 Model' },
-                        ].map((tab) => (
-                            <button
-                                key={tab.value}
-                                onClick={() => setActiveSubTab(tab.value)}
-                                className={cn(
-                                    "px-3 md:px-4 py-2 text-xs md:text-sm font-medium transition-colors relative whitespace-nowrap rounded-md",
-                                    activeSubTab === tab.value
-                                        ? "text-primary bg-primary/10"
-                                        : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                                )}
-                            >
-                                {tab.label}
-                            </button>
-                        ))}
+                {/* Search Bar for Custom Detailed */}
+                {isSearchMode && (
+                    <div className="p-4 border-b border-border flex gap-2">
+                        <input
+                            type="text"
+                            placeholder="Search Ticker (e.g. AAPL)"
+                            value={searchInput}
+                            onChange={(e) => setSearchInput(e.target.value)}
+                            onKeyDown={(e) => {
+                                if (e.key === 'Enter') setSearchQuery(searchInput);
+                            }}
+                            className="flex-1 px-4 py-2 rounded-md border border-input bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                        />
+                        <button
+                            onClick={() => setSearchQuery(searchInput)}
+                            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                        >
+                            Search
+                        </button>
                     </div>
                 )}
 
@@ -321,19 +351,26 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     >
                         {isLoadingTable || isLoadingRuns ? (
                             <div className="h-full flex items-center justify-center text-muted-foreground">Loading data...</div>
-                        ) : tableData ? (
+                        ) : filteredTableData && filteredTableData.length > 0 ? (
                             <AnalysisTable
-                                data={tableData}
+                                data={filteredTableData}
                                 onRowClick={setSelectedRow}
                             />
                         ) : (
                             <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-4 text-center">
-                                <p className="mb-2">No data available for {activeSubTab.replace(/_/g, ' ')}</p>
-                                <p className="text-xs opacity-70">
-                                    Stock List: {selectedStockList || 'None'} <br />
-                                    Latest Run: {currentRun ? new Date(currentRun.timestamp).toLocaleString() : 'Not Found'} <br />
-                                    Status: {currentRun?.status || 'N/A'}
-                                </p>
+                                {isSearchMode && !searchQuery ? (
+                                    <p>Enter a ticker to search for detailed results</p>
+                                ) : (
+                                    <>
+                                        <p className="mb-2">No data available for {activeSubTab.replace(/_/g, ' ')}</p>
+                                        <p className="text-xs opacity-70">
+                                            Date Range: {dateRange.start} to {dateRange.end} <br />
+                                            Stock List: {selectedStockList || 'None'} <br />
+                                            Latest Run: {currentRun ? new Date(currentRun.timestamp).toLocaleString() : 'Not Found'} <br />
+                                            Status: {currentRun?.status || 'N/A'}
+                                        </p>
+                                    </>
+                                )}
                             </div>
                         )}
                     </div>
@@ -371,7 +408,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             </div>
                             <div className="flex-1 p-4 overflow-y-auto bg-background md:bg-transparent">
                                 {/* Returns Distribution Boxplot(s) & Price History */}
-                                {detailedRows.length > 0 ? (
+                                {isLoadingDetails ? (
+                                    <div className="flex items-center justify-center h-full text-muted-foreground">
+                                        Loading detailed analysis...
+                                    </div>
+                                ) : detailedRows.length > 0 ? (
                                     <div className="space-y-6">
                                         {detailedRows.map((row: any, index: number) => (
                                             <DetailedChartRow

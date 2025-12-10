@@ -86,34 +86,66 @@ async def get_analysis_runs(db: Session = Depends(get_db)):
     } for r in runs]
 
 @router.get("/runs/{run_id}/results/{result_type}")
-async def get_analysis_result(run_id: int, result_type: str, db: Session = Depends(get_db)):
-    """Get specific results for a run."""
-    # Try to find a single record first (summary tables are stored as one row with JSON data)
-    result = db.query(AnalysisResult).filter(
+async def get_analysis_result(
+    run_id: int, 
+    result_type: str, 
+    ticker: Optional[str] = None,
+    db: Session = Depends(get_db)
+):
+    """Get specific results for a run, optionally filtered by ticker."""
+    
+    # 1. First check if we have individual rows stored for this result_type + ticker
+    # This matches usage where we might store per-ticker items (not currently used for big blobs, but good practice)
+    query = db.query(AnalysisResult).filter(
         AnalysisResult.run_id == run_id,
         AnalysisResult.result_type == result_type
+    )
+    
+    if ticker:
+        query = query.filter(AnalysisResult.ticker == ticker)
+        
+    results = query.all()
+    
+    # If we found individual rows, return their data payloads
+    if results and len(results) > 0:
+        # Flatten list of data items
+        final_list = []
+        for r in results:
+             if isinstance(r.data, list):
+                 final_list.extend(r.data)
+             else:
+                 final_list.append(r.data)
+        
+        # Double check filtering if the DB records were "ALL" ticker but contained a list
+        # This happens for 'cd_eval_custom_detailed' which is stored as one big row with ticker="ALL"
+        if ticker:
+             return [item for item in final_list if item.get('ticker') == ticker]
+        return final_list
+
+    # 2. If no individual rows found, it might be a big blob stored under ticker="ALL"
+    # This is how 'cd_eval_custom_detailed' is currently stored in stock_analyzer.py
+    # save_analysis_result(..., ticker="ALL", ...)
+    
+    # Retrieve the big blob
+    blob_record = db.query(AnalysisResult).filter(
+        AnalysisResult.run_id == run_id,
+        AnalysisResult.result_type == result_type,
+        AnalysisResult.ticker == "ALL"  # convention used in stock_analyzer.py
     ).first()
     
-    if result and result.data:
-        data = result.data
-        # If it's a list, return it directly (it's likely a summary table)
+    if blob_record and blob_record.data:
+        data = blob_record.data
         if isinstance(data, list):
+            if ticker:
+                # Server-side filtering of the big list to save bandwidth
+                filtered = [item for item in data if item.get('ticker') == ticker]
+                return filtered
+            return data
+        elif isinstance(data, dict):
+             # Try matching dict key if structure allows, otherwise return as is
              return data
-        # If it's a dict, valid JSON object
-        return data
-
-    # If no single record, check if it's aggregated from multiple rows
-    # (Not used in current stock_analyzer.py refactor, but for future proofing)
-    results = db.query(AnalysisResult).filter(
-        AnalysisResult.run_id == run_id,
-        AnalysisResult.result_type == result_type
-    ).all()
-    
-    if not results:
-        # Fallback for empty results (return empty list instead of 404 to be friendly to frontend)
-        return []
-
-    return [r.data for r in results]
+             
+    return []
 
 
 @router.get("/logs")

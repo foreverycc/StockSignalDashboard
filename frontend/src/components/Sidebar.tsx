@@ -1,6 +1,7 @@
 import React from 'react';
 import { LayoutDashboard, Settings, Activity, ChevronLeft, ChevronRight, Play, RefreshCw, Clock, AlertCircle, Terminal } from 'lucide-react';
 import { cn } from '../utils/cn';
+import { DateRangeCalendar } from './DateRangeCalendar';
 
 interface SidebarProps {
     activePage: 'dashboard' | 'configuration';
@@ -17,6 +18,8 @@ interface SidebarProps {
     latestUpdate: any;
     showLogs: boolean;
     setShowLogs: (show: boolean) => void;
+    dateRange?: { start: string; end: string };
+    setDateRange?: (range: { start: string; end: string }) => void;
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({
@@ -31,7 +34,9 @@ export const Sidebar: React.FC<SidebarProps> = ({
     jobStatus,
     latestUpdate,
     showLogs,
-    setShowLogs
+    setShowLogs,
+    dateRange,
+    setDateRange
 }) => {
     return (
         <div
@@ -161,6 +166,22 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <Terminal className="w-4 h-4 shrink-0" />
                         {!isCollapsed && <span className="text-sm">View Logs</span>}
                     </button>
+
+                    {/* Date Range Picker - Moved to bottom */}
+                    {!isCollapsed ? (
+                        <div className="px-2">
+                            <label className="text-xs font-medium text-muted-foreground px-1 mb-2 block">Date Range</label>
+                            <DateRangeCalendar
+                                startDate={dateRange?.start || ''}
+                                endDate={dateRange?.end || ''}
+                                onChange={(range) => setDateRange?.(range)}
+                            />
+                        </div>
+                    ) : (
+                        <div title={`Range: ${dateRange?.start} - ${dateRange?.end}`} className="w-10 h-10 flex items-center justify-center rounded-lg bg-muted text-muted-foreground">
+                            <Clock className="w-4 h-4" />
+                        </div>
+                    )}
 
                     {/* Status Indicators */}
                     {!isCollapsed && latestUpdate?.timestamp && (

@@ -69,8 +69,10 @@ export const analysisApi = {
         const response = await api.get<AnalysisRun[]>('/analysis/runs');
         return response.data;
     },
-    getResult: async (runId: number, resultType: string) => {
-        const response = await api.get<any[]>(`/analysis/runs/${runId}/results/${resultType}`);
+    getResult: async (runId: number, resultType: string, ticker?: string) => {
+        const response = await api.get<any[]>(`/analysis/runs/${runId}/results/${resultType}`, {
+            params: { ticker }
+        });
         return response.data;
     },
     getLogs: async (lines: number = 50) => {
