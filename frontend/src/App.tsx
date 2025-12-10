@@ -69,12 +69,18 @@ function AppContent() {
     }
   };
 
-  // Fetch latest update time
-  const { data: latestUpdate } = useQuery({
-    queryKey: ['latestUpdate', selectedStockList],
-    queryFn: () => selectedStockList ? analysisApi.getLatestUpdate(selectedStockList) : null,
-    enabled: !!selectedStockList
+  // Fetch analysis runs to derive latest update time
+  const { data: runs } = useQuery({
+    queryKey: ['analysisRuns'],
+    queryFn: analysisApi.getRuns,
+    refetchInterval: 30000
   });
+
+  const latestUpdate = {
+    timestamp: runs?.find(r => r.stock_list_name === selectedStockList)?.timestamp
+      ? new Date(runs.find(r => r.stock_list_name === selectedStockList)!.timestamp).getTime() / 1000
+      : null
+  };
 
   return (
     <div className="flex h-screen bg-background text-foreground overflow-hidden">

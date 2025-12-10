@@ -146,34 +146,32 @@ def process_ticker_5230(ticker, data_ticker=None):
     return results
 
 
-def identify_1234(file_path, all_ticker_data):
+def identify_1234(data, all_ticker_data):
     """
     Identify potential breakout stocks based on breakout signals across the 1h, 2h, 3h, and 4h intervals.
     
-    The file is expected to contain at least the following columns:
-      - ticker
-      - interval
-      - score
-      - signal_date
-      - breakthrough_date
-
-    A ticker qualifies if, when filtering for rows with intervals in {"1h", "2h", "3h", "4h"}
-    there is at least one 3-day window during which signals appear for all four intervals.
-    
     Parameters:
-        file_path (str): Path to the file containing breakout signals.
+        data (pd.DataFrame or list): DataFrame or list of dictionaries containing breakout signals.
         all_ticker_data (dict): Dictionary with pre-downloaded ticker data.
 
     Returns:
-        list: A list of ticker symbols that are potential breakout stocks.
+        DataFrame: A DataFrame of ticker symbols that are potential breakout stocks.
     """
     try:
-        # Read the data. The file is assumed to be tab-delimited.
-        df = pd.read_csv(file_path, sep="\t", engine="python")
-        print(df)
+        if isinstance(data, list):
+            df = pd.DataFrame(data)
+        elif isinstance(data, pd.DataFrame):
+            df = data.copy()
+        else:
+            print("Invalid data format for identify_1234")
+            return pd.DataFrame()
+            
+        if df.empty:
+            return pd.DataFrame()
+
     except Exception as e:
-        print(f"Failed to read file {file_path}: {e}")
-        return pd.DataFrame()  # Return empty DataFrame instead of empty list
+        print(f"Error processing data in identify_1234: {e}")
+        return pd.DataFrame()
 
     # Ensure signal_date is parsed as datetime
     if "signal_date" in df.columns:
@@ -329,33 +327,32 @@ def identify_1234(file_path, all_ticker_data):
     return df_breakout_candidates_sel
 
 
-def identify_5230(file_path, all_ticker_data):
+def identify_5230(data, all_ticker_data):
     """
     Identify potential breakout stocks based on breakout signals across the 5m, 10m, 15m, and 30m intervals.
     
-    The file is expected to contain at least the following columns:
-      - ticker
-      - interval
-      - score
-      - signal_date
-      - breakthrough_date
-
-    A ticker qualifies if, when filtering for rows with intervals in {"5m", "10m", "15m", "30m"}
-    there is at least one 3-day window during which signals appear for all four intervals.
-    
     Parameters:
-        file_path (str): Path to the file containing breakout signals.
+        data (pd.DataFrame or list): DataFrame or list of dictionaries containing breakout signals.
         all_ticker_data (dict): Dictionary with pre-downloaded ticker data.
 
     Returns:
-        list: A list of ticker symbols that are potential breakout stocks.
+        DataFrame: A DataFrame of ticker symbols that are potential breakout stocks.
     """
     try:
-        # Read the data. The file is assumed to be tab-delimited.
-        df = pd.read_csv(file_path, sep="\t", engine="python")
+        if isinstance(data, list):
+            df = pd.DataFrame(data)
+        elif isinstance(data, pd.DataFrame):
+            df = data.copy()
+        else:
+            print("Invalid data format for identify_5230")
+            return pd.DataFrame()
+
+        if df.empty:
+            return pd.DataFrame()
+            
     except Exception as e:
-        print(f"Failed to read file {file_path}: {e}")
-        return pd.DataFrame()  # Return empty DataFrame instead of empty list
+        print(f"Error processing data in identify_5230: {e}")
+        return pd.DataFrame()
 
     # Ensure signal_date is parsed as datetime
     if "signal_date" in df.columns:

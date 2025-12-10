@@ -12,6 +12,11 @@ sys.path.append(logic_path)
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from app.api.endpoints import analysis, stocks
+from app.db.database import engine, Base
+from app.db import models
+
+# Create database tables
+Base.metadata.create_all(bind=engine)
 
 import logging
 from logging.handlers import RotatingFileHandler
@@ -55,4 +60,5 @@ async def root():
 
 if __name__ == "__main__":
     import uvicorn
+    # default port 8000
     uvicorn.run("app.main:app", host="0.0.0.0", port=8000, reload=True)

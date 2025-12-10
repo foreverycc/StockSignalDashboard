@@ -13,6 +13,6 @@ export default defineConfig({
 //   }
 // }
 
-// proxy: {
-//   '/api'; 'http://192.168.1.143:8000'
-// }
+proxy: {
+  '/api'; 'http://192.168.1.143:9000'
+}

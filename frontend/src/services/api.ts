@@ -26,6 +26,13 @@ export interface JobStatus {
     end_time?: string;
 }
 
+export interface AnalysisRun {
+    id: number;
+    timestamp: string;
+    status: string;
+    stock_list_name: string;
+}
+
 export const stocksApi = {
     list: async () => {
         const response = await api.get<string[]>('/stocks/');
@@ -58,25 +65,16 @@ export const analysisApi = {
         const response = await api.get<JobStatus | null>('/analysis/status/current');
         return response.data;
     },
-    listFiles: async (stock_list?: string) => {
-        const params = stock_list ? { stock_list } : {};
-        const response = await api.get<string[]>('/analysis/results/files', { params });
+    getRuns: async () => {
+        const response = await api.get<AnalysisRun[]>('/analysis/runs');
         return response.data;
     },
-    getFileContent: async (filename: string) => {
-        const response = await api.get<any[]>('/analysis/results/content/' + filename);
-        return response.data;
-    },
-    getLatestUpdate: async (stock_list: string) => {
-        const response = await api.get<{ timestamp: number | null }>('/analysis/results/latest_update', { params: { stock_list } });
+    getResult: async (runId: number, resultType: string) => {
+        const response = await api.get<any[]>(`/analysis/runs/${runId}/results/${resultType}`);
         return response.data;
     },
     getLogs: async (lines: number = 50) => {
         const response = await api.get<{ logs: string[] }>('/analysis/logs', { params: { lines } });
-        return response.data;
-    },
-    getPriceData: async (ticker: string, interval: string = '1d', days: number = 60) => {
-        const response = await api.get<any[]>(`/analysis/price_data/${ticker}`, { params: { interval, days } });
         return response.data;
     },
     getPriceHistory: async (ticker: string, interval: string) => {

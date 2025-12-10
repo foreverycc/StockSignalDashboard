@@ -55,50 +55,55 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const [activeSubTab, setActiveSubTab] = useState<string>('best_intervals_50');
     const [selectedRow, setSelectedRow] = useState<any>(null);
 
-    // Fetch result files
-    const { data: resultFiles, isLoading: isLoadingFiles } = useQuery({
-        queryKey: ['resultFiles', selectedStockList],
-        queryFn: () => analysisApi.listFiles(selectedStockList),
-        enabled: !!selectedStockList
+    // Fetch analysis runs
+    const { data: runs, isLoading: isLoadingRuns } = useQuery({
+        queryKey: ['analysisRuns'],
+        queryFn: analysisApi.getRuns,
+        refetchInterval: 30000
     });
 
-    // Determine which file to load based on active tabs
-    const currentFileName = React.useMemo(() => {
-        if (!resultFiles) return null;
+    // Find latest run for selected stock list
+    const currentRun = React.useMemo(() => {
+        if (!runs || !selectedStockList) return null;
+        return runs.find(r => r.stock_list_name === selectedStockList);
+    }, [runs, selectedStockList]);
 
-        let pattern: string;
-
+    // Determine result type based on active tabs
+    const transformResultType = (tab: string, subTab: string) => {
         // Handle 1234 and 5230 resonance models
-        if (activeSubTab === '1234' || activeSubTab === '5230') {
-            const prefix = activeTab === 'cd' ? 'cd_breakout_candidates_summary_' : 'mc_breakout_candidates_summary_';
-            pattern = prefix + activeSubTab;
+        if (subTab === '1234' || subTab === '5230') {
+            const prefix = tab === 'cd' ? 'cd_breakout_candidates_summary_' : 'mc_breakout_candidates_summary_';
+            return prefix + subTab;
         } else {
             // Handle Best Intervals and Custom Detailed
-            const prefix = activeTab === 'cd' ? 'cd_eval_' : 'mc_eval_';
-            pattern = prefix + activeSubTab;
+            const prefix = tab === 'cd' ? 'cd_eval_' : 'mc_eval_';
+            return prefix + subTab;
         }
+    };
 
-        return resultFiles.find(f => f.startsWith(pattern));
-    }, [resultFiles, activeTab, activeSubTab]);
+    const currentResultType = React.useMemo(() => {
+        return transformResultType(activeTab, activeSubTab);
+    }, [activeTab, activeSubTab]);
 
     // Fetch table data
     const { data: tableData, isLoading: isLoadingTable } = useQuery({
-        queryKey: ['tableData', currentFileName],
-        queryFn: () => currentFileName ? analysisApi.getFileContent(currentFileName) : null,
-        enabled: !!currentFileName
+        queryKey: ['tableData', currentRun?.id, currentResultType],
+        queryFn: () => currentRun ? analysisApi.getResult(currentRun.id, currentResultType) : null,
+        enabled: !!currentRun
     });
 
-    // Fetch custom_detailed file for chart data (always load this for charts)
-    const detailedFileName = React.useMemo(() => {
-        if (!resultFiles) return null;
-        const prefix = activeTab === 'cd' ? 'cd_eval_custom_detailed_' : 'mc_eval_custom_detailed_';
-        return resultFiles.find(f => f.startsWith(prefix));
-    }, [resultFiles, activeTab]);
+    // Determine detailed result type for chart data
+    const detailedResultType = React.useMemo(() => {
+        const prefix = activeTab === 'cd' ? 'cd_eval_custom_detailed' : 'mc_eval_custom_detailed';
+        // Note: In DB we stored it as 'cd_eval_custom_detailed', without suffix_stocklistname
+        // So this constant string is correct if we query by run_id
+        return prefix;
+    }, [activeTab]);
 
     const { data: detailedData } = useQuery({
-        queryKey: ['detailedData', detailedFileName],
-        queryFn: () => detailedFileName ? analysisApi.getFileContent(detailedFileName) : null,
-        enabled: !!detailedFileName
+        queryKey: ['detailedData', currentRun?.id, detailedResultType],
+        queryFn: () => currentRun ? analysisApi.getResult(currentRun.id, detailedResultType) : null,
+        enabled: !!currentRun
     });
 
     // Find matching detailed row(s) for the selected row
@@ -314,7 +319,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             width: selectedRow && window.innerWidth >= 768 ? `${100 - chartPanelWidth}%` : '100%'
                         }}
                     >
-                        {isLoadingTable || isLoadingFiles ? (
+                        {isLoadingTable || isLoadingRuns ? (
                             <div className="h-full flex items-center justify-center text-muted-foreground">Loading data...</div>
                         ) : tableData ? (
                             <AnalysisTable
@@ -326,15 +331,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                 <p className="mb-2">No data available for {activeSubTab.replace(/_/g, ' ')}</p>
                                 <p className="text-xs opacity-70">
                                     Stock List: {selectedStockList || 'None'} <br />
-                                    Files Found: {resultFiles?.length || 0} <br />
-                                    Target File: {currentFileName || 'Not Found'}
+                                    Latest Run: {currentRun ? new Date(currentRun.timestamp).toLocaleString() : 'Not Found'} <br />
+                                    Status: {currentRun?.status || 'N/A'}
                                 </p>
-                                {resultFiles && resultFiles.length > 0 && (
-                                    <div className="mt-4 text-xs text-left max-h-32 overflow-y-auto border p-2 rounded">
-                                        <p className="font-semibold mb-1">Available Files:</p>
-                                        {resultFiles.map(f => <div key={f}>{f}</div>)}
-                                    </div>
-                                )}
                             </div>
                         )}
                     </div>

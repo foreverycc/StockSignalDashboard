@@ -4,17 +4,29 @@ import numpy as np
 import yfinance as yf
 import logging
 import traceback
-from fastapi import APIRouter, HTTPException, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends
 from pydantic import BaseModel
 from typing import Optional, List, Dict, Any
+from sqlalchemy.orm import Session
+from sqlalchemy import desc
+
 from app.services.engine import job_manager
 from app.logic.indicators import compute_cd_indicator, compute_mc_indicator
+from app.db.database import SessionLocal
+from app.db.models import AnalysisRun, AnalysisResult, PriceBar
+from app.logic.db_utils import save_price_history
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-OUTPUT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../output"))
+# Dependency
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
 
 class AnalysisRequest(BaseModel):
     stock_list_file: str
@@ -32,6 +44,8 @@ class JobStatus(BaseModel):
 async def run_analysis(request: AnalysisRequest):
     """Start a new analysis job."""
     try:
+        # job_manager still manages the background thread/process
+        # The process itself now writes to DB
         job_id = job_manager.start_analysis(request.stock_list_file, request.end_date)
         job = job_manager.get_job(job_id)
         return {
@@ -60,52 +74,47 @@ async def get_current_status():
         "end_time": job.end_time.isoformat() if job.end_time else None
     }
 
-@router.get("/results/files")
-async def list_result_files(stock_list: Optional[str] = None):
-    """List available result files, optionally filtered by stock list."""
-    if not os.path.exists(OUTPUT_DIR):
-        return []
-    
-    files = []
-    for f in os.listdir(OUTPUT_DIR):
-        if f.endswith('.csv') or f.endswith('.tab'):
-            if stock_list:
-                # Simple matching logic from original app
-                stock_list_name = os.path.splitext(stock_list)[0]
-                base_name = f.rsplit('.', 1)[0]
-                if base_name.endswith('_' + stock_list_name) or base_name == stock_list_name:
-                    files.append(f)
-            else:
-                files.append(f)
-    
-    # Sort by modification time (newest first)
-    files.sort(key=lambda x: os.path.getmtime(os.path.join(OUTPUT_DIR, x)), reverse=True)
-    return files
+@router.get("/runs")
+async def get_analysis_runs(db: Session = Depends(get_db)):
+    """List all analysis runs."""
+    runs = db.query(AnalysisRun).order_by(desc(AnalysisRun.timestamp)).all()
+    return [{
+        "id": r.id,
+        "timestamp": r.timestamp.isoformat(),
+        "status": r.status,
+        "stock_list_name": r.stock_list_name
+    } for r in runs]
 
-@router.get("/results/content/{filename}")
-async def get_result_content(filename: str):
-    """Get content of a result file as JSON."""
-    file_path = os.path.join(OUTPUT_DIR, filename)
-    if not os.path.exists(file_path):
-        raise HTTPException(status_code=404, detail="File not found")
+@router.get("/runs/{run_id}/results/{result_type}")
+async def get_analysis_result(run_id: int, result_type: str, db: Session = Depends(get_db)):
+    """Get specific results for a run."""
+    # Try to find a single record first (summary tables are stored as one row with JSON data)
+    result = db.query(AnalysisResult).filter(
+        AnalysisResult.run_id == run_id,
+        AnalysisResult.result_type == result_type
+    ).first()
     
-    try:
-        if filename.endswith('.csv'):
-            df = pd.read_csv(file_path)
-        else:
-            df = pd.read_csv(file_path, sep='\t')
-        
-        # Replace NaN with None for JSON compatibility
-        df = df.replace({np.nan: None})
-        
-        # Replace Infinity with None
-        df = df.replace([np.inf, -np.inf], None)
-        
-        return df.to_dict(orient='records')
-    except Exception as e:
-        print(f"Error reading file {filename}:")
-        traceback.print_exc()
-        raise HTTPException(status_code=500, detail=f"Error reading file: {str(e)}")
+    if result and result.data:
+        data = result.data
+        # If it's a list, return it directly (it's likely a summary table)
+        if isinstance(data, list):
+             return data
+        # If it's a dict, valid JSON object
+        return data
+
+    # If no single record, check if it's aggregated from multiple rows
+    # (Not used in current stock_analyzer.py refactor, but for future proofing)
+    results = db.query(AnalysisResult).filter(
+        AnalysisResult.run_id == run_id,
+        AnalysisResult.result_type == result_type
+    ).all()
+    
+    if not results:
+        # Fallback for empty results (return empty list instead of 404 to be friendly to frontend)
+        return []
+
+    return [r.data for r in results]
+
 
 @router.get("/logs")
 async def get_logs(lines: int = 100):
@@ -122,113 +131,88 @@ async def get_logs(lines: int = 100):
     except Exception as e:
         return {"logs": [f"Error reading logs: {str(e)}"]}
 
-@router.get("/results/latest_update")
-async def get_latest_update(stock_list: str):
-    """Get the latest update timestamp for a stock list."""
-    if not os.path.exists(OUTPUT_DIR):
-        return {"timestamp": None}
-    
-    stock_list_name = os.path.splitext(stock_list)[0]
-    latest_time = 0
-    
-    for f in os.listdir(OUTPUT_DIR):
-        if f.endswith('.csv') or f.endswith('.tab'):
-            base_name = f.rsplit('.', 1)[0]
-            if base_name.endswith('_' + stock_list_name) or base_name == stock_list_name:
-                mod_time = os.path.getmtime(os.path.join(OUTPUT_DIR, f))
-                if mod_time > latest_time:
-                    latest_time = mod_time
-    
-    return {"timestamp": latest_time if latest_time > 0 else None}
 
 @router.get("/price_history/{ticker}/{interval}")
 async def get_price_history(
     ticker: str,
     interval: str,
+    db: Session = Depends(get_db)
 ):
     """Get OHLCV price data for a ticker with calculated signals."""
     days = 60 # Default period length
+    ticker_upper = ticker.upper()
     
     try:
-        # Map interval to yfinance format
-        interval_map = {
-            '5m': '5m', '10m': '10m', '15m': '15m', '30m': '30m',
-            '1h': '1h', '2h': '2h', '3h': '3h', '4h': '4h',
-            '1d': '1d', '1w': '1wk'
-        }
-        yf_interval = interval_map.get(interval, '1d')
+        # 1. Try to fetch from Database
+        # We need to sort by timestamp
+        prices = db.query(PriceBar).filter(
+            PriceBar.ticker == ticker_upper,
+            PriceBar.interval == interval
+        ).order_by(PriceBar.timestamp).all()
         
-        # Calculate period
-        period = f"{days}d" if days <= 730 else "2y"
-        
-        # Define cache directory and file
-        # Use backend/data/price_cache to match stock_analyzer.py
-        CACHE_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../../data/price_cache"))
-        os.makedirs(CACHE_DIR, exist_ok=True)
-        
-        # Standardized filename: TICKER_INTERVAL.csv (e.g. MARA_2h.csv)
-        ticker_upper = ticker.upper()
-        cache_file = os.path.join(CACHE_DIR, f"{ticker_upper}_{interval}.csv")
-
         df = None
-        # Try to load from cache first
-        if os.path.exists(cache_file):
-            try:
-                df = pd.read_csv(cache_file, index_col=0, parse_dates=True)
-                # Ensure index is named Date
-                if df.index.name is None:
-                    df.index.name = 'Date'
-                
-                logger.info(f"Loaded {ticker} data from cache: {cache_file}")
-            except Exception as e:
-                logger.warning(f"Error loading {ticker} from cache: {e}. Fetching new data.")
-                df = None
+        if prices:
+            # Convert to DataFrame
+            data = []
+            for p in prices:
+                data.append({
+                    'Date': p.timestamp,
+                    'Open': p.open,
+                    'High': p.high,
+                    'Low': p.low,
+                    'Close': p.close,
+                    'Volume': p.volume
+                })
+            df = pd.DataFrame(data).set_index('Date')
 
+        # 2. If not in DB or empty, fetch from yfinance
         if df is None or df.empty:
-            # Fetch data
+            # Map interval to yfinance format
+            interval_map = {
+                '5m': '5m', '10m': '10m', '15m': '15m', '30m': '30m',
+                '1h': '1h', '2h': '2h', '3h': '3h', '4h': '4h',
+                '1d': '1d', '1w': '1wk'
+            }
+            yf_interval = interval_map.get(interval, '1d')
+            period = f"{days}d" if days <= 730 else "2y"
+            
             stock = yf.Ticker(ticker)
             df = stock.history(period=period, interval=yf_interval)
             
             if df.empty:
                 return []
-                
-            # Save to cache if it was downloaded
-            if not os.path.exists(cache_file): 
-                df.to_csv(cache_file)
-        
-        # Normalize timezone to Naive Eastern Time (Market Time) BEFORE computing signals
-        # This ensures both price data and signals share the same naive index, 
-        # avoiding mismatch and display discrepancies in frontend.
-        try:
-            # Force conversion to DatetimeIndex, handling mixed formats and timezone-aware strings safely
-            # utc=True ensures that if strings have offsets (e.g. -05:00), they are parsed correctly to UTC first.
-            df.index = pd.to_datetime(df.index, utc=True)
             
-            # Now convert efficiently to Eastern Time (Market Time) and strip timezone info
-            df.index = df.index.tz_convert('America/New_York').tz_localize(None)
-        except Exception as e:
-            logger.warning(f"Timezone conversion failed for {ticker}: {e}")
+            # Save to DB for next time
+            # Note: This might be slow for a read endpoint if saving many rows
+            # But it ensures consistency.
+            # Convert Index to naive datetime before saving? 
+            # save_price_history handles timezone conversion.
+            try:
+               save_price_history(ticker_upper, interval, df)
+            except Exception as e:
+               logger.error(f"Failed to save fetched data to DB: {e}")
 
+        # 3. Process Data (Timezone & Signals)
+        # Ensure index is datetime
+        if df.index.tzinfo is not None:
+             df.index = df.index.tz_convert('America/New_York').tz_localize(None)
+        
         # Calculate Signals on-the-fly
         try:
             cd_signals = compute_cd_indicator(df)
             mc_signals = compute_mc_indicator(df)
         except Exception as e:
             logger.warning(f"Error computing signals for {ticker}: {e}")
-            # Initialize with False if computation fails
             cd_signals = pd.Series(False, index=df.index)
             mc_signals = pd.Series(False, index=df.index)
 
         # Format response
         records = []
         for date, row in df.iterrows():
-            # Skip rows with missing data or handle NaNs
             if pd.isna(row['Open']) or pd.isna(row['Close']):
                 continue
             
-            # Get signal values for this date
             try:
-                # Use .get() or simple index check for safety
                 is_cd = bool(cd_signals.loc[date]) if date in cd_signals.index and pd.notna(cd_signals.loc[date]) else False
             except Exception:
                 is_cd = False
@@ -254,6 +238,5 @@ async def get_price_history(
         
     except Exception as e:
         logger.error(f"Error fetching price data for {ticker}: {e}")
-        # print stack trace for debugging
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error fetching price data: {str(e)}")

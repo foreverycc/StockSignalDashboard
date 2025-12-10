@@ -1,31 +1,62 @@
 /**
- * Parse array string from CSV - handles both "[1.5, 2.3]" and "{0: 1.5, 1: 2.3}" formats
+ * Parse data into array - handles:
+ * 1. Arrays: [1, 2, 3]
+ * 2. Objects: { "0": 1, "1": 2 } (sorted by key)
+ * 3. Strings: "[1, 2]" or "{0: 1}" (CSV formats)
  */
-export function parseArrayString(str: string | null | undefined): number[] {
-    if (!str) return [];
-    try {
-        const cleaned = str.trim();
-        if (!cleaned) return [];
+export function parseArrayString(str: any): number[] {
+    if (str === null || str === undefined) return [];
 
-        // Handle Python dict format: {0: 1.5, 1: 2.3, ...}
-        if (cleaned.startsWith('{')) {
-            const dictMatch = cleaned.match(/\{([^}]+)\}/);
-            if (!dictMatch) return [];
-            const entries = dictMatch[1].split(',').map(entry => {
-                const parts = entry.split(':');
-                if (parts.length !== 2) return NaN;
-                return parseFloat(parts[1].trim());
-            });
-            return entries.filter(n => !isNaN(n));
-        }
-
-        // Handle array format: [1.5, 2.3, ...]
-        const arrayMatch = cleaned.replace(/[\[\]]/g, '').trim();
-        if (!arrayMatch) return [];
-        return arrayMatch.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
-    } catch {
-        return [];
+    // 1. Handle arrays (JSON direct)
+    if (Array.isArray(str)) {
+        return str.map(n => {
+            if (n === null || n === undefined) return NaN;
+            return Number(n);
+        }).filter(n => !isNaN(n));
     }
+
+    // 2. Handle objects (JSON dicts like price_history)
+    if (typeof str === 'object') {
+        // Sort by integer keys to ensure correct order
+        const entries = Object.entries(str)
+            .map(([k, v]) => [parseInt(k), v] as [number, any])
+            .filter(([k]) => !isNaN(k))
+            .sort((a, b) => a[0] - b[0]);
+
+        return entries.map(([_, v]) => {
+            if (v === null || v === undefined) return NaN;
+            return Number(v);
+        }).filter(n => !isNaN(n));
+    }
+
+    // 3. Handle strings (CSV legacy)
+    if (typeof str === 'string') {
+        try {
+            const cleaned = str.trim();
+            if (!cleaned) return [];
+
+            // Handle Python dict format: {0: 1.5, 1: 2.3, ...}
+            if (cleaned.startsWith('{')) {
+                const dictMatch = cleaned.match(/\{([^}]+)\}/);
+                if (!dictMatch) return [];
+                const entries = dictMatch[1].split(',').map(entry => {
+                    const parts = entry.split(':');
+                    if (parts.length !== 2) return NaN;
+                    return parseFloat(parts[1].trim());
+                });
+                return entries.filter(n => !isNaN(n));
+            }
+
+            // Handle array format: [1.5, 2.3, ...]
+            const arrayMatch = cleaned.replace(/[\[\]]/g, '').trim();
+            if (!arrayMatch) return [];
+            return arrayMatch.split(',').map(s => parseFloat(s.trim())).filter(n => !isNaN(n));
+        } catch {
+            return [];
+        }
+    }
+
+    return [];
 }
 
 /**
