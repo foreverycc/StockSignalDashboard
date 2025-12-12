@@ -151,10 +151,7 @@ async def get_price_history(
     interval: str,
     db: Session = Depends(get_db)
 ):
-    """Get price history for a ticker."""
-    # Assuming we store it in PriceBar table OR fetch from cache
-    # Implementation depends on how we decided to store history.
-    # We implemented save_price_history in db_utils.
+    """Get price history for a ticker with computed signals."""
     
     # Fetch from DB
     prices = db.query(PriceBar).filter(
@@ -162,11 +159,60 @@ async def get_price_history(
         PriceBar.interval == interval
     ).order_by(PriceBar.timestamp).all()
     
-    return [{
-        "time": p.timestamp.isoformat(),
-        "open": p.open,
-        "high": p.high,
-        "low": p.low,
-        "close": p.close,
-        "volume": p.volume
+    if not prices:
+        return []
+
+    # Convert to DataFrame for indicator calculation
+    # We used "Open", "High", "Low", "Close", "Volume" in indicators.py (Case Sensitive often in pandas? logic uses dict keys usually)
+    # The indicators.py likely expects DataFrame columns. Let's check keys.
+    # Usually yfinance gives Capitalized. indicators.py likely uses Capitalized.
+    
+    data = [{
+        "timestamp": p.timestamp,
+        "Open": p.open,
+        "High": p.high,
+        "Low": p.low,
+        "Close": p.close,
+        "Volume": p.volume
     } for p in prices]
+    
+    df = pd.DataFrame(data)
+    if df.empty:
+        return []
+        
+    df.set_index("timestamp", inplace=True)
+    
+    # Compute Indicators
+    try:
+        cd_signals = compute_cd_indicator(df)
+        mc_signals = compute_mc_indicator(df)
+        
+        # Fill NaNs with False
+        cd_signals = cd_signals.fillna(False).astype(bool)
+        mc_signals = mc_signals.fillna(False).astype(bool)
+    except Exception as e:
+        logger.error(f"Error computing indicators for {ticker}: {e}")
+        # Fallback to no signals if error
+        cd_signals = pd.Series(False, index=df.index)
+        mc_signals = pd.Series(False, index=df.index)
+
+    # Construct response
+    response = []
+    for p in prices:
+        # p.timestamp is naive usually. Ensure alignment with df index.
+        ts = p.timestamp
+        is_cd = bool(cd_signals.get(ts, False))
+        is_mc = bool(mc_signals.get(ts, False))
+        
+        response.append({
+            "time": p.timestamp.isoformat(),
+            "open": p.open,
+            "high": p.high,
+            "low": p.low,
+            "close": p.close,
+            "volume": p.volume,
+            "cd_signal": is_cd,
+            "mc_signal": is_mc
+        })
+        
+    return response
