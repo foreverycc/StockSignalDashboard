@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Use the current hostname so it works both locally and from other devices
-const API_BASE_URL = `http://${window.location.hostname}:8000/api`;
+// Use relative path to leverage Vite proxy (configured in vite.config.ts)
+// This ensures requests work correctly whether accessed via localhost or IP address
+const API_BASE_URL = `/api`;
 
 export const api = axios.create({
     baseURL: API_BASE_URL,
