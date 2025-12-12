@@ -189,14 +189,16 @@ def identify_mc_1234(data, all_ticker_data):
     # Convert signal_date to date only (removing time component)
     df['date'] = df['signal_date'].dt.date
 
-    unique_dates = df['date'].unique()[::-1]
+    # Use sorted unique dates to ensure proper time window calculation
+    unique_dates = sorted(df['date'].unique())
     # Get unique dates to iterate through
     for i in range(len(unique_dates)):
         date = unique_dates[i]
         # Get data within 3-day window starting from current date
-        window_end = unique_dates[min(i+2, (len(unique_dates) - 1))]
+        # Use Timedelta for robust window calculation regardless of data sparsity
+        window_end_date = date + pd.Timedelta(days=3)
         window_data = df[(df['date'] >= date) & 
-                        (df['date'] <= window_end)]
+                        (df['date'] < window_end_date)]
         
         # Check each ticker in this window
         for ticker in window_data['ticker'].unique():
@@ -347,14 +349,16 @@ def identify_mc_5230(data, all_ticker_data):
     # Convert signal_date to date only (removing time component)
     df['date'] = df['signal_date'].dt.date
 
-    unique_dates = df['date'].unique()[::-1]
+    # Use sorted unique dates to ensure proper time window calculation
+    unique_dates = sorted(df['date'].unique())
     # Get unique dates to iterate through
     for i in range(len(unique_dates)):
         date = unique_dates[i]
         # Get data within 3-day window starting from current date
-        window_end = unique_dates[min(i+2, (len(unique_dates) - 1))]
+        # Use Timedelta for robust window calculation regardless of data sparsity
+        window_end_date = date + pd.Timedelta(days=3)
         window_data = df[(df['date'] >= date) & 
-                        (df['date'] <= window_end)]
+                        (df['date'] < window_end_date)]
         
         # Check each ticker in this window
         for ticker in window_data['ticker'].unique():

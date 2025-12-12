@@ -189,33 +189,23 @@ def identify_1234(data, all_ticker_data):
     # Convert signal_date to date only (removing time component)
     df['date'] = df['signal_date'].dt.date
 
-    # print(df)
-    
-    unique_dates = df['date'].unique()[::-1]
-    # print("unique_dates:", unique_dates)
+    # Use sorted unique dates to ensure proper time window calculation
+    unique_dates = sorted(df['date'].unique())
     # Get unique dates to iterate through
     for i in range(len(unique_dates)):
         date = unique_dates[i]
-        # print("date:", date)
         # Get data within 3-day window starting from current date
-        window_end = unique_dates[min(i+2, (len(unique_dates) - 1))]
-        # print("window_end:", window_end)
-        # if window_end > date + pd.Timedelta(days=5):
-        #     raise Exception(f"window_end is greater than date + 5 days: {window_end} > {date + pd.Timedelta(days=5)}")
+        # Use Timedelta for robust window calculation regardless of data sparsity
+        window_end_date = date + pd.Timedelta(days=3)
         window_data = df[(df['date'] >= date) & 
-                        (df['date'] <= window_end)]
-        # if date == '2025-05-22':
-        # print("window_data:", window_data)
+                        (df['date'] < window_end_date)]
+        
         # Check each ticker in this window
         for ticker in window_data['ticker'].unique():
             ticker_data = window_data[window_data['ticker'] == ticker]
             unique_intervals = set(ticker_data['interval'])
-            # print("unique_intervals:", unique_intervals)
 
             if len(unique_intervals.intersection(required_intervals)) >= 3:
-                # print("entered into the loop!")
-                # print("ticker:", ticker)
-                # print("date:", date)
                 # Get the most recent signal date within this window for this ticker
                 most_recent_signal_date = ticker_data['signal_date'].max().date()
                 # Check if we've already processed this combination
@@ -228,7 +218,6 @@ def identify_1234(data, all_ticker_data):
                     intervals_str = ",".join(map(str, sorted([int(s.replace('h', '')) for s in resonating_intervals_set])))
                     breakout_candidates.append([ticker, most_recent_signal_date, intervals_str, latest_signal_price])
     
-    # print("breakout_candidates:", breakout_candidates)
     # Include signal_price column if available
     columns = ['ticker', 'date', 'intervals']
     if any(len(candidate) > 3 for candidate in breakout_candidates):
@@ -247,9 +236,7 @@ def identify_1234(data, all_ticker_data):
     dict_nx_1d = {}
     dict_nx_30m = {}
 
-    # print(df_breakout_candidates)
     for ticker in df_breakout_candidates['ticker'].unique():
-        # print(ticker)
         # Calculate nx_1d
         if ticker not in all_ticker_data or '1d' not in all_ticker_data[ticker] or all_ticker_data[ticker]['1d'].empty:
             print(f"No 1d data found for {ticker} in pre-downloaded data, skipping nx_1d calculation.")
@@ -257,11 +244,6 @@ def identify_1234(data, all_ticker_data):
             
         df_stock = all_ticker_data[ticker]['1d']
         
-        # low = df_stock['Low']
-        # short_lower = low.ewm(span = 24, adjust=False).mean()
-        # long_lower = low.ewm(span = 89, adjust=False).mean()
-        # nx_1d = (short_lower > long_lower) 
-
         close = df_stock['Close']
         short_close = close.ewm(span = 24, adjust=False).mean()
         long_close = close.ewm(span = 89, adjust=False).mean()
@@ -286,8 +268,6 @@ def identify_1234(data, all_ticker_data):
         nx_30m_daily = nx_30m.groupby(nx_30m.index.date).last()
         dict_nx_30m[ticker] = nx_30m_daily.to_dict()
     
-    # print (dict_nx_1d)
-    # print (dict_nx_30m)
     # remove tickers that failed to get data (must have both nx_1d and nx_30m)
     valid_tickers = set(dict_nx_1d.keys()).intersection(set(dict_nx_30m.keys()))
     df_breakout_candidates = df_breakout_candidates[df_breakout_candidates['ticker'].isin(valid_tickers)]
@@ -334,7 +314,7 @@ def identify_5230(data, all_ticker_data):
     Parameters:
         data (pd.DataFrame or list): DataFrame or list of dictionaries containing breakout signals.
         all_ticker_data (dict): Dictionary with pre-downloaded ticker data.
-
+    
     Returns:
         DataFrame: A DataFrame of ticker symbols that are potential breakout stocks.
     """
@@ -370,22 +350,22 @@ def identify_5230(data, all_ticker_data):
     # Convert signal_date to date only (removing time component)
     df['date'] = df['signal_date'].dt.date
 
-    # print(df)
-    
-    unique_dates = df['date'].unique()[::-1]
+    # Use sorted unique dates to ensure proper time window calculation
+    unique_dates = sorted(df['date'].unique())
     # Get unique dates to iterate through
     for i in range(len(unique_dates)):
         date = unique_dates[i]
-        # print("date:", date)
         # Get data within 3-day window starting from current date
-        window_end = unique_dates[min(i+2, (len(unique_dates) - 1))]
+        # Use Timedelta for robust window calculation regardless of data sparsity
+        window_end_date = date + pd.Timedelta(days=3)
         window_data = df[(df['date'] >= date) & 
-                        (df['date'] <= window_end)]
-        # print("window_data:", window_data)
+                        (df['date'] < window_end_date)]
+        
         # Check each ticker in this window
         for ticker in window_data['ticker'].unique():
             ticker_data = window_data[window_data['ticker'] == ticker]
             unique_intervals = set(ticker_data['interval'])
+
             if len(unique_intervals.intersection(required_intervals)) >= 3:
                 # Get the most recent signal date within this window for this ticker
                 most_recent_signal_date = ticker_data['signal_date'].max().date()
@@ -406,6 +386,7 @@ def identify_5230(data, all_ticker_data):
         
     df_breakout_candidates = pd.DataFrame(breakout_candidates, columns=columns).sort_values(by=['date', 'ticker'], ascending=[False, True])
 
+    # Add current price data
     current_data = df_breakout_candidates['ticker'].apply(lambda ticker: 
         (
             round(all_ticker_data[ticker]['1d'].iloc[-1]['Close'], 2),
@@ -414,12 +395,11 @@ def identify_5230(data, all_ticker_data):
     )
     df_breakout_candidates[['current_price', 'current_time']] = pd.DataFrame(current_data.tolist(), index=df_breakout_candidates.index)
 
+    # Add NX indicator data for 1h timeframe
     dict_nx_1h = {}
     dict_nx_5m = {}
 
-    print(df_breakout_candidates)
     for ticker in df_breakout_candidates['ticker'].unique():
-        print(ticker)
         # Calculate nx_1h from 1h data
         if ticker in all_ticker_data and '1h' in all_ticker_data[ticker] and not all_ticker_data[ticker]['1h'].empty:
             df_stock_1h = all_ticker_data[ticker]['1h']
@@ -449,14 +429,12 @@ def identify_5230(data, all_ticker_data):
         else:
             print(f"No 5m data found for {ticker} in pre-downloaded data, skipping nx_5m calculation.")
     
-    print (dict_nx_1h)
-    print (dict_nx_5m)
     # remove tickers that failed to get data (must have at least 1h data)
     df_breakout_candidates = df_breakout_candidates[df_breakout_candidates['ticker'].isin(dict_nx_1h.keys())]
     
     # Check if DataFrame is empty after filtering
     if df_breakout_candidates.empty:
-        print("No breakout candidates found after filtering")
+        print("No 5230 breakout candidates found after filtering")
         return df_breakout_candidates  # Return empty DataFrame
     
     # add nx_1h to df_breakout_candidates according to ticker and date
