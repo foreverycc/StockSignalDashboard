@@ -548,11 +548,40 @@ def evaluate_interval(ticker, interval, data=None):
             result['min_return'] = 0
         
         # Add NX values (both signal and current values)
+        # Add NX values (both signal and current values)
         # Signal NX values (at signal dates) - using the latest signal date if available
         result['nx_1d_signal'] = None
         result['nx_30m_signal'] = None  
         result['nx_1h_signal'] = None
         result['nx_5m_signal'] = None
+
+        if latest_signal_date and data:
+             for timeframe in ['1d', '30m', '1h', '5m']:
+                if timeframe in data and not data[timeframe].empty:
+                    df_nx = data[timeframe]
+                    if len(df_nx) >= 89:
+                        # Calculate EMAs
+                        close = df_nx['Close']
+                        short_close = close.ewm(span=24, adjust=False).mean()
+                        long_close = close.ewm(span=89, adjust=False).mean()
+                        nx_series = short_close > long_close
+                        
+                        # Find value at signal date
+                        # Use asof to find the latest valid index up to signal_date
+                        try:
+                            # Note: yfinance 1d data is usually indexed at 00:00:00 (start of day)
+                            # If signal is 14:30:00, asof(14:30) might match today's 00:00 if present.
+                            # However, today's 1d bar is only complete at close. 
+                            # If we are "backtesting", we theoretically shouldn't know Close of today at 14:30.
+                            # But often for 1d trend we check "Yesterday's Close" or "Current Live".
+                            # Here we use simplest approach: lookup nearest past/present timestamp.
+                            
+                            idx_loc = df_nx.index.get_indexer([latest_signal_date], method='pad')[0]
+                            if idx_loc != -1:
+                                val = bool(nx_series.iloc[idx_loc])
+                                result[f'nx_{timeframe}_signal'] = val
+                        except Exception as e:
+                            print(f"Error calculating nx_{timeframe}_signal for {ticker}: {e}")
         
         # Current NX values (at current time)
         result['nx_1d'] = None
@@ -576,7 +605,7 @@ def evaluate_interval(ticker, interval, data=None):
         
         # For signal NX values, we would need the signal date to calculate NX at that time
         # This is more complex and would require storing historical NX calculations
-        # For now, setting to None as placeholder
+        # Logic implemented above using EMA calculation and index lookup
             
         return result
         
