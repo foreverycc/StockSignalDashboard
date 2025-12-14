@@ -1,6 +1,6 @@
 import pandas as pd
 from indicators import compute_mc_indicator, compute_nx_break_through
-from utils import calculate_current_nx_values
+from utils import calculate_current_nx_values, get_trading_day_window_end
     
 def calculate_mc_score(data, interval, signal_date):
     """Calculate score for MC signals - adapted for sell signals"""
@@ -194,15 +194,19 @@ def identify_mc_1234(data, all_ticker_data):
     # Get unique dates to iterate through
     for i in range(len(unique_dates)):
         date = unique_dates[i]
-        # Get data within 3-day window starting from current date
-        # Use Timedelta for robust window calculation regardless of data sparsity
-        window_end_date = date + pd.Timedelta(days=3)
-        window_data = df[(df['date'] >= date) & 
-                        (df['date'] < window_end_date)]
+        # Get data within BROAD window (e.g. 10 days) to assume coverage
+        window_end_broad = date + pd.Timedelta(days=10)
+        window_data_broad = df[(df['date'] >= date) & 
+                        (df['date'] < window_end_broad)]
         
         # Check each ticker in this window
-        for ticker in window_data['ticker'].unique():
-            ticker_data = window_data[window_data['ticker'] == ticker]
+        for ticker in window_data_broad['ticker'].unique():
+            # Apply precise trading day window
+            precise_end_date = get_trading_day_window_end(date, ticker, all_ticker_data, days=3)
+            
+            ticker_data = window_data_broad[(window_data_broad['ticker'] == ticker) & 
+                                            (window_data_broad['date'] < precise_end_date + pd.Timedelta(days=1))] # precise_end is inclusive day
+            
             unique_intervals = set(ticker_data['interval'])
 
             if len(unique_intervals.intersection(required_intervals)) >= 3:
@@ -354,15 +358,19 @@ def identify_mc_5230(data, all_ticker_data):
     # Get unique dates to iterate through
     for i in range(len(unique_dates)):
         date = unique_dates[i]
-        # Get data within 3-day window starting from current date
-        # Use Timedelta for robust window calculation regardless of data sparsity
-        window_end_date = date + pd.Timedelta(days=3)
-        window_data = df[(df['date'] >= date) & 
-                        (df['date'] < window_end_date)]
+        # Get data within BROAD window (e.g. 10 days) to assume coverage
+        window_end_broad = date + pd.Timedelta(days=10)
+        window_data_broad = df[(df['date'] >= date) & 
+                        (df['date'] < window_end_broad)]
         
         # Check each ticker in this window
-        for ticker in window_data['ticker'].unique():
-            ticker_data = window_data[window_data['ticker'] == ticker]
+        for ticker in window_data_broad['ticker'].unique():
+            # Apply precise trading day window
+            precise_end_date = get_trading_day_window_end(date, ticker, all_ticker_data, days=3)
+            
+            ticker_data = window_data_broad[(window_data_broad['ticker'] == ticker) & 
+                                            (window_data_broad['date'] < precise_end_date + pd.Timedelta(days=1))] # precise_end is inclusive day
+            
             unique_intervals = set(ticker_data['interval'])
 
             if len(unique_intervals.intersection(required_intervals)) >= 3:

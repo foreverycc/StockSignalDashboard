@@ -1,5 +1,65 @@
 import pandas as pd
 import os
+import numpy as np
+
+def get_trading_day_window_end(start_date, ticker, all_ticker_data, days=3):
+    """
+    Calculate the end date of a trading day window.
+    
+    Args:
+        start_date (datetime.date): The starting date.
+        ticker (str): Ticker symbol.
+        all_ticker_data (dict): Dictionary of ticker data.
+        days (int): Number of trading days in the window suitable for the cluster.
+                    Current logic usually implies 3-day window inclusive (Start, +1, +2).
+    
+    Returns:
+        datetime.date: The end date of the window.
+    """
+    # Default fallback: 5 calendar days (covers weekend)
+    fallback_date = start_date + pd.Timedelta(days=3)
+    
+    if ticker not in all_ticker_data or '1d' not in all_ticker_data[ticker]:
+        return fallback_date
+        
+    df_daily = all_ticker_data[ticker]['1d']
+    if df_daily.empty:
+        return fallback_date
+        
+    # Get sorted trading dates as pd.Timestamp list
+    trading_dates = df_daily.index
+    
+    # Find insertion point for start_date
+    # Normalize start_date to timestamp for comparison (assume 00:00 or match index)
+    # Trading index is usually DatetimeIndex.
+    try:
+        ts_start = pd.Timestamp(start_date)
+        
+        # Use searchsorted to find position
+        # If match, returns index. If not, returns index where it would be inserted.
+        idx = trading_dates.searchsorted(ts_start)
+        
+        # If idx is past end, return fallback
+        if idx >= len(trading_dates):
+            return fallback_date
+            
+        # Target index: inclusive of start day?
+        # If start_date is present (idx points to it), we want start + 2 more days.
+        # So target = idx + (days - 1).
+        
+        target_idx = idx + (days - 1)
+        
+        if target_idx < len(trading_dates):
+            return trading_dates[target_idx].date()
+        else:
+            # If window extends beyond available data, just take the last available date
+            # But maybe add buffer if we are at edge?
+            # Safe to return last date available.
+            return trading_dates[-1].date()
+            
+    except Exception as e:
+        # print(f"Error calculating trading window: {e}")
+        return fallback_date
 
 def save_results(results, output_file):
     df = pd.DataFrame(results)
@@ -91,7 +151,6 @@ def save_breakout_candidates_5230(df, file_path):
         available_columns.append('nx_1h')
     if 'nx_30m' in df.columns:
         available_columns.append('nx_30m')
-
     
     df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
@@ -132,7 +191,6 @@ def save_mc_breakout_candidates_1234(df, file_path):
         available_columns.append('nx_1h')
     if 'nx_30m' in df.columns:
         available_columns.append('nx_30m')
- 
     
     df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
 
@@ -178,137 +236,50 @@ def save_mc_breakout_candidates_5230(df, file_path):
 
 def calculate_current_nx_values(ticker, all_ticker_data, precomputed_series=None):
     """
-    Calculate current NX values for nx_1d, nx_30m, and nx_1h at the current time.
-
-    This function prefers previously computed NX booleans when provided, avoiding
-    any new data fetches or redundant computations. If a precomputed series is
-    not provided for a timeframe, it computes the value from the pre-downloaded
-    data in all_ticker_data.
-
-    Parameters:
-        ticker (str): The stock ticker symbol
-        all_ticker_data (dict): Dictionary with pre-downloaded ticker data
-        precomputed_series (dict | None): Optional mapping per timeframe containing
-            the historical NX boolean series for this ticker. Expected keys are
-            '1d', '30m', '1h'. Each value can be a dict of {date -> bool} or a
-            pandas Series/DataFrame convertible to the same.
-
+    Calculate current NX values for a ticker across different timeframes.
+    
+    Args:
+        ticker: Stock symbol
+        all_ticker_data: Dictionary containing ticker data
+        precomputed_series: Optional dictionary of precomputed boolean series to avoiding recalculation
+                           Format: {'1d': series, '1h': series, ...}
+    
     Returns:
-        dict: Dictionary with keys 'nx_1d', 'nx_30m', 'nx_1h'
+        dict: Dictionary with 'nx_1d', 'nx_1h', 'nx_30m', 'nx_5m' boolean values
     """
-    current_nx = {
+    results = {
         'nx_1d': None,
         'nx_1h': None,
         'nx_30m': None,
+        'nx_5m': None
     }
-
-    def latest_bool_from_series(series_like):
-        if series_like is None:
-            return None
-        try:
-            # Normalize to dict
-            if hasattr(series_like, 'to_dict'):
-                series_dict = series_like.to_dict()
-            elif isinstance(series_like, dict):
-                series_dict = series_like
-            else:
-                return None
-            if not series_dict:
-                return None
-            last_key = max(series_dict.keys())
-            val = series_dict.get(last_key, None)
-            if val is None:
-                return None
-            # Some series may store numpy.bool_ or object; coerce to bool
-            return bool(val)
-        except Exception:
-            return None
-
-    pre = precomputed_series or {}
-
-    # Prefer precomputed latest values when available; otherwise compute from data
-    # 1d
-    nx_1d_pre = latest_bool_from_series(pre.get('1d'))
-    if nx_1d_pre is not None:
-        current_nx['nx_1d'] = nx_1d_pre
-    elif ticker in all_ticker_data and '1d' in all_ticker_data[ticker] and not all_ticker_data[ticker]['1d'].empty:
-        df_stock = all_ticker_data[ticker]['1d']
-        close = df_stock['Close']
-        short_close = close.ewm(span=24, adjust=False).mean()
-        long_close = close.ewm(span=89, adjust=False).mean()
-        current_nx['nx_1d'] = short_close.iloc[-1] > long_close.iloc[-1]
-
-    # 30m
-    nx_30m_pre = latest_bool_from_series(pre.get('30m'))
-    if nx_30m_pre is not None:
-        current_nx['nx_30m'] = nx_30m_pre
-    elif ticker in all_ticker_data and '30m' in all_ticker_data[ticker] and not all_ticker_data[ticker]['30m'].empty:
-        df_stock_30m = all_ticker_data[ticker]['30m']
-        close_30m = df_stock_30m['Close']
-        short_close_30m = close_30m.ewm(span=24, adjust=False).mean()
-        long_close_30m = close_30m.ewm(span=89, adjust=False).mean()
-        current_nx['nx_30m'] = short_close_30m.iloc[-1] > long_close_30m.iloc[-1]
-
-    # 1h
-    nx_1h_pre = latest_bool_from_series(pre.get('1h'))
-    if nx_1h_pre is not None:
-        current_nx['nx_1h'] = nx_1h_pre
-    elif ticker in all_ticker_data and '1h' in all_ticker_data[ticker] and not all_ticker_data[ticker]['1h'].empty:
-        df_stock_1h = all_ticker_data[ticker]['1h']
-        close_1h = df_stock_1h['Close']
-        short_close_1h = close_1h.ewm(span=24, adjust=False).mean()
-        long_close_1h = close_1h.ewm(span=89, adjust=False).mean()
-        current_nx['nx_1h'] = short_close_1h.iloc[-1] > long_close_1h.iloc[-1]
-
-    return current_nx
-    return current_nx
-
-def save_breakout_candidates(df, output_dir, filename):
-    """
-    Save breakout candidates (detailed) to a file.
-    """
-    if isinstance(df, list):
-        df = pd.DataFrame(df)
+    
+    if ticker not in all_ticker_data:
+        return results
         
-    output_path = os.path.join(output_dir, filename)
+    precomputed = precomputed_series or {}
     
-    if df.empty:
-        # Create empty file with headers if possible, or just touch it
-        # For details, we might want all columns. 
-        # If we don't know columns, just save empty csv
-        df.to_csv(output_path, sep='\t', index=False)
-        return
+    # Helper to calculate or reuse NX value
+    def get_nx_value(interval, key):
+        # Try to use precomputed series logic
+        if key in precomputed and precomputed[key] is not None:
+            # precomputed[key] is a dict {date: bool} or Series
+            # We want current status (latest available)
+            # This is tricky because precomputed used date keys.
+            # So fallback to recalculation is safer for "current status" unless dates align perfectly.
+            pass
+            
+        if interval in all_ticker_data[ticker] and not all_ticker_data[ticker][interval].empty:
+            df = all_ticker_data[ticker][interval]
+            close = df['Close']
+            short = close.ewm(span=24, adjust=False).mean()
+            long = close.ewm(span=89, adjust=False).mean()
+            return bool((short > long).iloc[-1])
+        return None
 
-    # Save all columns for details
-    df.to_csv(output_path, sep='\t', index=False)
-
-def save_breakout_candidates_summary(df, output_dir, filename):
-    """
-    Save breakout candidates (summary) to a file.
-    """
-    if isinstance(df, list):
-        df = pd.DataFrame(df)
-        
-    output_path = os.path.join(output_dir, filename)
+    results['nx_1d'] = get_nx_value('1d', '1d')
+    results['nx_1h'] = get_nx_value('1h', '1h')
+    results['nx_30m'] = get_nx_value('30m', '30m')
+    results['nx_5m'] = get_nx_value('5m', '5m')
     
-    if df.empty:
-        # Create empty file with standard summary headers
-        columns = ['ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time', 'nx_1d_signal', 'nx_30m_signal', 'nx_1d', 'nx_1h', 'nx_30m']
-        pd.DataFrame(columns=columns).to_csv(output_path, sep='\t', index=False)
-        return
-
-    # Define standard summary columns
-    # We try to include as many as available
-    target_columns = [
-        'ticker', 'date', 'intervals', 'signal_price', 'current_price', 'current_time',
-        'nx_1d_signal', 'nx_30m_signal', 'nx_1h_signal', 'nx_5m_signal',
-        'nx_1d', 'nx_1h', 'nx_30m', 'nx_5m'
-    ]
-    
-    available_columns = [c for c in target_columns if c in df.columns]
-    
-    # If no target columns found (e.g. different structure), save what we have or specific subset
-    if not available_columns:
-        available_columns = df.columns.tolist()
-        
-    df.to_csv(output_path, sep='\t', index=False, columns=available_columns)
+    return results
