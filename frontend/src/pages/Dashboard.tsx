@@ -15,7 +15,7 @@ interface DashboardProps {
 }
 
 // Wrapper component to handle individual chart data fetching
-const DetailedChartRow = ({ row, activeSubTab }: { row: any, activeSubTab: string }) => {
+const DetailedChartRow = ({ row, activeSubTab: _activeSubTab }: { row: any, activeSubTab: string }) => {
     const { data: priceHistory, isLoading } = useQuery({
         queryKey: ['priceHistory', row.ticker, row.interval],
         queryFn: () => analysisApi.getPriceHistory(row.ticker, row.interval),
@@ -32,7 +32,7 @@ const DetailedChartRow = ({ row, activeSubTab }: { row: any, activeSubTab: strin
                     subtitle={`Success Rate: ${row.success_rate}% | Avg Return: ${row.avg_return}% | Signal Count: ${row.test_count || row.test_count_0 || 'N/A'}`}
                 />
             </div>
-            <div style={{ height: '500px' }} className="mt-4 border-t pt-4 border-border/50">
+            <div style={{ height: '350px' }} className="mt-4 border-t pt-4 border-border/50">
                 {isLoading ? (
                     <div className="h-full flex items-center justify-center text-muted-foreground">Loading price history...</div>
                 ) : (
@@ -152,7 +152,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
         // Helper to extract best metrics from detailed row
         const extractBestMetrics = (row: any) => {
-            let bestPeriod = -1;
             let maxSuccessRate = -1;
             let bestReturn = -1;
             let bestCount = 0;
@@ -167,7 +166,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         maxSuccessRate = rate;
                         bestReturn = ret;
                         bestCount = count;
-                        bestPeriod = i;
                     }
                 }
             }

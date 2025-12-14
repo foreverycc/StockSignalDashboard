@@ -83,11 +83,12 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             dataKey="period"
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                            hide
                         />
                         <YAxis
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                            label={{ value: 'Return (%)', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }}
+                            label={{ value: 'Return (%)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
                         <Tooltip
                             contentStyle={{
@@ -98,39 +99,46 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             }}
                             formatter={(value: any, name: string) => [typeof value === 'number' ? value.toFixed(2) + '%' : value, name]}
                         />
-                        <Legend wrapperStyle={{ fontSize: '11px' }} />
+                        <Legend wrapperStyle={{ fontSize: '11px' }} align="center" />
                         <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
+
+                        {/* Min/Max - light gray dashed line */}
+                        <Line
+                            type="monotone"
+                            dataKey="max"
+                            stroke="hsl(var(--muted-foreground))"
+                            strokeWidth={1}
+                            strokeOpacity={0.62}
+                            strokeDasharray="4 4"
+                            dot={false}
+                            name="Min/Max" // Merge Min/Max name here
+                        />
+                        <Line
+                            type="monotone"
+                            dataKey="min"
+                            stroke="hsl(var(--muted-foreground))"
+                            strokeWidth={1}
+                            strokeOpacity={0.62}
+                            strokeDasharray="4 4"
+                            dot={false}
+                            name="Min"
+                            legendType="none" // Hide Min legend
+                        />
 
                         {/* Q1-Q3 Interquartile Range - light blue fill using stacked bar */}
                         <Bar
                             dataKey="iqrBase"
                             fill="transparent"
                             stackId="iqr"
+                            legendType="none"
                         />
                         <Bar
                             dataKey="iqrRange"
                             fill="hsl(var(--primary))"
                             fillOpacity={0.2}
                             stackId="iqr"
-                            name="IQR"
-                        />
-
-                        {/* Min/Max - light gray super small dots only */}
-                        <Line
-                            type="monotone"
-                            dataKey="max"
-                            stroke="transparent"
-                            strokeWidth={0}
-                            dot={{ r: 1.5, fill: 'hsl(var(--muted-foreground))', opacity: 0.4 }}
-                            name="Max"
-                        />
-                        <Line
-                            type="monotone"
-                            dataKey="min"
-                            stroke="transparent"
-                            strokeWidth={0}
-                            dot={{ r: 1.5, fill: 'hsl(var(--muted-foreground))', opacity: 0.4 }}
-                            name="Min"
+                            name="IQR (Q1/Q3)"
+                            legendType="none" // Hide bar legend
                         />
 
                         {/* Q1 and Q3 lines - blue dashed */}
@@ -142,6 +150,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             strokeDasharray="3 3"
                             dot={false}
                             name="Q3"
+                            legendType="none" // Merged into Q1/Q3
                         />
                         <Line
                             type="monotone"
@@ -150,7 +159,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             strokeWidth={1}
                             strokeDasharray="3 3"
                             dot={false}
-                            name="Q1"
+                            name="Q1/Q3" // Visible Legend Item
                         />
 
                         {/* Median - small blue dots only */}
@@ -188,12 +197,12 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             dataKey="period"
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                            label={{ value: 'Period', position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))' }}
+                            label={{ value: 'Period', position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
                         <YAxis
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                            label={{ value: 'Volume', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }}
+                            label={{ value: 'Vol', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
                         <Tooltip
                             contentStyle={{

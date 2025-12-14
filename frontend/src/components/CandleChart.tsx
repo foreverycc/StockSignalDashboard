@@ -135,7 +135,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
             <h3 className="text-sm font-semibold mb-2">Price History - {ticker} ({interval})</h3>
 
             {/* Price Chart - Top Section */}
-            <div className="flex-1 min-h-[300px]">
+            <div className="flex-1 min-h-0">
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
                         data={validData}
@@ -154,7 +154,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                                 }
                             }}
                             stroke="hsl(var(--muted-foreground))"
-                            tick={{ fontSize: 10 }}
+                            tick={{ fontSize: 11 }}
                             minTickGap={30}
                             hide // Hide XAxis on top chart to avoid clutter, user can see specific time in tooltip
                         />
@@ -162,14 +162,14 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                         <YAxis
                             domain={['auto', 'auto']}
                             stroke="hsl(var(--muted-foreground))"
-                            tick={{ fontSize: 10 }}
+                            tick={{ fontSize: 11 }}
                             tickFormatter={(val: number) => val.toFixed(1)}
                             scale="linear"
-                            label={{ value: 'Price', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }}
+                            label={{ value: 'Price', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
 
                         <Tooltip content={<CustomTooltip />} />
-                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
+                        <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} align="center" />
 
                         {/* Candlestick - Using [low, high] with custom shape */}
                         <Bar
@@ -243,17 +243,17 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                                 }
                             }}
                             stroke="hsl(var(--muted-foreground))"
-                            tick={{ fontSize: 10 }}
+                            tick={{ fontSize: 11 }}
                             minTickGap={30}
-                            label={{ value: 'Date', position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))', fontSize: 10 }}
+                            label={{ value: 'Date', position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
 
                         <YAxis
                             domain={[0, 'auto']}
                             stroke="hsl(var(--muted-foreground))"
-                            tick={{ fontSize: 10 }}
+                            tick={{ fontSize: 11 }}
                             tickFormatter={(val: number) => (val / 1000).toFixed(0) + 'k'}
-                            label={{ value: 'Volume', angle: -90, position: 'insideLeft', fill: 'hsl(var(--muted-foreground))' }}
+                            label={{ value: 'Vol', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
 
                         <Tooltip content={<CustomTooltip />} />
@@ -261,7 +261,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                         <Bar
                             dataKey="volume"
                             fill="hsl(var(--muted-foreground))"
-                            opacity={0.3}
+                            opacity={0.5}
                             barSize={30}
                             name="Volume"
                             isAnimationActive={false}
