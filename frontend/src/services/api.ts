@@ -84,4 +84,9 @@ export const analysisApi = {
         const response = await api.get<any[]>(`/analysis/price_history/${ticker}/${interval}`);
         return response.data;
     },
+
+    getOptions: async (ticker: string) => {
+        const response = await axios.get(`${API_BASE_URL}/analysis/options/${ticker}`);
+        return response.data;
+    }
 };

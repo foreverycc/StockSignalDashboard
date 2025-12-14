@@ -15,6 +15,7 @@ from app.logic.indicators import compute_cd_indicator, compute_mc_indicator
 from app.db.database import SessionLocal
 from app.db.models import AnalysisRun, AnalysisResult, PriceBar
 from app.logic.db_utils import save_price_history
+from app.logic.options import get_option_data
 
 logger = logging.getLogger(__name__)
 
@@ -216,3 +217,16 @@ async def get_price_history(
         })
         
     return response
+
+@router.get("/options/{ticker}")
+def get_options(ticker: str):
+    """
+    Get option open interest data for nearest day, week, and month.
+    """
+    try:
+        data = get_option_data(ticker)
+        if not data:
+            raise HTTPException(status_code=404, detail=f"Option data not found for {ticker}")
+        return data
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

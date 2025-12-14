@@ -4,6 +4,7 @@ import { analysisApi } from '../services/api';
 import { AnalysisTable } from '../components/AnalysisTable';
 import { BoxplotChart } from '../components/BoxplotChart';
 import { CandleChart } from '../components/CandleChart';
+import { OptionOIChart } from '../components/OptionOIChart';
 import { LogViewer } from '../components/LogViewer';
 import { cn } from '../utils/cn';
 
@@ -42,6 +43,10 @@ const DetailedChartRow = ({ row, activeSubTab: _activeSubTab }: { row: any, acti
                         interval={row.interval}
                     />
                 )}
+            </div>
+            {/* Option Open Interest Chart */}
+            <div style={{ height: '350px' }} className="mt-4 border-t pt-4 border-border/50">
+                <OptionOIChart ticker={row.ticker} />
             </div>
         </div>
     );
