@@ -220,7 +220,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         return [];
     }, [selectedRow, detailedRowData, activeSubTab]);
 
-    const [chartPanelWidth, setChartPanelWidth] = useState(33);
+    const [chartPanelWidth, setChartPanelWidth] = useState(50);
     const [isResizing, setIsResizing] = useState(false);
 
     const startResizing = React.useCallback(() => {
