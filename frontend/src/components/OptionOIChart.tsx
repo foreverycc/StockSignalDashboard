@@ -20,6 +20,7 @@ interface OptionOIChartProps {
 
 export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
     const [selectedTimeframe, setSelectedTimeframe] = useState<'nearest' | 'week' | 'month'>('nearest');
+    const [showFullRange, setShowFullRange] = useState(false);
 
     // Fetch options data
     const { data: optionsData, isLoading, error } = useQuery({
@@ -34,8 +35,22 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
         return optionsData[selectedTimeframe];
     }, [optionsData, selectedTimeframe]);
 
-    const chartData = activeData?.data || [];
+    const chartData = useMemo(() => {
+        if (!activeData?.data) return [];
+        let data = activeData.data;
+        const currentPrice = optionsData?.current_price;
+
+        if (!showFullRange && currentPrice && data.length > 0) {
+            // Filter to +/- 25% of current price (50% range)
+            const lowerBound = currentPrice * 0.75;
+            const upperBound = currentPrice * 1.25;
+            data = data.filter((d: any) => d.strike >= lowerBound && d.strike <= upperBound);
+        }
+        return data;
+    }, [activeData, optionsData, showFullRange]);
+
     const expiryDate = activeData?.date || '';
+    const maxPain = activeData?.max_pain;
     const currentPrice = optionsData?.current_price;
 
     if (isLoading) {
@@ -60,25 +75,46 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
 
     return (
         <div className="flex flex-col h-full space-y-4">
-            <div className="flex justify-between items-center">
-                <h3 className="text-sm font-semibold text-foreground">
-                    Open Interest (Exp: {expiryDate})
-                </h3>
-                <div className="flex bg-muted/20 rounded-lg p-1">
-                    {(['nearest', 'week', 'month'] as const).map((tf) => (
-                        <button
-                            key={tf}
-                            onClick={() => setSelectedTimeframe(tf)}
-                            className={cn(
-                                "px-3 py-1 text-xs font-medium rounded-md transition-all",
-                                selectedTimeframe === tf
-                                    ? "bg-background shadow-sm text-foreground"
-                                    : "text-muted-foreground hover:text-foreground"
-                            )}
-                        >
-                            {tf.charAt(0).toUpperCase() + tf.slice(1)}
-                        </button>
-                    ))}
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-2">
+                <div>
+                    <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                        Open Interest (Exp: {expiryDate})
+                        {maxPain !== undefined && maxPain !== null && (
+                            <span className="text-xs font-normal text-muted-foreground bg-muted/30 px-2 py-0.5 rounded ml-2">
+                                Max Pain: {maxPain}
+                            </span>
+                        )}
+                    </h3>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => setShowFullRange(!showFullRange)}
+                        className={cn(
+                            "px-2 py-1 text-xs font-medium rounded-md border border-border transition-colors",
+                            !showFullRange ? "bg-primary/10 text-primary border-primary/20" : "text-muted-foreground hover:bg-muted"
+                        )}
+                        title="Show focused range around current price"
+                    >
+                        {showFullRange ? "Show Focused Range" : "Show All Strikes"}
+                    </button>
+
+                    <div className="flex bg-muted/20 rounded-lg p-1">
+                        {(['nearest', 'week', 'month'] as const).map((tf) => (
+                            <button
+                                key={tf}
+                                onClick={() => setSelectedTimeframe(tf)}
+                                className={cn(
+                                    "px-3 py-1 text-xs font-medium rounded-md transition-all",
+                                    selectedTimeframe === tf
+                                        ? "bg-background shadow-sm text-foreground"
+                                        : "text-muted-foreground hover:text-foreground"
+                                )}
+                            >
+                                {tf.charAt(0).toUpperCase() + tf.slice(1)}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 

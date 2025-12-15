@@ -79,6 +79,11 @@ def get_option_data(ticker_symbol: str):
                 # Merge on strike
                 merged = pd.merge(calls, puts, on='strike', how='outer').fillna(0)
                 
+                # Check if there is any open interest
+                if (merged['calls'].sum() == 0) and (merged['puts'].sum() == 0):
+                    chain_cache[d] = {'data': [], 'max_pain': None}
+                    continue
+
                 # Calculate Max Pain
                 # Iterate through all strikes as potential expiration prices
                 # For each price P, calculate total liability:
@@ -89,7 +94,7 @@ def get_option_data(ticker_symbol: str):
                 put_ois = merged['puts'].values
                 
                 min_pain_value = float('inf')
-                max_pain_strike = 0
+                max_pain_strike = None
                 
                 for price_point in strikes:
                     call_loss = np.maximum(0, price_point - strikes) * call_ois
