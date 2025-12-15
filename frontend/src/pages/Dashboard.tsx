@@ -113,7 +113,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
             // For standard tabs, fetch all (the API supports "all" logic internally via blob)
             return analysisApi.getResult(currentRun.id, currentResultType);
         },
-        enabled: !!currentRun && (!isSearchMode || !!searchQuery)
+        enabled: !!currentRun && (!isSearchMode || !!searchQuery),
+        retry: 2,
+        staleTime: 0 // Always check for fresh data when keys change
     });
 
     // Filter table data by date

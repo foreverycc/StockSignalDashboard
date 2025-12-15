@@ -247,3 +247,20 @@ def get_options(ticker: str):
         return data
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+@router.get("/logs")
+def get_logs(lines: int = 100):
+    """Get the last N lines of the backend server log."""
+    log_file = "backend_server.log"
+    if not os.path.exists(log_file):
+        return {"logs": []}
+    
+    try:
+        # Use simple file reading; for very large files seek might be improved but tail is fine for now
+        with open(log_file, "r") as f:
+            # Read all lines then slice is simplest for now (assuming log rotation keeps it manageable)
+            # For robustness with rotating logs, this reads the current active log
+            all_lines = f.readlines()
+            return {"logs": all_lines[-lines:]}
+    except Exception as e:
+        logger.error(f"Error reading logs: {e}")
+        return {"logs": [f"Error reading logs: {str(e)}"]}

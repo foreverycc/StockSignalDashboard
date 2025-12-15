@@ -13,7 +13,9 @@ function AppContent() {
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // State lifted from Dashboard
-  const [selectedStockList, setSelectedStockList] = useState<string>('');
+  const [selectedStockList, setSelectedStockList] = useState<string>(() => {
+    return localStorage.getItem('selectedStockList') || '';
+  });
   const [showLogs, setShowLogs] = useState(false);
 
   // Date Range State (default: last 1 month)
@@ -43,9 +45,18 @@ function AppContent() {
     queryFn: stocksApi.list
   });
 
-  // Set default stock list
+  // Persist selection
+  useEffect(() => {
+    if (selectedStockList) {
+      localStorage.setItem('selectedStockList', selectedStockList);
+    }
+  }, [selectedStockList]);
+
+  // Set default stock list (only if nothing selected yet)
   useEffect(() => {
     if (stockLists && stockLists.length > 0 && !selectedStockList) {
+      // If we have a stored value that matches the list, use it (handled by init state, but verify specific validity?)
+      // For now, init state handles it. If init state was '' (empty storage), proceed to default.
       if (stockLists.includes('00-stocks_hot.tab')) {
         setSelectedStockList('00-stocks_hot.tab');
       } else {
@@ -60,6 +71,23 @@ function AppContent() {
     queryFn: analysisApi.getStatus,
     refetchInterval: (query) => (query.state.data?.status === 'running' ? 1000 : false)
   });
+
+  // Auto-refresh runs when job completes
+  useEffect(() => {
+    if (jobStatus?.status === 'completed' && jobStatus.job_id) {
+      const lastProcessed = localStorage.getItem('lastProcessedJobId');
+      if (lastProcessed !== jobStatus.job_id) {
+        console.log("Job completed, forcing refresh...");
+        localStorage.setItem('lastProcessedJobId', jobStatus.job_id);
+        // Small delay to ensure DB writes are fully committed/propagated if needed
+        setTimeout(() => {
+          window.location.reload();
+        }, 500);
+      }
+    }
+  }, [jobStatus]);
+
+  // Run analysis mutation
 
   // Run analysis mutation
   const runAnalysisMutation = useMutation({
