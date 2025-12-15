@@ -191,6 +191,13 @@ async def get_price_history(
         # Fill NaNs with False
         cd_signals = cd_signals.fillna(False).astype(bool)
         mc_signals = mc_signals.fillna(False).astype(bool)
+
+        # Vegas Channel EMAs
+        df['ema_13'] = df['Close'].ewm(span=13, adjust=False).mean()
+        df['ema_21'] = df['Close'].ewm(span=21, adjust=False).mean()
+        df['ema_144'] = df['Close'].ewm(span=144, adjust=False).mean()
+        df['ema_169'] = df['Close'].ewm(span=169, adjust=False).mean()
+
     except Exception as e:
         logger.error(f"Error computing indicators for {ticker}: {e}")
         # Fallback to no signals if error
@@ -205,6 +212,12 @@ async def get_price_history(
         is_cd = bool(cd_signals.get(ts, False))
         is_mc = bool(mc_signals.get(ts, False))
         
+        # Ema values
+        e13 = df.loc[ts, 'ema_13'] if 'ema_13' in df else None
+        e21 = df.loc[ts, 'ema_21'] if 'ema_21' in df else None
+        e144 = df.loc[ts, 'ema_144'] if 'ema_144' in df else None
+        e169 = df.loc[ts, 'ema_169'] if 'ema_169' in df else None
+
         response.append({
             "time": p.timestamp.isoformat(),
             "open": p.open,
@@ -213,7 +226,11 @@ async def get_price_history(
             "close": p.close,
             "volume": p.volume,
             "cd_signal": is_cd,
-            "mc_signal": is_mc
+            "mc_signal": is_mc,
+            "ema_13": float(e13) if pd.notna(e13) else None,
+            "ema_21": float(e21) if pd.notna(e21) else None,
+            "ema_144": float(e144) if pd.notna(e144) else None,
+            "ema_169": float(e169) if pd.notna(e169) else None
         })
         
     return response

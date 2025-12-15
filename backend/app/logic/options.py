@@ -1,5 +1,6 @@
 import yfinance as yf
 import pandas as pd
+import numpy as np
 from datetime import datetime, timedelta
 
 def get_option_data(ticker_symbol: str):
@@ -78,25 +79,54 @@ def get_option_data(ticker_symbol: str):
                 # Merge on strike
                 merged = pd.merge(calls, puts, on='strike', how='outer').fillna(0)
                 
-                # Filter useful range? 
-                # Showing ALL strikes might be too much. 
-                # Let's filter to e.g. +/- 20% or 30% of current price if available, 
-                # or just top N active strikes?
-                # User didn't specify, but for UI performance, maybe not hundreds of bars.
-                # However, for now, let's just sort by strike and return.
+                # Calculate Max Pain
+                # Iterate through all strikes as potential expiration prices
+                # For each price P, calculate total liability:
+                # Sum(max(0, P - k) * call_oi(k) + max(0, k - P) * put_oi(k))
                 
+                strikes = merged['strike'].values
+                call_ois = merged['calls'].values
+                put_ois = merged['puts'].values
+                
+                min_pain_value = float('inf')
+                max_pain_strike = 0
+                
+                for price_point in strikes:
+                    call_loss = np.maximum(0, price_point - strikes) * call_ois
+                    put_loss = np.maximum(0, strikes - price_point) * put_ois
+                    total_pain = np.sum(call_loss + put_loss)
+                    
+                    if total_pain < min_pain_value:
+                        min_pain_value = total_pain
+                        max_pain_strike = price_point
+                        
                 merged = merged.sort_values('strike')
                 
-                chain_cache[d] = merged.to_dict(orient='records')
+                chain_cache[d] = {
+                    'data': merged.to_dict(orient='records'),
+                    'max_pain': max_pain_strike
+                }
             except Exception as e:
                 print(f"Error fetching chain for {d}: {e}")
-                chain_cache[d] = []
+                chain_cache[d] = {'data': [], 'max_pain': None}
 
         return {
             "current_price": current_price,
-            "nearest": {"date": targets['nearest'], "data": chain_cache.get(targets['nearest'], [])},
-            "week": {"date": targets['week'], "data": chain_cache.get(targets['week'], [])},
-            "month": {"date": targets['month'], "data": chain_cache.get(targets['month'], [])}
+            "nearest": {
+                "date": targets['nearest'], 
+                "data": chain_cache.get(targets['nearest'], {}).get('data', []),
+                "max_pain": chain_cache.get(targets['nearest'], {}).get('max_pain')
+            },
+            "week": {
+                "date": targets['week'], 
+                "data": chain_cache.get(targets['week'], {}).get('data', []),
+                "max_pain": chain_cache.get(targets['week'], {}).get('max_pain')
+            },
+            "month": {
+                "date": targets['month'], 
+                "data": chain_cache.get(targets['month'], {}).get('data', []),
+                "max_pain": chain_cache.get(targets['month'], {}).get('max_pain')
+            }
         }
 
     except Exception as e:

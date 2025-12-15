@@ -2,13 +2,15 @@ import React, { useMemo } from 'react';
 import {
     ComposedChart,
     Bar,
+    Line,
     XAxis,
     YAxis,
     CartesianGrid,
     Tooltip,
     Legend,
     ResponsiveContainer,
-    Scatter
+    Scatter,
+    ReferenceLine
 } from 'recharts';
 import { format } from 'date-fns';
 
@@ -21,6 +23,10 @@ interface CandleData {
     volume: number;
     cd_signal?: boolean;
     mc_signal?: boolean;
+    ema_13?: number;
+    ema_21?: number;
+    ema_144?: number;
+    ema_169?: number;
 }
 
 interface CandleChartProps {
@@ -178,6 +184,25 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                             shape={<CandleShape />}
                             isAnimationActive={false}
                             legendType="none" // Hide generic Candle bar from legend if preferred, or keep
+                        />
+
+                        {/* Vegas Channel */}
+                        <Line type="monotone" dataKey="ema_13" stroke="#0ea5e9" strokeWidth={1} dot={false} name="EMA 13" />
+                        <Line type="monotone" dataKey="ema_21" stroke="#3b82f6" strokeWidth={1} dot={false} name="EMA 21" />
+                        <Line type="monotone" dataKey="ema_144" stroke="#ef4444" strokeWidth={1} dot={false} name="EMA 144" />
+                        <Line type="monotone" dataKey="ema_169" stroke="#f97316" strokeWidth={1} dot={false} name="EMA 169" />
+
+                        {/* Current Price Line */}
+                        <ReferenceLine
+                            y={data[data.length - 1]?.close}
+                            stroke="hsl(var(--foreground))"
+                            strokeDasharray="3 3"
+                            label={{
+                                value: data[data.length - 1]?.close?.toFixed(2),
+                                position: 'right',
+                                fill: 'hsl(var(--foreground))',
+                                fontSize: 11
+                            }}
                         />
 
                         {/* Buy Signals (CD) */}
