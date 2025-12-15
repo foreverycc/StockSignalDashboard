@@ -44,3 +44,16 @@ class PriceBar(Base):
     # Optional: Store computed signals if we want to cache them persistently?
     # For now, keep signals computed on-the-fly or in cache, 
     # but storing raw OHLCV here is the main goal.
+
+class OptionChain(Base):
+    __tablename__ = "option_chains"
+
+    id = Column(Integer, primary_key=True, index=True)
+    ticker = Column(String, index=True)
+    expiration = Column(String, index=True) # YYYY-MM-DD
+    scrape_date = Column(DateTime, default=datetime.utcnow, index=True)
+    
+    data = Column(JSON) # List of {strike, calls, puts}
+    current_price = Column(Float)
+    max_pain = Column(Float, nullable=True)
+

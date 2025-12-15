@@ -3,11 +3,18 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 
+from app.db.database import SessionLocal, Base, engine
+from app.db.models import OptionChain
+from sqlalchemy import desc
+
+# Ensure tables exist (simple migration for now)
+Base.metadata.create_all(bind=engine)
+
 def get_option_data(ticker_symbol: str):
     """
-    Fetch option chain data for nearest day, week, and month.
-     Returns a structured dictionary with aggregated OI data.
+    Fetch option chain data, using DB cache if available.
     """
+    db = SessionLocal()
     try:
         ticker = yf.Ticker(ticker_symbol)
         
@@ -15,7 +22,6 @@ def get_option_data(ticker_symbol: str):
         try:
             expirations = ticker.options
         except Exception as e:
-            # Handle case where no options exist or API fails
             print(f"No options found for {ticker_symbol}: {e}")
             return None
 
@@ -34,8 +40,6 @@ def get_option_data(ticker_symbol: str):
 
         # 2. Next Week (Closest to Today + 7 days)
         target_week = today + timedelta(days=7)
-        # Find date closest to target_week
-        # We want closest absolute difference
         week_date_obj = min(exp_dates, key=lambda d: abs(d - target_week))
         week_date = week_date_obj.strftime('%Y-%m-%d')
         
@@ -50,14 +54,11 @@ def get_option_data(ticker_symbol: str):
             'month': month_date
         }
         
-        # Avoid duplicate fetches if dates are the same (e.g. if nearest is 7 days away)
-        # We will fetch for unique dates and then map back
         unique_dates = list(set(targets.values()))
         chain_cache = {}
 
         current_price = None
         try:
-             # Try fast info first
              current_price = ticker.fast_info.last_price
         except:
              try:
@@ -66,54 +67,89 @@ def get_option_data(ticker_symbol: str):
                      current_price = hist['Close'].iloc[-1]
              except:
                  pass
+        
+        if current_price is None:
+            # Try to get from last DB entry if API fails? 
+            # For now just set 0 or use basic invalid
+            current_price = 0.0
 
         for d in unique_dates:
-            try:
-                chain = ticker.option_chain(d)
-                # Combine matching strikes
-                # We need a DataFrame with Strike, Call OI, Put OI
-                
-                calls = chain.calls[['strike', 'openInterest']].rename(columns={'openInterest': 'calls'})
-                puts = chain.puts[['strike', 'openInterest']].rename(columns={'openInterest': 'puts'})
-                
-                # Merge on strike
-                merged = pd.merge(calls, puts, on='strike', how='outer').fillna(0)
-                
-                # Check if there is any open interest
-                if (merged['calls'].sum() == 0) and (merged['puts'].sum() == 0):
-                    chain_cache[d] = {'data': [], 'max_pain': None}
-                    continue
+            # Check DB Cache (valid for 1 hour?)
+            cutoff_time = datetime.utcnow() - timedelta(hours=1)
+            cached_entry = db.query(OptionChain).filter(
+                OptionChain.ticker == ticker_symbol,
+                OptionChain.expiration == d,
+                OptionChain.scrape_date >= cutoff_time
+            ).order_by(desc(OptionChain.scrape_date)).first()
 
-                # Calculate Max Pain
-                # Iterate through all strikes as potential expiration prices
-                # For each price P, calculate total liability:
-                # Sum(max(0, P - k) * call_oi(k) + max(0, k - P) * put_oi(k))
-                
-                strikes = merged['strike'].values
-                call_ois = merged['calls'].values
-                put_ois = merged['puts'].values
-                
-                min_pain_value = float('inf')
-                max_pain_strike = None
-                
-                for price_point in strikes:
-                    call_loss = np.maximum(0, price_point - strikes) * call_ois
-                    put_loss = np.maximum(0, strikes - price_point) * put_ois
-                    total_pain = np.sum(call_loss + put_loss)
-                    
-                    if total_pain < min_pain_value:
-                        min_pain_value = total_pain
-                        max_pain_strike = price_point
-                        
-                merged = merged.sort_values('strike')
-                
+            if cached_entry:
+                print(f"DEBUG: Using cached options for {ticker_symbol} exp {d}")
                 chain_cache[d] = {
-                    'data': merged.to_dict(orient='records'),
-                    'max_pain': max_pain_strike
+                    'data': cached_entry.data,
+                    'max_pain': cached_entry.max_pain
                 }
-            except Exception as e:
-                print(f"Error fetching chain for {d}: {e}")
-                chain_cache[d] = {'data': [], 'max_pain': None}
+                # If cached entry has price, maybe use it if live failed? 
+                # But live price is better.
+            else:
+                # Fetch fresh
+                try:
+                    chain = ticker.option_chain(d)
+                    calls = chain.calls[['strike', 'openInterest']].rename(columns={'openInterest': 'calls'})
+                    puts = chain.puts[['strike', 'openInterest']].rename(columns={'openInterest': 'puts'})
+                    
+                    merged = pd.merge(calls, puts, on='strike', how='outer').fillna(0)
+                    
+                    # Cleanup
+                    if (merged['calls'].sum() == 0) and (merged['puts'].sum() == 0):
+                        chain_cache[d] = {'data': [], 'max_pain': None}
+                        # Don't cache empty? Or cache it to prevent spamming API?
+                        # Let's not cache empty result so we retry next time, 
+                        # OR cache it for a shorter time. For now, just skip saving.
+                        continue
+
+                    # Calculate Max Pain
+                    strikes = merged['strike'].values
+                    call_ois = merged['calls'].values
+                    put_ois = merged['puts'].values
+                    
+                    min_pain_value = float('inf')
+                    max_pain_strike = None
+                    
+                    if len(strikes) > 0:
+                        for price_point in strikes:
+                            call_loss = np.maximum(0, price_point - strikes) * call_ois
+                            put_loss = np.maximum(0, strikes - price_point) * put_ois
+                            total_pain = np.sum(call_loss + put_loss)
+                            
+                            if total_pain < min_pain_value:
+                                min_pain_value = total_pain
+                                max_pain_strike = price_point
+                    
+                    merged = merged.sort_values('strike')
+                    chain_data = merged.to_dict(orient='records')
+                    
+                    # Save to DB
+                    new_entry = OptionChain(
+                        ticker=ticker_symbol,
+                        expiration=d,
+                        scrape_date=datetime.utcnow(),
+                        data=chain_data,
+                        current_price=float(current_price) if current_price else 0.0,
+                        max_pain=float(max_pain_strike) if max_pain_strike else None
+                    )
+                    db.add(new_entry)
+                    db.commit()
+                    
+                    chain_cache[d] = {
+                        'data': chain_data,
+                        'max_pain': max_pain_strike
+                    }
+                    
+                except Exception as e:
+                    print(f"Error fetching chain for {d}: {e}")
+                    chain_cache[d] = {'data': [], 'max_pain': None}
+
+        db.close()
 
         return {
             "current_price": current_price,
