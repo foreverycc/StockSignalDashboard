@@ -182,3 +182,32 @@ export function extractCurrentTrajectory(rowData: any) {
         volumes: volumeHistory
     };
 }
+// ... (previous content)
+
+/**
+ * Format large numbers with K/M/B suffixes
+ * e.g. 1500 -> 1.5k, 2500000 -> 2.5m
+ */
+export function formatNumberShort(value: number, decimals: number = 1): string {
+    if (value === 0) return '0';
+
+    const absVal = Math.abs(value);
+
+    // Billion
+    if (absVal >= 1.0e+9) {
+        return (value / 1.0e+9).toFixed(decimals) + 'b';
+    }
+
+    // Million
+    if (absVal >= 1.0e+6) {
+        return (value / 1.0e+6).toFixed(decimals) + 'm';
+    }
+
+    // Thousand
+    if (absVal >= 1.0e+3) {
+        return (value / 1.0e+3).toFixed(decimals) + 'k';
+    }
+
+    // Default
+    return value.toLocaleString(undefined, { maximumFractionDigits: decimals });
+}

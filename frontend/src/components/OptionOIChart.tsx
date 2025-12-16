@@ -13,6 +13,7 @@ import {
 } from 'recharts';
 import { analysisApi } from '../services/api';
 import { cn } from '../utils/cn';
+import { formatNumberShort } from '../utils/chartUtils';
 
 interface OptionOIChartProps {
     ticker: string;
@@ -136,7 +137,7 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                             tickLine={true}
                             axisLine={true}
-                            tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value}
+                            tickFormatter={(value) => formatNumberShort(value)}
                         />
                         <Tooltip
                             contentStyle={{

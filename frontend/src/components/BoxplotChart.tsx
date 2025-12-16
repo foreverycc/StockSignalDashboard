@@ -11,7 +11,7 @@ import {
     ResponsiveContainer,
     ReferenceLine
 } from 'recharts';
-import { processRowDataForChart, extractCurrentTrajectory } from '../utils/chartUtils';
+import { processRowDataForChart, extractCurrentTrajectory, formatNumberShort } from '../utils/chartUtils';
 
 interface BoxplotChartProps {
     selectedRow: any | null;
@@ -203,6 +203,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                             label={{ value: 'Vol', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                            tickFormatter={(value: any) => formatNumberShort(value, 0)}
                         />
                         <Tooltip
                             contentStyle={{
@@ -211,7 +212,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                                 color: 'hsl(var(--card-foreground))',
                                 fontSize: '11px'
                             }}
-                            formatter={(value: any) => [Math.round(value).toLocaleString(), 'Avg Volume']}
+                            formatter={(value: any) => [formatNumberShort(value, 0), 'Avg Volume']}
                         />
                         <Bar
                             dataKey="volume"

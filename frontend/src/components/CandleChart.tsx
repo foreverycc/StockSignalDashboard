@@ -13,6 +13,7 @@ import {
     ReferenceLine
 } from 'recharts';
 import { format } from 'date-fns';
+import { formatNumberShort } from '../utils/chartUtils';
 
 interface CandleData {
     time: string;
@@ -169,7 +170,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                             domain={['auto', 'auto']}
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fontSize: 11 }}
-                            tickFormatter={(val: number) => val.toFixed(1)}
+                            tickFormatter={(val: number) => formatNumberShort(val)}
                             scale="linear"
                             label={{ value: 'Price', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
@@ -277,7 +278,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                             domain={[0, 'auto']}
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fontSize: 11 }}
-                            tickFormatter={(val: number) => (val / 1000).toFixed(0) + 'k'}
+                            tickFormatter={(val: number) => formatNumberShort(val)}
                             label={{ value: 'Vol', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
 
