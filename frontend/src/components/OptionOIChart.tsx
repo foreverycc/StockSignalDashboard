@@ -123,7 +123,7 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                         data={chartData}
-                        margin={{ top: 20, right: 55, left: 20, bottom: 5 }}
+                        margin={{ top: 20, right: 55, left: 20, bottom: 30 }}
                         barGap={0}
                     >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -207,11 +207,6 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
                     </BarChart>
                 </ResponsiveContainer>
             </div>
-            {currentPrice && (
-                <div className="text-center text-xs text-muted-foreground mt-2">
-                    Current Price: {currentPrice.toFixed(2)}
-                </div>
-            )}
         </div>
     );
 };

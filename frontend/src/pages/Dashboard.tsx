@@ -44,10 +44,6 @@ const DetailedChartRow = ({ row, activeSubTab: _activeSubTab }: { row: any, acti
                     />
                 )}
             </div>
-            {/* Option Open Interest Chart */}
-            <div style={{ height: '350px' }} className="mt-4 border-t pt-4 border-border/50">
-                <OptionOIChart ticker={row.ticker} />
-            </div>
         </div>
     );
 };
@@ -190,7 +186,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
             const intervalNumbers = intervalsStr.split(',').map((s: string) => s.trim());
             const suffix = activeSubTab === '1234' ? 'h' : 'm';
-            const intervals = intervalNumbers.map((n: string) => n + suffix);
+            let intervals = intervalNumbers.map((n: string) => n + suffix);
+
+            // Add extra interval (1d for 1234, 1h for 5230)
+            const extraInterval = activeSubTab === '1234' ? '1d' : '1h';
+
+            // Explicitly add extra interval if not present (logic: show specific sequence requested)
+            // Requested: intervals... then extra
+            if (!intervals.includes(extraInterval)) {
+                intervals.push(extraInterval);
+            }
 
             const results = intervals.map((interval: any) => {
                 const match = detailedRowData.find((d: any) =>
@@ -201,10 +206,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     const metrics = extractBestMetrics(match);
                     return { ...match, ...metrics };
                 }
-                return match;
-            }).filter(Boolean);
 
-            return results;
+                // If no match found (especially for extra interval), return dummy for Price Chart
+                return {
+                    ticker: selectedRow.ticker,
+                    interval: interval,
+                    success_rate: 0,
+                    avg_return: 0,
+                    test_count: 0
+                };
+            });
+
+            return results.filter(Boolean);
         }
 
         const match = detailedRowData.find((d: any) =>
@@ -426,6 +439,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                                 activeSubTab={activeSubTab}
                                             />
                                         ))}
+
+                                        {/* Single Option Chart at the bottom */}
+                                        <div style={{ height: '350px' }} className="p-4 border rounded-lg bg-card/50">
+                                            <OptionOIChart ticker={selectedRow.ticker} />
+                                        </div>
                                     </div>
                                 ) : (
                                     <div className="flex items-center justify-center h-full text-muted-foreground">
