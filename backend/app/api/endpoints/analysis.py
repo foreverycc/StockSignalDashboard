@@ -2,6 +2,7 @@ import os
 import pandas as pd
 import numpy as np
 import yfinance as yf
+from datetime import datetime, timedelta
 import logging
 import traceback
 from fastapi import APIRouter, HTTPException, Depends
@@ -154,11 +155,39 @@ async def get_price_history(
 ):
     """Get price history for a ticker with computed signals."""
     
-    # Fetch from DB
-    prices = db.query(PriceBar).filter(
+    # Determine cutoff date based on interval for pruning logic
+    # As requested by user:
+    # 1d/1w: last 2 years
+    # 4h/3h: last 1 year
+    # 2h/1h: last 6 month
+    # 5m/10m: last 30 days
+    # 15min/30m: last 60 days
+
+    now = datetime.utcnow()
+    cutoff_date = None
+
+    if interval in ['1d', '1w', '1wk']:
+        cutoff_date = now - timedelta(days=730) # 2 years
+    elif interval in ['3h', '4h']:
+        cutoff_date = now - timedelta(days=365) # 1 year
+    elif interval in ['1h', '60m', '2h']:
+        cutoff_date = now - timedelta(days=180) # 6 months
+    elif interval in ['15m', '30m']:
+        cutoff_date = now - timedelta(days=60)
+    elif interval in ['5m', '10m']:
+        cutoff_date = now - timedelta(days=30)
+    
+    # Base query
+    query = db.query(PriceBar).filter(
         PriceBar.ticker == ticker,
         PriceBar.interval == interval
-    ).order_by(PriceBar.timestamp).all()
+    )
+
+    # Apply date filter if cutoff is determined
+    if cutoff_date:
+        query = query.filter(PriceBar.timestamp >= cutoff_date)
+
+    prices = query.order_by(PriceBar.timestamp).all()
     
     if not prices:
         return []
