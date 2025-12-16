@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
-    BarChart,
+    ComposedChart,
     Bar,
     XAxis,
     YAxis,
@@ -9,7 +9,8 @@ import {
     Tooltip,
     Legend,
     ResponsiveContainer,
-    ReferenceLine
+    ReferenceLine,
+    Line
 } from 'recharts';
 import { analysisApi } from '../services/api';
 import { cn } from '../utils/cn';
@@ -121,9 +122,9 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
 
             <div className="flex-1 min-h-[300px]">
                 <ResponsiveContainer width="100%" height="100%">
-                    <BarChart
+                    <ComposedChart
                         data={chartData}
-                        margin={{ top: 20, right: 55, left: 20, bottom: 30 }}
+                        margin={{ top: 20, right: 25, left: 20, bottom: 30 }}
                         barGap={0}
                     >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
@@ -132,26 +133,43 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                             tickLine={true}
                             axisLine={true}
+                            type="number"
+                            domain={['dataMin', 'dataMax']}
                         />
                         <YAxis
+                            yAxisId="left"
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                             tickLine={true}
                             axisLine={true}
                             tickFormatter={(value) => formatNumberShort(value)}
                         />
+                        <YAxis
+                            yAxisId="right"
+                            orientation="right"
+                            tick={{ fill: '#3b82f6', fontSize: 11 }}
+                            tickLine={{ stroke: '#3b82f6' }}
+                            axisLine={{ stroke: '#3b82f6' }}
+                            tickFormatter={(value) => formatNumberShort(value)}
+                            label={{ value: 'Total market value ($)', angle: 90, position: 'insideRight', style: { textAnchor: 'middle' }, fill: '#3b82f6', fontSize: 10 }}
+                        />
                         <Tooltip
                             contentStyle={{
-                                backgroundColor: 'hsl(var(--card))',
+                                backgroundColor: 'hsl(var(--popover))',
                                 borderColor: 'hsl(var(--border))',
-                                borderRadius: '8px',
+                                borderRadius: 'var(--radius)',
                                 fontSize: '12px'
                             }}
                             cursor={{ fill: 'hsl(var(--muted)/0.2)' }}
+                            formatter={(value: number, name: string) => [
+                                formatNumberShort(value),
+                                name.charAt(0).toUpperCase() + name.slice(1)
+                            ]}
                         />
                         <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} />
 
                         {/* Calls */}
                         <Bar
+                            yAxisId="left"
                             dataKey="calls"
                             name="Calls"
                             fill="#22c55e"
@@ -161,6 +179,7 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
 
                         {/* Puts */}
                         <Bar
+                            yAxisId="left"
                             dataKey="puts"
                             name="Puts"
                             fill="#ef4444"
@@ -168,8 +187,40 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
                             radius={[2, 2, 0, 0]}
                         />
 
+                        {/* Pain Line (Blue) */}
+                        <Line
+                            yAxisId="right"
+                            type="monotone"
+                            dataKey="pain"
+                            name="Pain"
+                            stroke="#3b82f6"
+                            strokeWidth={2}
+                            strokeDasharray="3 3"
+                            dot={false}
+                        />
+
+                        {/* Max Pain Highlight */}
+                        {maxPain && (
+                            <ReferenceLine
+                                yAxisId="left"
+                                x={maxPain}
+                                stroke="#f59e0b"
+                                strokeWidth={1}
+                                strokeDasharray="3 3"
+                                label={{
+                                    value: `Max Pain: ${maxPain}`,
+                                    position: 'insideTopRight',
+                                    fill: '#f59e0b',
+                                    fontSize: 10,
+                                    // fontWeight: 'bold',
+                                    dy: 10
+                                }}
+                            />
+                        )}
+
                         {/* Reference Line for Current Price - Snapped to closest strike */}
                         {currentPrice && (() => {
+                            if (chartData.length === 0) return null;
                             // Find closest strike
                             const closest = chartData.reduce((prev: any, curr: any) => {
                                 return (Math.abs(curr.strike - currentPrice) < Math.abs(prev.strike - currentPrice) ? curr : prev);
@@ -177,6 +228,7 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
 
                             return (
                                 <ReferenceLine
+                                    yAxisId="left"
                                     x={closest.strike}
                                     stroke="hsl(var(--foreground))"
                                     strokeDasharray="3 3"
@@ -190,21 +242,10 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
                                 />
                             );
                         })()}
-                        {/* 
-                            Note: ReferenceLine 'x' matches 'dataKey' if it's categorical. 
-                            If strike is numerical, XAxis needs 'type="number"'.
-                            Normally chartData strikes are numbers. 
-                            Let's force XAxis type="number" and domain/ticks properly if needed,
-                            or Recharts handles it if 'dataKey' is numeric.
-                            Usually for BarChart, XAxis is categorical by default.
-                            If categorical, ReferenceLine x must be an exact match to a category value.
-                            If currentPrice is 151.2 and strikes are 150, 155, ReferenceLine won't show on categorical axis.
-                            
-                            Better approach:
-                            Find closest strike to currentPrice to attach the label, or just show it roughly?
-                            Or switch to Type="number" for XAxis. 
-                        */}
-                    </BarChart>
+
+                        {/* Max Pain Reference (already covered by Pain Line minimum, but keeping for specific label if needed) */}
+                        {/* We could add it, but the Curve shows it. Let's keep it simple. */}
+                    </ComposedChart>
                 </ResponsiveContainer>
             </div>
         </div>

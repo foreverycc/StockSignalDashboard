@@ -83,14 +83,23 @@ def get_option_data(ticker_symbol: str):
             ).order_by(desc(OptionChain.scrape_date)).first()
 
             if cached_entry:
-                print(f"DEBUG: Using cached options for {ticker_symbol} exp {d}")
-                chain_cache[d] = {
-                    'data': cached_entry.data,
-                    'max_pain': cached_entry.max_pain
-                }
-                # If cached entry has price, maybe use it if live failed? 
-                # But live price is better.
-            else:
+                # Check if cache includes 'pain' data (for backward compatibility upgrade)
+                has_pain = False
+                if cached_entry.data and len(cached_entry.data) > 0:
+                    if 'pain' in cached_entry.data[0]:
+                        has_pain = True
+                
+                if has_pain:
+                    print(f"DEBUG: Using cached options for {ticker_symbol} exp {d}")
+                    chain_cache[d] = {
+                        'data': cached_entry.data,
+                        'max_pain': cached_entry.max_pain
+                    }
+                else:
+                    print(f"DEBUG: Cache for {ticker_symbol} exp {d} missing pain data, refreshing...")
+                    cached_entry = None # Force refresh
+            
+            if not cached_entry:
                 # Fetch fresh
                 try:
                     chain = ticker.option_chain(d)
@@ -107,24 +116,30 @@ def get_option_data(ticker_symbol: str):
                         # OR cache it for a shorter time. For now, just skip saving.
                         continue
 
-                    # Calculate Max Pain
+                    # Calculate Max Pain and Pain Curve
                     strikes = merged['strike'].values
                     call_ois = merged['calls'].values
                     put_ois = merged['puts'].values
                     
                     min_pain_value = float('inf')
                     max_pain_strike = None
+                    pain_values = []
                     
                     if len(strikes) > 0:
                         for price_point in strikes:
                             call_loss = np.maximum(0, price_point - strikes) * call_ois
                             put_loss = np.maximum(0, strikes - price_point) * put_ois
-                            total_pain = np.sum(call_loss + put_loss)
+                            # Multiply by 100 because each contract is 100 shares
+                            total_pain = np.sum(call_loss + put_loss) * 100
+                            
+                            pain_values.append(float(total_pain))
                             
                             if total_pain < min_pain_value:
                                 min_pain_value = total_pain
                                 max_pain_strike = price_point
                     
+                    # Add pain curve to data
+                    merged['pain'] = pain_values
                     merged = merged.sort_values('strike')
                     chain_data = merged.to_dict(orient='records')
                     
