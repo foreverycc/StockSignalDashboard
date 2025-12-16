@@ -70,9 +70,8 @@ class JobManager:
             file_path = os.path.join(data_dir, job.stock_list_file)
 
             # Run analysis
-            # TODO: Pass progress callback to analyze_stocks if possible
             logger.info(f"Job {job_id}: Calling analyze_stocks with file: {file_path}")
-            analyze_stocks(file_path, end_date=job.end_date)
+            analyze_stocks(file_path, end_date=job.end_date, progress_callback=update_progress)
             
             job.status = "completed"
             job.progress = 100

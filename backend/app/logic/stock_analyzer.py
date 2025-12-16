@@ -200,7 +200,7 @@ def process_ticker_all(ticker, end_date=None):
         print(f"Error processing {ticker}: {e}")
         return ticker, None, None, [], [], [], [], None
 
-def analyze_stocks(file_path, end_date=None):
+def analyze_stocks(file_path, end_date=None, progress_callback=None):
     """
     Comprehensive stock analysis function that performs all three types of analysis:
     - 1234 Breakout candidates
@@ -210,6 +210,7 @@ def analyze_stocks(file_path, end_date=None):
     Args:
         file_path: Path to the file containing stock ticker symbols
         end_date: Optional end date for backtesting (format: 'YYYY-MM-DD')
+        progress_callback: Optional callable that accepts integer progress (0-100)
     
     Returns:
         None: Results are saved to database
@@ -252,17 +253,28 @@ def analyze_stocks(file_path, end_date=None):
             # Create a partial function with fixed arguments
             process_func = functools.partial(process_ticker_all, end_date=end_date)
             
-            # Map the function to the tickers
-            chunk_size = 10
+            # Map the function to the tickers using imap for progress tracking
             total_tickers = len(tickers)
             processed_count = 0
             
-            for i in range(0, total_tickers, chunk_size):
-                chunk = tickers[i:i + chunk_size]
-                chunk_results = pool.map(process_func, chunk)
-                results.extend(chunk_results)
-                processed_count += len(chunk)
-                logger.info(f"Processed {processed_count}/{total_tickers} tickers")
+            if progress_callback:
+                progress_callback(0)
+            
+            # Use chunks for better performance but iterate one by one for progress
+            # chunksize heuristic
+            chunk_size = max(1, total_tickers // (num_processes * 4))
+            
+            for result in pool.imap(process_func, tickers, chunksize=chunk_size):
+                results.append(result)
+                processed_count += 1
+                
+                if processed_count % 5 == 0 or processed_count == total_tickers:
+                    logger.info(f"Processed {processed_count}/{total_tickers} tickers")
+                    
+                if progress_callback:
+                    # Scale progress 1-99% (engine sets 100% on completion)
+                    progress = max(1, int((processed_count / total_tickers) * 99))
+                    progress_callback(progress)
                 
         logger.info("All tickers processed. Aggregating results...")
         
