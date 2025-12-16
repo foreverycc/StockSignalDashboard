@@ -229,7 +229,9 @@ def analyze_stocks(file_path, end_date=None, progress_callback=None):
     try:
         tickers = []
         with open(file_path, 'r') as f:
-            tickers = [line.strip() for line in f if line.strip()]
+            raw_tickers = [line.strip() for line in f if line.strip()]
+            # Deduplicate while preserving order
+            tickers = list(dict.fromkeys(raw_tickers))
         logger.info(f"Loaded {len(tickers)} tickers from {file_path}")
     except Exception as e:
         logger.error(f"Failed to load stock list: {e}")

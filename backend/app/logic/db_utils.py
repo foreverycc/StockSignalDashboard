@@ -74,9 +74,22 @@ def save_price_history(ticker: str, interval: str, df: pd.DataFrame):
         db.close()
 
 def create_analysis_run(stock_list_name: str) -> int:
-    """Create a new analysis run record and return its ID."""
+    """
+    Create a new analysis run record and return its ID.
+    Enforces 'Keep Latest' policy by deleting all previous runs for this stock list.
+    """
     db = SessionLocal()
     try:
+        # Cleanup previous runs for this stock list
+        try:
+            db.query(AnalysisRun).filter(AnalysisRun.stock_list_name == stock_list_name).delete()
+            db.commit()
+            print(f"Cleaned up previous runs for {stock_list_name}")
+        except Exception as e:
+            db.rollback()
+            print(f"Error cleaning up previous runs: {e}")
+
+        # Create new run
         run = AnalysisRun(stock_list_name=stock_list_name, status="running")
         db.add(run)
         db.commit()
@@ -116,6 +129,14 @@ def save_analysis_result(run_id: int, ticker: str, interval: str, result_type: s
 
         clean_data = clean_nans(data)
 
+        # Delete existing result for this run/ticker/type to prevent duplicates
+        db.query(AnalysisResult).filter(
+            AnalysisResult.run_id == run_id,
+            AnalysisResult.ticker == ticker,
+            AnalysisResult.interval == interval,
+            AnalysisResult.result_type == result_type
+        ).delete()
+
         result = AnalysisResult(
             run_id=run_id,
             ticker=ticker,
@@ -126,6 +147,7 @@ def save_analysis_result(run_id: int, ticker: str, interval: str, result_type: s
         db.add(result)
         db.commit()
     except Exception as e:
+        db.rollback()
         print(f"Error saving analysis result {result_type} for {ticker}: {e}")
     finally:
         db.close()
