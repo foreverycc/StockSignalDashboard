@@ -76,7 +76,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                 <ResponsiveContainer width="100%" height={200}>
                     <ComposedChart
                         data={chartData}
-                        margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                        margin={{ top: 5, right: 55, left: 20, bottom: 5 }}
                     >
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                         <XAxis
@@ -190,7 +190,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                 <ResponsiveContainer width="100%" height={100}>
                     <ComposedChart
                         data={volumeData}
-                        margin={{ top: 0, right: 30, left: 20, bottom: 20 }}
+                        margin={{ top: 0, right: 55, left: 20, bottom: 20 }}
                     >
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
                         <XAxis

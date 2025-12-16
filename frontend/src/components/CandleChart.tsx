@@ -146,7 +146,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                     <ComposedChart
                         data={validData}
                         syncId="candleGraph"
-                        margin={{ top: 10, right: 30, left: 10, bottom: 0 }}
+                        margin={{ top: 10, right: 55, left: 20, bottom: 5 }}
                     >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
 
@@ -254,7 +254,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                     <ComposedChart
                         data={validData}
                         syncId="candleGraph"
-                        margin={{ top: 0, right: 30, left: 10, bottom: 20 }}
+                        margin={{ top: 0, right: 55, left: 20, bottom: 20 }}
                     >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" opacity={0.5} />
 

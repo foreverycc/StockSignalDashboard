@@ -122,20 +122,20 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
                 <ResponsiveContainer width="100%" height="100%">
                     <BarChart
                         data={chartData}
-                        margin={{ top: 20, right: 30, left: 0, bottom: 5 }}
+                        margin={{ top: 20, right: 55, left: 20, bottom: 5 }}
                         barGap={0}
                     >
                         <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
                         <XAxis
                             dataKey="strike"
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                            tickLine={false}
-                            axisLine={false}
+                            tickLine={true}
+                            axisLine={true}
                         />
                         <YAxis
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
-                            tickLine={false}
-                            axisLine={false}
+                            tickLine={true}
+                            axisLine={true}
                             tickFormatter={(value) => value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value}
                         />
                         <Tooltip
