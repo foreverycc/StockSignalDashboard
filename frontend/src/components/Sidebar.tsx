@@ -57,7 +57,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
                 <div className="flex items-center gap-2 text-primary overflow-hidden whitespace-nowrap">
                     <Activity className="w-6 h-6 shrink-0" />
                     <span className={cn("font-bold text-xl transition-opacity duration-300", isCollapsed ? "opacity-0 w-0" : "opacity-100")}>
-                        Stock Signal
+                        WaveCatcher
                     </span>
                 </div>
             </div>

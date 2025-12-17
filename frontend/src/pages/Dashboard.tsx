@@ -5,6 +5,7 @@ import { AnalysisTable } from '../components/AnalysisTable';
 import { BoxplotChart } from '../components/BoxplotChart';
 import { CandleChart } from '../components/CandleChart';
 import { OptionOIChart } from '../components/OptionOIChart';
+import { OptionAnalysisPanel } from '../components/OptionAnalysisPanel';
 import { LogViewer } from '../components/LogViewer';
 import { cn } from '../utils/cn';
 
@@ -54,7 +55,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setShowLogs,
     dateRange
 }) => {
-    const [activeTab, setActiveTab] = useState<'cd' | 'mc'>('cd');
+    const [activeTab, setActiveTab] = useState<'cd' | 'mc' | 'option'>('cd');
     const [activeSubTab, setActiveSubTab] = useState<string>('best_intervals_50');
     const [selectedRow, setSelectedRow] = useState<any>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -302,158 +303,176 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         MC Analysis (Sell)
                         {activeTab === 'mc' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
                     </button>
-                </div>
-
-                {/* Subtabs */}
-                <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-hide p-1">
-                    {[
-                        { value: 'best_intervals_50', label: 'Best Intervals (50)' },
-                        { value: 'best_intervals_20', label: 'Best Intervals (20)' },
-                        { value: 'best_intervals_100', label: 'Best Intervals (100)' },
-                        { value: 'good_signals', label: 'High Return Intervals' },
-                        { value: 'custom_detailed', label: 'Detailed Results' },
-                        { value: '1234', label: '1234 Model' },
-                        { value: '5230', label: '5230 Model' },
-                    ].map((tab) => (
-                        <button
-                            key={tab.value}
-                            onClick={() => {
-                                setActiveSubTab(tab.value);
-                                // Reset selection and search on tab change
-                                setSelectedRow(null);
-                                setSearchQuery('');
-                                setSearchInput('');
-                            }}
-                            className={cn(
-                                "px-3 md:px-4 py-2 text-xs md:text-sm font-medium transition-colors relative whitespace-nowrap rounded-md",
-                                activeSubTab === tab.value
-                                    ? "text-primary bg-primary/10"
-                                    : "text-muted-foreground hover:text-foreground hover:bg-muted"
-                            )}
-                        >
-                            {tab.label}
-                        </button>
-                    ))}
-                </div>
-
-                {/* Search Bar for Custom Detailed */}
-                {isSearchMode && (
-                    <div className="p-4 border-b border-border flex gap-2">
-                        <input
-                            type="text"
-                            placeholder="Search Ticker (e.g. AAPL)"
-                            value={searchInput}
-                            onChange={(e) => setSearchInput(e.target.value)}
-                            onKeyDown={(e) => {
-                                if (e.key === 'Enter') setSearchQuery(searchInput);
-                            }}
-                            className="flex-1 px-4 py-2 rounded-md border border-input bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        />
-                        <button
-                            onClick={() => setSearchQuery(searchInput)}
-                            className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
-                        >
-                            Search
-                        </button>
-                    </div>
-                )}
-
-                {/* Content Area */}
-                <div id="dashboard-content-container" className="flex-1 flex overflow-hidden relative">
-                    {/* Table */}
-                    <div
-                        className={cn("flex-1 border-r border-border overflow-hidden flex flex-col transition-all duration-300")}
-                        style={{
-                            width: selectedRow && window.innerWidth >= 768 ? `${100 - chartPanelWidth}%` : '100%'
-                        }}
-                    >
-                        {isLoadingTable || isLoadingRuns ? (
-                            <div className="h-full flex items-center justify-center text-muted-foreground">Loading data...</div>
-                        ) : filteredTableData && filteredTableData.length > 0 ? (
-                            <AnalysisTable
-                                data={filteredTableData}
-                                onRowClick={setSelectedRow}
-                            />
-                        ) : (
-                            <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-4 text-center">
-                                {isSearchMode && !searchQuery ? (
-                                    <p>Enter a ticker to search for detailed results</p>
-                                ) : (
-                                    <>
-                                        <p className="mb-2">No data available for {activeSubTab.replace(/_/g, ' ')}</p>
-                                        <p className="text-xs opacity-70">
-                                            Date Range: {dateRange.start} to {dateRange.end} <br />
-                                            Stock List: {selectedStockList || 'None'} <br />
-                                            Latest Run: {currentRun ? new Date(currentRun.timestamp).toLocaleString() : 'Not Found'} <br />
-                                            Status: {currentRun?.status || 'N/A'}
-                                        </p>
-                                    </>
-                                )}
-                            </div>
+                    <button
+                        onClick={() => setActiveTab('option')}
+                        className={cn(
+                            "px-4 md:px-6 py-3 text-sm font-medium transition-colors relative whitespace-nowrap",
+                            activeTab === 'option'
+                                ? "text-primary"
+                                : "text-muted-foreground hover:text-foreground"
                         )}
-                    </div>
+                    >
+                        Option Analysis
+                        {activeTab === 'option' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
+                    </button>
+                </div>
 
-                    {/* Resizer Handle (Desktop Only) */}
-                    {selectedRow && (
-                        <div
-                            className="hidden md:flex w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors z-10 items-center justify-center"
-                            onMouseDown={startResizing}
-                        >
-                            <div className="h-8 w-0.5 bg-muted-foreground/30 rounded-full" />
-                        </div>
-                    )}
-
-                    {/* Chart / Details Panel */}
-                    {selectedRow && (
-                        <div
-                            className={cn(
-                                "flex flex-col bg-card overflow-hidden transition-all duration-300 h-full",
-                                // Mobile: Fixed overlay
-                                "fixed inset-0 z-50 md:static md:z-auto"
-                            )}
-                            style={{
-                                width: window.innerWidth >= 768 ? `${chartPanelWidth}%` : '100%'
-                            }}
-                        >
-                            <div className="p-4 border-b border-border flex justify-between items-center bg-muted/10">
-                                <h3 className="font-semibold truncate pr-2">{selectedRow.ticker} ({selectedRow.interval})</h3>
+                {activeTab === 'option' ? (
+                    <OptionAnalysisPanel />
+                ) : (
+                    <>
+                        {/* Subtabs */}
+                        <div className="flex gap-1 border-b border-border overflow-x-auto scrollbar-hide p-1">
+                            {[
+                                { value: 'best_intervals_50', label: 'Best Intervals (50)' },
+                                { value: 'best_intervals_20', label: 'Best Intervals (20)' },
+                                { value: 'best_intervals_100', label: 'Best Intervals (100)' },
+                                { value: 'good_signals', label: 'High Return Intervals' },
+                                { value: 'custom_detailed', label: 'Detailed Results' },
+                                { value: '1234', label: '1234 Model' },
+                                { value: '5230', label: '5230 Model' },
+                            ].map((tab) => (
                                 <button
-                                    onClick={() => setSelectedRow(null)}
-                                    className="p-2 -mr-2 text-muted-foreground hover:text-foreground shrink-0"
+                                    key={tab.value}
+                                    onClick={() => {
+                                        setActiveSubTab(tab.value);
+                                        // Reset selection and search on tab change
+                                        setSelectedRow(null);
+                                        setSearchQuery('');
+                                        setSearchInput('');
+                                    }}
+                                    className={cn(
+                                        "px-3 md:px-4 py-2 text-xs md:text-sm font-medium transition-colors relative whitespace-nowrap rounded-md",
+                                        activeSubTab === tab.value
+                                            ? "text-primary bg-primary/10"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-muted"
+                                    )}
                                 >
-                                    Close
+                                    {tab.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Search Bar for Custom Detailed */}
+                        {isSearchMode && (
+                            <div className="p-4 border-b border-border flex gap-2">
+                                <input
+                                    type="text"
+                                    placeholder="Search Ticker (e.g. AAPL)"
+                                    value={searchInput}
+                                    onChange={(e) => setSearchInput(e.target.value)}
+                                    onKeyDown={(e) => {
+                                        if (e.key === 'Enter') setSearchQuery(searchInput);
+                                    }}
+                                    className="flex-1 px-4 py-2 rounded-md border border-input bg-background/50 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                                />
+                                <button
+                                    onClick={() => setSearchQuery(searchInput)}
+                                    className="px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 transition-colors"
+                                >
+                                    Search
                                 </button>
                             </div>
-                            <div className="flex-1 p-4 overflow-y-auto bg-background md:bg-transparent">
-                                {/* Returns Distribution Boxplot(s) & Price History */}
-                                {isLoadingDetails ? (
-                                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                                        Loading detailed analysis...
-                                    </div>
-                                ) : detailedRows.length > 0 ? (
-                                    <div className="space-y-6">
-                                        {detailedRows.map((row: any, index: number) => (
-                                            <DetailedChartRow
-                                                key={`${row.ticker}-${row.interval}-${index}`}
-                                                row={row}
-                                                activeSubTab={activeSubTab}
-                                            />
-                                        ))}
+                        )}
 
-                                        {/* Single Option Chart at the bottom */}
-                                        <div style={{ height: '350px' }} className="p-4 border rounded-lg bg-card/50">
-                                            <OptionOIChart ticker={selectedRow.ticker} />
-                                        </div>
-                                    </div>
+                        {/* Content Area */}
+                        <div id="dashboard-content-container" className="flex-1 flex overflow-hidden relative">
+                            {/* Table */}
+                            <div
+                                className={cn("flex-1 border-r border-border overflow-hidden flex flex-col transition-all duration-300")}
+                                style={{
+                                    width: selectedRow && window.innerWidth >= 768 ? `${100 - chartPanelWidth}%` : '100%'
+                                }}
+                            >
+                                {isLoadingTable || isLoadingRuns ? (
+                                    <div className="h-full flex items-center justify-center text-muted-foreground">Loading data...</div>
+                                ) : filteredTableData && filteredTableData.length > 0 ? (
+                                    <AnalysisTable
+                                        data={filteredTableData}
+                                        onRowClick={setSelectedRow}
+                                    />
                                 ) : (
-                                    <div className="flex items-center justify-center h-full text-muted-foreground">
-                                        No detailed data available for this selection
+                                    <div className="h-full flex flex-col items-center justify-center text-muted-foreground p-4 text-center">
+                                        {isSearchMode && !searchQuery ? (
+                                            <p>Enter a ticker to search for detailed results</p>
+                                        ) : (
+                                            <>
+                                                <p className="mb-2">No data available for {activeSubTab.replace(/_/g, ' ')}</p>
+                                                <p className="text-xs opacity-70">
+                                                    Date Range: {dateRange.start} to {dateRange.end} <br />
+                                                    Stock List: {selectedStockList || 'None'} <br />
+                                                    Latest Run: {currentRun ? new Date(currentRun.timestamp).toLocaleString() : 'Not Found'} <br />
+                                                    Status: {currentRun?.status || 'N/A'}
+                                                </p>
+                                            </>
+                                        )}
                                     </div>
                                 )}
                             </div>
+
+                            {/* Resizer Handle (Desktop Only) */}
+                            {selectedRow && (
+                                <div
+                                    className="hidden md:flex w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors z-10 items-center justify-center"
+                                    onMouseDown={startResizing}
+                                >
+                                    <div className="h-8 w-0.5 bg-muted-foreground/30 rounded-full" />
+                                </div>
+                            )}
+
+                            {/* Chart / Details Panel */}
+                            {selectedRow && (
+                                <div
+                                    className={cn(
+                                        "flex flex-col bg-card overflow-hidden transition-all duration-300 h-full",
+                                        // Mobile: Fixed overlay
+                                        "fixed inset-0 z-50 md:static md:z-auto"
+                                    )}
+                                    style={{
+                                        width: window.innerWidth >= 768 ? `${chartPanelWidth}%` : '100%'
+                                    }}
+                                >
+                                    <div className="p-4 border-b border-border flex justify-between items-center bg-muted/10">
+                                        <h3 className="font-semibold truncate pr-2">{selectedRow.ticker} ({selectedRow.interval})</h3>
+                                        <button
+                                            onClick={() => setSelectedRow(null)}
+                                            className="p-2 -mr-2 text-muted-foreground hover:text-foreground shrink-0"
+                                        >
+                                            Close
+                                        </button>
+                                    </div>
+                                    <div className="flex-1 p-4 overflow-y-auto bg-background md:bg-transparent">
+                                        {/* Returns Distribution Boxplot(s) & Price History */}
+                                        {isLoadingDetails ? (
+                                            <div className="flex items-center justify-center h-full text-muted-foreground">
+                                                Loading detailed analysis...
+                                            </div>
+                                        ) : detailedRows.length > 0 ? (
+                                            <div className="space-y-6">
+                                                {detailedRows.map((row: any, index: number) => (
+                                                    <DetailedChartRow
+                                                        key={`${row.ticker}-${row.interval}-${index}`}
+                                                        row={row}
+                                                        activeSubTab={activeSubTab}
+                                                    />
+                                                ))}
+
+                                                {/* Single Option Chart at the bottom */}
+                                                <div style={{ height: '350px' }} className="p-4 border rounded-lg bg-card/50">
+                                                    <OptionOIChart ticker={selectedRow.ticker} />
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="flex items-center justify-center h-full text-muted-foreground">
+                                                No detailed data available for this selection
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                    )}
-                </div>
+                    </>
+                )}
             </div>
         </div>
     );

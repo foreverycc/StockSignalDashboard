@@ -10,52 +10,211 @@ import {
     Legend,
     ResponsiveContainer,
     ReferenceLine,
-    Line
+    Line,
+    ReferenceArea
 } from 'recharts';
 import { analysisApi } from '../services/api';
 import { cn } from '../utils/cn';
 import { formatNumberShort } from '../utils/chartUtils';
 
 interface OptionOIChartProps {
-    ticker: string;
+    ticker?: string;
+    data?: any[]; // Manual data mode (e.g. from CSV)
+    maxPain?: number; // Manual max pain
+    currentPrice?: number; // Manual current price
+    priceRange?: { min: number; max: number }; // Manual zoom range
+    onRangeChange?: (min: number, max: number) => void;
 }
 
-export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
+export const OptionOIChart: React.FC<OptionOIChartProps> = ({
+    ticker,
+    data: manualData,
+    maxPain: manualMaxPain,
+    currentPrice: manualCurrentPrice,
+    priceRange,
+    onRangeChange
+}) => {
     const [selectedTimeframe, setSelectedTimeframe] = useState<'nearest' | 'week' | 'month'>('nearest');
     const [showFullRange, setShowFullRange] = useState(false);
 
-    // Fetch options data
+    // Interaction State
+    const chartContainerRef = React.useRef<HTMLDivElement>(null);
+    // const draggingRef = React.useRef(false); // Removed
+    // const startXRef = React.useRef(0); // Removed
+    // const rangeSnapshotRef = React.useRef<{ min: number, max: number } | null>(null); // Removed
+
+    // Fetch options data (only if ticker is provided and no manual data)
     const { data: optionsData, isLoading, error } = useQuery({
         queryKey: ['options', ticker],
-        queryFn: () => analysisApi.getOptions(ticker),
+        queryFn: () => ticker ? analysisApi.getOptions(ticker) : null,
         staleTime: 1000 * 60 * 5, // 5 minutes
-        enabled: !!ticker
+        enabled: !!ticker && !manualData
     });
 
     const activeData = useMemo(() => {
+        if (manualData) {
+            return {
+                data: manualData,
+                max_pain: manualMaxPain,
+                date: 'Manual Import'
+            };
+        }
         if (!optionsData || !optionsData[selectedTimeframe]) return null;
         return optionsData[selectedTimeframe];
-    }, [optionsData, selectedTimeframe]);
+    }, [optionsData, selectedTimeframe, manualData, manualMaxPain]);
+
+    const globalMinMax = useMemo(() => {
+        if (!activeData?.data || activeData.data.length === 0) return { min: 0, max: 0 };
+        const strikes = activeData.data.map((d: any) => d.strike);
+        return {
+            min: Math.min(...strikes),
+            max: Math.max(...strikes)
+        };
+    }, [activeData]);
 
     const chartData = useMemo(() => {
         if (!activeData?.data) return [];
         let data = activeData.data;
-        const currentPrice = optionsData?.current_price;
+        // Use manual price if available, otherwise fetch result
+        const currentPrice = manualCurrentPrice ?? optionsData?.current_price;
 
-        if (!showFullRange && currentPrice && data.length > 0) {
-            // Filter to +/- 25% of current price (50% range)
+        // 1. External Filter (Range Slider or Zoom/Pan State)
+        if (priceRange) {
+            data = data.filter((d: any) => d.strike >= priceRange.min && d.strike <= priceRange.max);
+        }
+        // 2. Focused Range Toggle (fallback if no range slider)
+        else if (!showFullRange && currentPrice && data.length > 0) {
             const lowerBound = currentPrice * 0.75;
             const upperBound = currentPrice * 1.25;
             data = data.filter((d: any) => d.strike >= lowerBound && d.strike <= upperBound);
         }
         return data;
-    }, [activeData, optionsData, showFullRange]);
+    }, [activeData, optionsData, showFullRange, priceRange, manualCurrentPrice]);
 
     const expiryDate = activeData?.date || '';
-    const maxPain = activeData?.max_pain;
-    const currentPrice = optionsData?.current_price;
+    const maxPain = manualMaxPain ?? activeData?.max_pain;
+    const currentPrice = manualCurrentPrice ?? optionsData?.current_price;
 
-    if (isLoading) {
+    // --- Interaction Handlers ---
+
+    const effectiveRange = useMemo(() => {
+        if (priceRange) return priceRange;
+        if (chartData.length > 0) {
+            // Assuming sorted data by strike
+            const min = chartData[0].strike;
+            const max = chartData[chartData.length - 1].strike;
+            return { min, max };
+        }
+        return { min: 0, max: 0 };
+    }, [priceRange, chartData]);
+
+    const [selection, setSelection] = useState<{ start: number, end: number } | null>(null);
+    const isSelectingRef = React.useRef(false);
+    const startXRef = React.useRef(0);
+
+    const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+        if (!onRangeChange) return;
+        isSelectingRef.current = true;
+        // Calculate initial strike from x coordinate? 
+        // We can't easily get the exact strike on MouseDown without calculating it from pixels.
+        // Let's store the PIXELS and convert later, or convert on the fly for the preview.
+
+        // Better: We need visual feedback. Recharts ReferenceArea takes X axis values (Strikes).
+        // So we MUST convert pixels to strikes immediately.
+
+        const chartArea = getChartArea(e.currentTarget);
+        if (!chartArea) return;
+
+        const strike = pixelToStrike(e.nativeEvent.offsetX, chartArea, effectiveRange);
+        if (strike !== null) {
+            setSelection({ start: strike, end: strike });
+            startXRef.current = e.nativeEvent.offsetX;
+            document.body.style.cursor = 'crosshair';
+        }
+    };
+
+    const handleMouseMove = React.useCallback((e: MouseEvent) => {
+        if (!isSelectingRef.current || !chartContainerRef.current) return;
+
+        const chartArea = getChartArea(chartContainerRef.current);
+        if (!chartArea) return;
+
+        const strike = pixelToStrike(e.offsetX, chartArea, effectiveRange);
+
+        if (strike !== null) {
+            setSelection(prev => prev ? { ...prev, end: strike } : null);
+        }
+    }, [effectiveRange]);
+
+    const handleMouseUp = React.useCallback(() => {
+        if (!isSelectingRef.current) return;
+        isSelectingRef.current = false;
+        document.body.style.cursor = '';
+
+        setSelection(prev => {
+            if (prev && Math.abs(prev.end - prev.start) > 5) { // Minimum threshold
+                const min = Math.min(prev.start, prev.end);
+                const max = Math.max(prev.start, prev.end);
+
+                // Trigger change
+                if (onRangeChange) onRangeChange(min, max);
+            }
+            return null; // Clear selection
+        });
+    }, [onRangeChange]);
+
+    // Helpers
+    const getChartArea = (container: HTMLElement) => {
+        // Hardcoded margins matching ComposedChart
+        const margins = { left: 20, right: 25 };
+        const width = container.clientWidth;
+        const chartWidth = width - margins.left - margins.right;
+        if (chartWidth <= 0) return null;
+        return { width: chartWidth, left: margins.left };
+    };
+
+    const pixelToStrike = (x: number, chartArea: { width: number, left: number }, range: { min: number, max: number }) => {
+        const relativeX = x - chartArea.left;
+        const fraction = relativeX / chartArea.width;
+        // Clamp fraction? Allow slightly outside?
+        // Let's clamp to 0-1 to avoid selecting outside axis
+        const clampedFraction = Math.max(0, Math.min(1, fraction));
+
+        return range.min + clampedFraction * (range.max - range.min);
+    };
+
+    // Attach global handlers
+    React.useEffect(() => {
+        if (chartContainerRef.current) {
+            // We can attach mousemove/up to window to handle dragging outside container
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [handleMouseMove, handleMouseUp]);
+
+    // Wheel Zoom (Keep this?) - User said "Drag and select", didn't explicitly ask to remove Zoom. 
+    // Keeping scroll zoom is usually nice.
+    const handleWheel = (e: React.WheelEvent) => {
+        if (!onRangeChange) return;
+        const currentRange = effectiveRange.max - effectiveRange.min;
+        if (currentRange <= 0) return;
+        const zoomFactor = 0.1;
+        const delta = e.deltaY > 0 ? 1 : -1;
+        const change = currentRange * zoomFactor * delta;
+        let newMin = effectiveRange.min - (change / 2);
+        let newMax = effectiveRange.max + (change / 2);
+        if (newMin < globalMinMax.min) newMin = globalMinMax.min;
+        if (newMax > globalMinMax.max) newMax = globalMinMax.max;
+        if (newMax - newMin < 5) return;
+        onRangeChange(newMin, newMax);
+    };
+
+
+    if (isLoading && !manualData) {
         return <div className="h-[350px] flex items-center justify-center text-muted-foreground">Loading option data...</div>;
     }
 
@@ -91,14 +250,15 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
 
                 <div className="flex items-center gap-2">
                     <button
-                        onClick={() => setShowFullRange(!showFullRange)}
-                        className={cn(
-                            "px-2 py-1 text-xs font-medium rounded-md border border-border transition-colors",
-                            !showFullRange ? "bg-primary/10 text-primary border-primary/20" : "text-muted-foreground hover:bg-muted"
-                        )}
-                        title="Show focused range around current price"
+                        onClick={() => {
+                            // Reset logic - Show Global Range
+                            if (onRangeChange) onRangeChange(globalMinMax.min, globalMinMax.max);
+                            setShowFullRange(true); // Ensure flag reflects "all"
+                        }}
+                        className="px-2 py-1 text-xs font-medium rounded-md border border-border text-muted-foreground hover:bg-muted"
+                        title="Reset Zoom"
                     >
-                        {showFullRange ? "Show Focused Range" : "Show All Strikes"}
+                        Reset Zoom
                     </button>
 
                     <div className="flex bg-muted/20 rounded-lg p-1">
@@ -120,7 +280,12 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
                 </div>
             </div>
 
-            <div className="flex-1 min-h-[300px]">
+            <div
+                ref={chartContainerRef}
+                className="flex-1 min-h-[300px] select-none"
+                onWheel={handleWheel}
+                onMouseDown={handleMouseDown}
+            >
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
                         data={chartData}
@@ -135,6 +300,7 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
                             axisLine={true}
                             type="number"
                             domain={['dataMin', 'dataMax']}
+                            allowDataOverflow={true} // Allow fixed domain from state
                         />
                         <YAxis
                             yAxisId="left"
@@ -198,6 +364,18 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({ ticker }) => {
                             strokeDasharray="3 3"
                             dot={false}
                         />
+
+                        {/* Selection Overlay */}
+                        {selection && (
+                            <ReferenceArea
+                                yAxisId="left"
+                                x1={Math.min(selection.start, selection.end)}
+                                x2={Math.max(selection.start, selection.end)}
+                                strokeOpacity={0}
+                                fill="hsl(var(--primary))"
+                                fillOpacity={0.1}
+                            />
+                        )}
 
                         {/* Max Pain Highlight */}
                         {maxPain && (
