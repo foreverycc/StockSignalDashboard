@@ -10,7 +10,8 @@ import {
     Legend,
     ResponsiveContainer,
     Scatter,
-    ReferenceLine
+    ReferenceLine,
+    ReferenceArea
 } from 'recharts';
 import { format } from 'date-fns';
 import { formatNumberShort } from '../utils/chartUtils';
@@ -120,32 +121,164 @@ const CandleShape = (props: any) => {
 
 export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval }) => {
 
-    const validData = useMemo(() => {
+    // --- Zoom State & Logic ---
+    const [zoomState, setZoomState] = React.useState<{ start: number, end: number } | null>(null);
+    const [selection, setSelection] = React.useState<{ start: number, end: number } | null>(null);
+    const isSelectingRef = React.useRef(false);
+    const startXRef = React.useRef(0);
+    const chartContainerRef = React.useRef<HTMLDivElement>(null);
+
+    // Initial data processing
+    const allData = useMemo(() => {
         if (!data) return [];
         return data.filter(d =>
             d.open != null && d.close != null && d.high != null && d.low != null
         ).map(d => ({
             ...d,
-            // Prepare signals for scatter plots
-            // We'll place signals slightly above high (sell) or below low (buy)
             buySignal: d.cd_signal ? d.low * 0.999 : null,
             sellSignal: d.mc_signal ? d.high * 1.001 : null
         }));
     }, [data]);
 
-    if (!validData || validData.length === 0) {
+    // Visible data slice
+    const visibleData = useMemo(() => {
+        if (allData.length === 0) return [];
+        if (!zoomState) return allData;
+        return allData.slice(zoomState.start, zoomState.end + 1);
+    }, [allData, zoomState]);
+
+    // Helpers to convert pixel to data index
+    const getChartArea = (container: HTMLElement) => {
+        // Hardcoded margins matching ComposedChart
+        const margins = { left: 20, right: 55 };
+        const width = container.clientWidth;
+        const chartWidth = width - margins.left - margins.right;
+        if (chartWidth <= 0) return null;
+        return { width: chartWidth, left: margins.left };
+    };
+
+    const pixelToIndex = (x: number, chartArea: { width: number, left: number }, currentCount: number) => {
+        const relativeX = x - chartArea.left;
+        const fraction = relativeX / chartArea.width;
+        const index = Math.floor(fraction * currentCount);
+        return Math.max(0, Math.min(currentCount - 1, index));
+    };
+
+    // Handlers
+    const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+        isSelectingRef.current = true;
+        const chartArea = getChartArea(e.currentTarget);
+        if (!chartArea) return;
+
+        const count = visibleData.length;
+        const clickIndex = pixelToIndex(e.nativeEvent.offsetX, chartArea, count);
+
+        // We track local index (0 to validData.length) to display ReferenceArea which matches XAxis
+        // XAxis uses 'time' string. ReferenceArea needs that label string.
+        setSelection({ start: clickIndex, end: clickIndex });
+        startXRef.current = e.nativeEvent.offsetX;
+        document.body.style.cursor = 'crosshair';
+    };
+
+    const handleMouseMove = React.useCallback((e: MouseEvent) => {
+        if (!isSelectingRef.current || !chartContainerRef.current) return;
+
+        const chartArea = getChartArea(chartContainerRef.current);
+        if (!chartArea) return;
+
+        const count = visibleData.length;
+        const moveIndex = pixelToIndex(e.offsetX, chartArea, count);
+
+        setSelection(prev => prev ? { ...prev, end: moveIndex } : null);
+    }, [visibleData.length]);
+
+    const handleMouseUp = React.useCallback(() => {
+        if (!isSelectingRef.current) return;
+        isSelectingRef.current = false;
+        document.body.style.cursor = '';
+
+        setSelection(prev => {
+            if (prev && Math.abs(prev.end - prev.start) > 1) { // Min 2 bars
+                // Calculate GLOBAL indices
+                const currentStart = zoomState ? zoomState.start : 0;
+
+                const localMin = Math.min(prev.start, prev.end);
+                const localMax = Math.max(prev.start, prev.end);
+
+                const newStart = currentStart + localMin;
+                const newEnd = currentStart + localMax;
+
+                setZoomState({ start: newStart, end: newEnd });
+            }
+            return null;
+        });
+    }, [zoomState]);
+
+    const handleWheel = (e: React.WheelEvent) => {
+        // Scroll to zoom
+        if (visibleData.length === 0) return;
+
+        const currentStart = zoomState ? zoomState.start : 0;
+        const currentEnd = zoomState ? zoomState.end : allData.length - 1;
+        const currentLength = currentEnd - currentStart + 1;
+
+        const zoomFactor = 0.1;
+        const delta = e.deltaY > 0 ? 1 : -1; // Down = Zoom Out (Expand), Up = Zoom In (Shrink)
+        const change = Math.max(2, Math.floor(currentLength * zoomFactor)); // At least 2 bars change
+
+        let newStart = currentStart;
+        let newEnd = currentEnd;
+
+        if (delta > 0) { // Zoom Out
+            newStart = Math.max(0, currentStart - Math.ceil(change / 2));
+            newEnd = Math.min(allData.length - 1, currentEnd + Math.ceil(change / 2));
+        } else { // Zoom In
+            newStart = Math.min(newEnd - 5, currentStart + Math.ceil(change / 2)); // Min 5 bars
+            newEnd = Math.max(newStart + 5, currentEnd - Math.ceil(change / 2));
+        }
+
+        setZoomState({ start: newStart, end: newEnd });
+    };
+
+    // Attach global handlers
+    React.useEffect(() => {
+        if (chartContainerRef.current) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [handleMouseMove, handleMouseUp]);
+
+
+    if (!allData || allData.length === 0) {
         return <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/10 rounded border border-dashed border-border p-4">No price data available</div>;
     }
 
     return (
         <div className="w-full h-full flex flex-col">
-            <h3 className="text-sm font-semibold mb-2">Price History - {ticker} ({interval})</h3>
+            <div className="flex justify-between items-center mb-2">
+                <h3 className="text-sm font-semibold">Price History - {ticker} ({interval})</h3>
+                <button
+                    onClick={() => setZoomState(null)} // Reset
+                    className="px-2 py-1 text-xs font-medium rounded-md border border-border text-muted-foreground hover:bg-muted"
+                >
+                    Reset Zoom
+                </button>
+            </div>
 
             {/* Price Chart - Top Section */}
-            <div className="flex-1 min-h-0">
+            <div
+                ref={chartContainerRef}
+                className="flex-1 min-h-0 select-none"
+                onMouseDown={handleMouseDown}
+                onWheel={handleWheel}
+            >
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
-                        data={validData}
+                        data={visibleData}
                         syncId="candleGraph"
                         margin={{ top: 10, right: 55, left: 20, bottom: 5 }}
                     >
@@ -195,11 +328,11 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
 
                         {/* Current Price Line */}
                         <ReferenceLine
-                            y={data[data.length - 1]?.close}
+                            y={visibleData[visibleData.length - 1]?.close}
                             stroke="hsl(var(--foreground))"
                             strokeDasharray="3 3"
                             label={{
-                                value: data[data.length - 1]?.close?.toFixed(2),
+                                value: visibleData[visibleData.length - 1]?.close?.toFixed(2),
                                 position: 'right',
                                 fill: 'hsl(var(--foreground))',
                                 fontSize: 11
@@ -245,6 +378,16 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                             isAnimationActive={false}
                             fill="#ef4444"
                         />
+
+                        {selection && visibleData[Math.min(selection.start, selection.end)] && visibleData[Math.max(selection.start, selection.end)] && (
+                            <ReferenceArea
+                                x1={visibleData[Math.min(selection.start, selection.end)].time}
+                                x2={visibleData[Math.max(selection.start, selection.end)].time}
+                                strokeOpacity={0}
+                                fill="hsl(var(--primary))"
+                                fillOpacity={0.1}
+                            />
+                        )}
                     </ComposedChart>
                 </ResponsiveContainer>
             </div>
@@ -253,7 +396,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
             <div className="h-[100px] mt-2">
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart
-                        data={validData}
+                        data={visibleData}
                         syncId="candleGraph"
                         margin={{ top: 0, right: 55, left: 20, bottom: 20 }}
                     >

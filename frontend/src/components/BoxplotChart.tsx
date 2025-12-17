@@ -9,7 +9,8 @@ import {
     Tooltip,
     Legend,
     ResponsiveContainer,
-    ReferenceLine
+    ReferenceLine,
+    ReferenceArea
 } from 'recharts';
 import { processRowDataForChart, extractCurrentTrajectory, formatNumberShort } from '../utils/chartUtils';
 
@@ -64,15 +65,130 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
         currentVolume: d.currentVolume
     }));
 
+    // --- Zoom State ---
+    const [zoomDomain, setZoomDomain] = React.useState<{ min: number, max: number } | null>(null);
+    const [selection, setSelection] = React.useState<{ start: number, end: number } | null>(null);
+    const isSelectingRef = React.useRef(false);
+    const startXRef = React.useRef(0);
+    const chartContainerRef = React.useRef<HTMLDivElement>(null);
+
+    // Helpers
+    const getChartArea = (container: HTMLElement) => {
+        const margins = { left: 20, right: 55 };
+        const width = container.clientWidth;
+        const chartWidth = width - margins.left - margins.right;
+        if (chartWidth <= 0) return null;
+        return { width: chartWidth, left: margins.left };
+    };
+
+    const pixelToValue = (x: number, chartArea: { width: number, left: number }, currentDomain: { min: number, max: number }) => {
+        const relativeX = x - chartArea.left;
+        const fraction = relativeX / chartArea.width;
+        const clampedFraction = Math.max(0, Math.min(1, fraction));
+        const range = currentDomain.max - currentDomain.min;
+        return currentDomain.min + (clampedFraction * range);
+    };
+
+    const globalDomain = { min: 0, max: 100 }; // Assuming period is 0-100 always
+    const currentDomain = zoomDomain || globalDomain;
+
+    const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+        isSelectingRef.current = true;
+        const chartArea = getChartArea(e.currentTarget);
+        if (!chartArea) return;
+
+        const val = pixelToValue(e.nativeEvent.offsetX, chartArea, currentDomain);
+        setSelection({ start: val, end: val });
+        startXRef.current = e.nativeEvent.offsetX;
+        document.body.style.cursor = 'crosshair';
+    };
+
+    const handleMouseMove = React.useCallback((e: MouseEvent) => {
+        if (!isSelectingRef.current || !chartContainerRef.current) return;
+        const chartArea = getChartArea(chartContainerRef.current);
+        if (!chartArea) return;
+
+        const val = pixelToValue(e.offsetX, chartArea, currentDomain);
+        setSelection(prev => prev ? { ...prev, end: val } : null);
+    }, [currentDomain]);
+
+    const handleMouseUp = React.useCallback(() => {
+        if (!isSelectingRef.current) return;
+        isSelectingRef.current = false;
+        document.body.style.cursor = '';
+
+        setSelection(prev => {
+            if (prev && Math.abs(prev.end - prev.start) > 2) { // Min 2 periods
+                setZoomDomain({
+                    min: Math.floor(Math.min(prev.start, prev.end)),
+                    max: Math.ceil(Math.max(prev.start, prev.end))
+                });
+            }
+            return null;
+        });
+    }, []);
+
+    const handleWheel = (e: React.WheelEvent) => {
+        const range = currentDomain.max - currentDomain.min;
+        if (range <= 0) return;
+
+        const zoomFactor = 0.1;
+        const delta = e.deltaY > 0 ? 1 : -1;
+        const change = Math.max(2, range * zoomFactor);
+
+        let newMin = currentDomain.min;
+        let newMax = currentDomain.max;
+
+        if (delta > 0) { // Zoom Out
+            newMin = Math.max(globalDomain.min, currentDomain.min - change / 2);
+            newMax = Math.min(globalDomain.max, currentDomain.max + change / 2);
+        } else { // Zoom In
+            newMin = currentDomain.min + change / 2;
+            newMax = currentDomain.max - change / 2;
+            if (newMax - newMin < 5) { // Min 5 periods
+                return;
+            }
+        }
+
+        setZoomDomain({ min: newMin, max: newMax });
+    };
+
+    // Attach global handlers
+    React.useEffect(() => {
+        if (chartContainerRef.current) {
+            window.addEventListener('mousemove', handleMouseMove);
+            window.addEventListener('mouseup', handleMouseUp);
+        }
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [handleMouseMove, handleMouseUp]);
+
+
     return (
         <div className="w-full h-full flex flex-col">
-            <div className="mb-2">
-                {title && <h3 className="text-sm font-semibold">{title}</h3>}
-                {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
+            <div className="flex justify-between items-center mb-2">
+                <div>
+                    {title && <h3 className="text-sm font-semibold">{title}</h3>}
+                    {subtitle && <p className="text-xs text-muted-foreground mt-1">{subtitle}</p>}
+                </div>
+                <button
+                    onClick={() => setZoomDomain(null)}
+                    className="px-2 py-1 text-xs font-medium rounded-md border border-border text-muted-foreground hover:bg-muted"
+                >
+                    Reset Zoom
+                </button>
             </div>
 
             {/* Returns Chart - Top */}
-            <div className="w-full mb-1" style={{ height: '200px' }}>
+            <div
+                ref={chartContainerRef}
+                className="w-full mb-1 select-none"
+                style={{ height: '200px' }}
+                onMouseDown={handleMouseDown}
+                onWheel={handleWheel}
+            >
                 <ResponsiveContainer width="100%" height={200}>
                     <ComposedChart
                         data={chartData}
@@ -84,6 +200,9 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                             hide
+                            type="number"
+                            domain={[currentDomain.min, currentDomain.max]}
+                            allowDataOverflow={true}
                         />
                         <YAxis
                             stroke="hsl(var(--muted-foreground))"
@@ -181,6 +300,17 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             dot={{ r: 1, fill: '#ef4444' }}
                             name="Current"
                         />
+
+                        {selection && (
+                            <ReferenceArea
+                                x1={Math.min(selection.start, selection.end)}
+                                x2={Math.max(selection.start, selection.end)}
+                                strokeOpacity={0}
+                                fill="hsl(var(--primary))"
+                                fillOpacity={0.1}
+                            />
+                        )}
+
                     </ComposedChart>
                 </ResponsiveContainer>
             </div>
@@ -198,6 +328,9 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                             label={{ value: 'Period', position: 'insideBottom', offset: -10, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
+                            type="number"
+                            domain={[currentDomain.min, currentDomain.max]}
+                            allowDataOverflow={true}
                         />
                         <YAxis
                             stroke="hsl(var(--muted-foreground))"
