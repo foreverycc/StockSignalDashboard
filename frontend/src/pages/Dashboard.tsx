@@ -49,6 +49,23 @@ const DetailedChartRow = ({ row, activeSubTab: _activeSubTab }: { row: any, acti
     );
 };
 
+const InteractiveOptionChart = ({ ticker }: { ticker: string }) => {
+    const [priceRange, setPriceRange] = useState<{ min: number, max: number } | undefined>(undefined);
+
+    // Reset range when ticker changes
+    useEffect(() => {
+        setPriceRange(undefined);
+    }, [ticker]);
+
+    return (
+        <OptionOIChart
+            ticker={ticker}
+            priceRange={priceRange}
+            onRangeChange={(min, max) => setPriceRange({ min, max })}
+        />
+    );
+};
+
 export const Dashboard: React.FC<DashboardProps> = ({
     selectedStockList,
     showLogs,
@@ -459,7 +476,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                                                 {/* Single Option Chart at the bottom */}
                                                 <div style={{ height: '350px' }} className="p-4 border rounded-lg bg-card/50">
-                                                    <OptionOIChart ticker={selectedRow.ticker} />
+                                                    <InteractiveOptionChart ticker={selectedRow.ticker} />
                                                 </div>
                                             </div>
                                         ) : (
