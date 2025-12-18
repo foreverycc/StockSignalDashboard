@@ -13,6 +13,46 @@ import {
     ReferenceArea
 } from 'recharts';
 import { processRowDataForChart, extractCurrentTrajectory, formatNumberShort } from '../utils/chartUtils';
+import { cn } from '../utils/cn';
+
+const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+        const data = payload[0].payload;
+        // data contains: period, min, max, q1, q3, median, avgVolume, currentReturn, currentVolume
+
+        return (
+            <div className="bg-card border border-border p-2 rounded shadow text-xs z-50 min-w-[150px]">
+                <p className="font-semibold mb-1">Period: {label}</p>
+                <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                    {/* Returns Section */}
+                    <span className="text-muted-foreground">Current:</span>
+                    <span className={cn("text-right font-medium", data.currentReturn >= 0 ? "text-green-500" : "text-red-500")}>
+                        {data.currentReturn !== null ? `${data.currentReturn.toFixed(2)}%` : '-'}
+                    </span>
+
+                    <span className="text-muted-foreground">Median:</span>
+                    <span className="text-foreground text-right">{data.median?.toFixed(2)}%</span>
+
+                    <span className="text-muted-foreground">Q1 / Q3:</span>
+                    <span className="text-foreground text-right">{data.q1?.toFixed(2)}% / {data.q3?.toFixed(2)}%</span>
+
+                    <span className="text-muted-foreground">Min / Max:</span>
+                    <span className="text-foreground text-right">{data.min?.toFixed(2)}% / {data.max?.toFixed(2)}%</span>
+
+                    <div className="col-span-2 h-px bg-border my-1" />
+
+                    {/* Volume Section */}
+                    <span className="text-muted-foreground">Cur Vol:</span>
+                    <span className="text-foreground text-right">{data.currentVolume ? formatNumberShort(data.currentVolume) : '-'}</span>
+
+                    <span className="text-muted-foreground">Avg Vol:</span>
+                    <span className="text-foreground text-right">{formatNumberShort(data.avgVolume)}</span>
+                </div>
+            </div>
+        );
+    }
+    return null;
+};
 
 interface BoxplotChartProps {
     selectedRow: any | null;
@@ -237,6 +277,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                 <ResponsiveContainer width="100%" height={200}>
                     <ComposedChart
                         data={chartData}
+                        syncId="returnDistribution"
                         margin={{ top: 5, right: 55, left: 20, bottom: 5 }}
                     >
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -255,13 +296,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             label={{ value: 'Return (%)', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
                         <Tooltip
-                            contentStyle={{
-                                backgroundColor: 'hsl(var(--card))',
-                                borderColor: 'hsl(var(--border))',
-                                color: 'hsl(var(--card-foreground))',
-                                fontSize: '11px'
-                            }}
-                            formatter={(value: any, name: string) => [typeof value === 'number' ? value.toFixed(2) + '%' : value, name]}
+                            content={<CustomTooltip />}
                         />
                         <Legend wrapperStyle={{ fontSize: '11px' }} align="center" />
                         <ReferenceLine y={0} stroke="hsl(var(--muted-foreground))" strokeDasharray="3 3" />
@@ -275,7 +310,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             strokeOpacity={0.62}
                             strokeDasharray="4 4"
                             dot={false}
-                            name="Min/Max" // Merge Min/Max name here
+                            name="Max"
                         />
                         <Line
                             type="monotone"
@@ -323,7 +358,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             strokeWidth={1}
                             strokeDasharray="3 3"
                             dot={false}
-                            name="Q1/Q3" // Visible Legend Item
+                            name="Q1"
                         />
 
                         {/* Median - small blue dots only */}
@@ -365,6 +400,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                 <ResponsiveContainer width="100%" height={100}>
                     <ComposedChart
                         data={volumeData}
+                        syncId="returnDistribution"
                         margin={{ top: 0, right: 55, left: 20, bottom: 20 }}
                     >
                         <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
@@ -383,15 +419,7 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
                             label={{ value: 'Vol', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                             tickFormatter={(value: any) => formatNumberShort(value, 0)}
                         />
-                        <Tooltip
-                            contentStyle={{
-                                backgroundColor: 'hsl(var(--card))',
-                                borderColor: 'hsl(var(--border))',
-                                color: 'hsl(var(--card-foreground))',
-                                fontSize: '11px'
-                            }}
-                            formatter={(value: any) => [formatNumberShort(value, 0), 'Avg Volume']}
-                        />
+                        <Tooltip content={() => null} />
                         <Bar
                             dataKey="volume"
                             fill="hsl(var(--muted-foreground))"

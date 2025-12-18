@@ -480,7 +480,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                             label={{ value: 'Vol', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
 
-                        <Tooltip content={<CustomTooltip />} />
+                        <Tooltip content={() => null} />
 
                         <Bar
                             dataKey="volume"
