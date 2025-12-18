@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { OptionOIChart } from './OptionOIChart';
-import { Search, Upload, RefreshCw, AlertCircle } from 'lucide-react';
+import { Search, Upload, AlertCircle } from 'lucide-react';
 import { cn } from '../utils/cn';
 
 export const OptionAnalysisPanel: React.FC = () => {
@@ -192,82 +192,61 @@ export const OptionAnalysisPanel: React.FC = () => {
     return (
         <div className="flex flex-col gap-4 p-4 h-full">
             {/* Control Bar */}
-            <div className="flex flex-col md:flex-row gap-4 justify-between items-start md:items-center bg-card p-4 rounded-lg border border-border">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center bg-card p-4 rounded-lg border border-border">
 
-                {/* Mode Selection */}
-                <div className="flex gap-2 bg-muted/30 p-1 rounded-lg">
-                    <button
-                        onClick={() => setMode('live')}
-                        className={cn("px-4 py-2 rounded-md text-sm font-medium transition-colors", mode === 'live' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
-                    >
-                        Live Ticker
-                    </button>
-                    <button
-                        onClick={() => setMode('csv')}
-                        className={cn("px-4 py-2 rounded-md text-sm font-medium transition-colors", mode === 'csv' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
-                    >
-                        Import CSV
-                    </button>
-                </div>
-
-                {/* Live Input */}
-                {mode === 'live' && (
-                    <div className="flex gap-2 w-full md:w-auto">
-                        <input
-                            type="text"
-                            placeholder="Enter Ticker (e.g. SPY)"
-                            value={tickerInput}
-                            onChange={(e) => setTickerInput(e.target.value)}
-                            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-                            className="px-3 py-2 bg-background border border-input rounded-md text-sm w-full md:w-48 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        />
-                        <button onClick={handleSearch} className="px-3 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90">
-                            <Search className="w-4 h-4" />
+                {/* Left: Mode Selection */}
+                <div className="flex justify-center md:justify-start">
+                    <div className="flex gap-2 bg-muted/30 p-1 rounded-lg">
+                        <button
+                            onClick={() => setMode('live')}
+                            className={cn("px-4 py-2 rounded-md text-sm font-medium transition-colors", mode === 'live' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+                        >
+                            Live Ticker
+                        </button>
+                        <button
+                            onClick={() => setMode('csv')}
+                            className={cn("px-4 py-2 rounded-md text-sm font-medium transition-colors", mode === 'csv' ? "bg-background shadow text-foreground" : "text-muted-foreground hover:text-foreground")}
+                        >
+                            Import CSV
                         </button>
                     </div>
-                )}
-
-                {/* CSV Input */}
-                {mode === 'csv' && (
-                    <div className="flex flex-col gap-1 w-full md:w-auto">
-                        <div className="flex gap-2 items-center">
-                            <label className="cursor-pointer px-4 py-2 bg-muted hover:bg-muted/80 rounded-md text-sm font-medium flex items-center gap-2">
-                                <Upload className="w-4 h-4" />
-                                {csvMeta.filename ? 'Change File' : 'Upload CSV'}
-                                <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
-                            </label>
-                            {csvMeta.filename && <span className="text-xs text-muted-foreground truncate max-w-[150px]">{csvMeta.filename}</span>}
-                        </div>
-                        {csvError && <span className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {csvError}</span>}
-                    </div>
-                )}
-
-                {/* Range Filter */}
-                <div className="flex gap-2 items-center border-l border-border pl-4">
-                    <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">Price Range:</span>
-                    <input
-                        type="number"
-                        placeholder="Min"
-                        value={filterMin}
-                        onChange={(e) => setFilterMin(e.target.value)}
-                        className="w-20 px-2 py-1 text-sm bg-background border border-input rounded-md"
-                    />
-                    <span className="text-muted-foreground">-</span>
-                    <input
-                        type="number"
-                        placeholder="Max"
-                        value={filterMax}
-                        onChange={(e) => setFilterMax(e.target.value)}
-                        className="w-20 px-2 py-1 text-sm bg-background border border-input rounded-md"
-                    />
-                    <button
-                        onClick={() => { setFilterMin(''); setFilterMax(''); }}
-                        className="p-1 hover:bg-muted rounded text-muted-foreground"
-                        title="Reset Range"
-                    >
-                        <RefreshCw className="w-3 h-3" />
-                    </button>
                 </div>
+
+                {/* Center: Input */}
+                <div className="flex justify-center w-full">
+                    {mode === 'live' && (
+                        <div className="flex gap-2 w-full md:w-auto">
+                            <input
+                                type="text"
+                                placeholder="Enter Ticker (e.g. SPY)"
+                                value={tickerInput}
+                                onChange={(e) => setTickerInput(e.target.value)}
+                                onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+                                className="px-3 py-2 bg-background border border-input rounded-md text-sm w-full md:w-48 focus:outline-none focus:ring-2 focus:ring-primary/50"
+                            />
+                            <button onClick={handleSearch} className="px-3 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90">
+                                <Search className="w-4 h-4" />
+                            </button>
+                        </div>
+                    )}
+
+                    {mode === 'csv' && (
+                        <div className="flex flex-col gap-1 w-full md:w-auto">
+                            <div className="flex gap-2 items-center">
+                                <label className="cursor-pointer px-4 py-2 bg-muted hover:bg-muted/80 rounded-md text-sm font-medium flex items-center gap-2">
+                                    <Upload className="w-4 h-4" />
+                                    {csvMeta.filename ? 'Change File' : 'Upload CSV'}
+                                    <input type="file" accept=".csv" onChange={handleFileUpload} className="hidden" />
+                                </label>
+                                {csvMeta.filename && <span className="text-xs text-muted-foreground truncate max-w-[150px]">{csvMeta.filename}</span>}
+                            </div>
+                            {csvError && <span className="text-xs text-red-500 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {csvError}</span>}
+                        </div>
+                    )}
+                </div>
+
+                {/* Right: Spacer */}
+                <div className="hidden md:block" />
 
             </div>
 
