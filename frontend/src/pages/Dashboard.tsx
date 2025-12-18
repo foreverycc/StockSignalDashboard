@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Maximize2, Minimize2, X } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { analysisApi } from '../services/api';
 import { AnalysisTable } from '../components/AnalysisTable';
@@ -255,6 +256,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
     const [chartPanelWidth, setChartPanelWidth] = useState(50);
     const [isResizing, setIsResizing] = useState(false);
+    const [isChartMaximized, setIsChartMaximized] = useState(false);
+
+    // Reset maximized state when row changes
+    useEffect(() => {
+        if (!selectedRow) setIsChartMaximized(false);
+    }, [selectedRow]);
 
     const startResizing = React.useCallback(() => {
         setIsResizing(true);
@@ -398,7 +405,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             <div
                                 className={cn("flex-1 border-r border-border overflow-hidden flex flex-col transition-all duration-300")}
                                 style={{
-                                    width: selectedRow && window.innerWidth >= 768 ? `${100 - chartPanelWidth}%` : '100%'
+                                    width: selectedRow && window.innerWidth >= 768
+                                        ? (isChartMaximized ? '0%' : `${100 - chartPanelWidth}%`)
+                                        : (selectedRow ? '0%' : '100%'),
+                                    display: (selectedRow && isChartMaximized && window.innerWidth >= 768) ? 'none' : 'flex'
                                 }}
                             >
                                 {isLoadingTable || isLoadingRuns ? (
@@ -428,7 +438,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                             </div>
 
                             {/* Resizer Handle (Desktop Only) */}
-                            {selectedRow && (
+                            {selectedRow && !isChartMaximized && (
                                 <div
                                     className="hidden md:flex w-1 bg-border hover:bg-primary/50 cursor-col-resize transition-colors z-10 items-center justify-center"
                                     onMouseDown={startResizing}
@@ -446,17 +456,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                         "fixed inset-0 z-50 md:static md:z-auto"
                                     )}
                                     style={{
-                                        width: window.innerWidth >= 768 ? `${chartPanelWidth}%` : '100%'
+                                        width: window.innerWidth >= 768
+                                            ? (isChartMaximized ? '100%' : `${chartPanelWidth}%`)
+                                            : '100%'
                                     }}
                                 >
                                     <div className="p-4 border-b border-border flex justify-between items-center bg-muted/10">
                                         <h3 className="font-semibold truncate pr-2">{selectedRow.ticker} ({selectedRow.interval})</h3>
-                                        <button
-                                            onClick={() => setSelectedRow(null)}
-                                            className="p-2 -mr-2 text-muted-foreground hover:text-foreground shrink-0"
-                                        >
-                                            Close
-                                        </button>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                onClick={() => setIsChartMaximized(!isChartMaximized)}
+                                                className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/50 transition-colors hidden md:block"
+                                                title={isChartMaximized ? "Restore" : "Maximize"}
+                                            >
+                                                {isChartMaximized ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}
+                                            </button>
+                                            <button
+                                                onClick={() => setSelectedRow(null)}
+                                                className="p-2 text-muted-foreground hover:text-foreground rounded-md hover:bg-muted/50 transition-colors"
+                                                title="Close"
+                                            >
+                                                <X className="w-4 h-4" />
+                                            </button>
+                                        </div>
                                     </div>
                                     <div className="flex-1 p-4 overflow-y-auto bg-background md:bg-transparent">
                                         {/* Returns Distribution Boxplot(s) & Price History */}
