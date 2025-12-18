@@ -52,7 +52,7 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                     <span className="text-muted-foreground">High:</span> <span className="text-foreground text-right">{high.toFixed(2)}</span>
                     <span className="text-muted-foreground">Low:</span> <span className="text-foreground text-right">{low.toFixed(2)}</span>
                     <span className="text-muted-foreground">Close:</span> <span className="text-foreground text-right">{close.toFixed(2)}</span>
-                    <span className="text-muted-foreground">Vol:</span> <span className="text-foreground text-right">{volume.toLocaleString()}</span>
+                    <span className="text-muted-foreground">Vol:</span> <span className="text-foreground text-right">{formatNumberShort(volume)}</span>
                 </div>
                 {(cd_signal || mc_signal) && (
                     <div className="mt-2 pt-2 border-t border-border flex flex-col gap-1">

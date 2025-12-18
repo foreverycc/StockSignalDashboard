@@ -372,7 +372,7 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({
                             tickLine={{ stroke: '#3b82f6' }}
                             axisLine={{ stroke: '#3b82f6' }}
                             tickFormatter={(value) => formatNumberShort(value)}
-                            label={{ value: 'Total market value ($)', angle: 90, position: 'insideRight', style: { textAnchor: 'middle' }, fill: '#3b82f6', fontSize: 10 }}
+                            label={{ value: 'Option Value ($)', angle: 90, position: 'insideRight', style: { textAnchor: 'middle' }, fill: '#3b82f6', fontSize: 10 }}
                         />
                         <Tooltip
                             contentStyle={{
@@ -414,7 +414,7 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({
                             yAxisId="right"
                             type="monotone"
                             dataKey="pain"
-                            name="Pain"
+                            name="Option Value"
                             stroke="#3b82f6"
                             strokeWidth={2}
                             strokeDasharray="3 3"
