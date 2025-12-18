@@ -240,6 +240,58 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
         setZoomState({ start: newStart, end: newEnd });
     };
 
+    const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+        isSelectingRef.current = true;
+        const chartArea = getChartArea(e.currentTarget);
+        if (!chartArea) return;
+
+        const touchX = e.touches[0].clientX;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const localX = touchX - rect.left;
+
+        const count = visibleData.length;
+        const clickIndex = pixelToIndex(localX, chartArea, count);
+
+        setSelection({ start: clickIndex, end: clickIndex });
+        startXRef.current = localX;
+    };
+
+    const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+        if (!isSelectingRef.current || !chartContainerRef.current) return;
+
+        const chartArea = getChartArea(chartContainerRef.current);
+        if (!chartArea) return;
+
+        const touchX = e.touches[0].clientX;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const localX = touchX - rect.left;
+
+        const count = visibleData.length;
+        const moveIndex = pixelToIndex(localX, chartArea, count);
+
+        setSelection(prev => prev ? { ...prev, end: moveIndex } : null);
+    };
+
+    const handleTouchEnd = () => {
+        if (!isSelectingRef.current) return;
+        isSelectingRef.current = false;
+
+        setSelection(prev => {
+            if (prev && Math.abs(prev.end - prev.start) > 1) { // Min 2 bars
+                const currentStart = zoomState ? zoomState.start : 0;
+
+                const localMin = Math.min(prev.start, prev.end);
+                const localMax = Math.max(prev.start, prev.end);
+
+                const newStart = currentStart + localMin;
+                const newEnd = currentStart + localMax;
+
+                setZoomState({ start: newStart, end: newEnd });
+            }
+            return null;
+        });
+    };
+
     // Attach global handlers
     React.useEffect(() => {
         if (chartContainerRef.current) {
@@ -272,9 +324,12 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
             {/* Price Chart - Top Section */}
             <div
                 ref={chartContainerRef}
-                className="flex-1 min-h-0 select-none"
+                className="flex-1 min-h-0 select-none touch-none"
                 onMouseDown={handleMouseDown}
                 onWheel={handleWheel}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
             >
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart

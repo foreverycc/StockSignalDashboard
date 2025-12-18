@@ -183,10 +183,60 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({
         return range.min + clampedFraction * (range.max - range.min);
     };
 
+    const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+        if (!onRangeChange) return;
+        isSelectingRef.current = true;
+        const chartArea = getChartArea(e.currentTarget);
+        if (!chartArea) return;
+
+        const touchX = e.touches[0].clientX;
+        // Adjust for element position since clientX is global
+        const rect = e.currentTarget.getBoundingClientRect();
+        const localX = touchX - rect.left;
+
+        const strike = pixelToStrike(localX, chartArea, effectiveRange);
+        if (strike !== null) {
+            setSelection({ start: strike, end: strike });
+            startXRef.current = localX;
+        }
+    };
+
+    const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+        if (!isSelectingRef.current) return;
+
+        // Prevent scrolling while dragging logic could go here if needed
+        // e.preventDefault(); 
+
+        const chartArea = getChartArea(e.currentTarget);
+        if (!chartArea) return;
+
+        const touchX = e.touches[0].clientX;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const localX = touchX - rect.left;
+
+        const strike = pixelToStrike(localX, chartArea, effectiveRange);
+        if (strike !== null) {
+            setSelection(prev => prev ? { ...prev, end: strike } : null);
+        }
+    };
+
+    const handleTouchEnd = () => {
+        if (!isSelectingRef.current) return;
+        isSelectingRef.current = false;
+
+        setSelection(prev => {
+            if (prev && Math.abs(prev.end - prev.start) > 5) {
+                const min = Math.min(prev.start, prev.end);
+                const max = Math.max(prev.start, prev.end);
+                if (onRangeChange) onRangeChange(min, max);
+            }
+            return null;
+        });
+    };
+
     // Attach global handlers
     React.useEffect(() => {
         if (chartContainerRef.current) {
-            // We can attach mousemove/up to window to handle dragging outside container
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
         }
@@ -195,6 +245,9 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({
             window.removeEventListener('mouseup', handleMouseUp);
         };
     }, [handleMouseMove, handleMouseUp]);
+
+    // Note: For touch, we generally attach directly to the element rather than window 
+    // because standard behavior handles touch capture differently.
 
     // Wheel Zoom (Keep this?) - User said "Drag and select", didn't explicitly ask to remove Zoom. 
     // Keeping scroll zoom is usually nice.
@@ -282,9 +335,12 @@ export const OptionOIChart: React.FC<OptionOIChartProps> = ({
 
             <div
                 ref={chartContainerRef}
-                className="flex-1 min-h-[300px] select-none"
+                className="flex-1 min-h-[300px] select-none touch-none" // Add touch-none to prevent scrolling
                 onWheel={handleWheel}
                 onMouseDown={handleMouseDown}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
             >
                 <ResponsiveContainer width="100%" height="100%">
                     <ComposedChart

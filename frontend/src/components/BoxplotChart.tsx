@@ -153,6 +153,48 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
         setZoomDomain({ min: newMin, max: newMax });
     };
 
+    const handleTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+        isSelectingRef.current = true;
+        const chartArea = getChartArea(e.currentTarget);
+        if (!chartArea) return;
+
+        const touchX = e.touches[0].clientX;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const localX = touchX - rect.left;
+
+        const val = pixelToValue(localX, chartArea, currentDomain);
+        setSelection({ start: val, end: val });
+        startXRef.current = localX;
+    };
+
+    const handleTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+        if (!isSelectingRef.current || !chartContainerRef.current) return;
+        const chartArea = getChartArea(chartContainerRef.current);
+        if (!chartArea) return;
+
+        const touchX = e.touches[0].clientX;
+        const rect = e.currentTarget.getBoundingClientRect();
+        const localX = touchX - rect.left;
+
+        const val = pixelToValue(localX, chartArea, currentDomain);
+        setSelection(prev => prev ? { ...prev, end: val } : null);
+    };
+
+    const handleTouchEnd = () => {
+        if (!isSelectingRef.current) return;
+        isSelectingRef.current = false;
+
+        setSelection(prev => {
+            if (prev && Math.abs(prev.end - prev.start) > 2) {
+                setZoomDomain({
+                    min: Math.floor(Math.min(prev.start, prev.end)),
+                    max: Math.ceil(Math.max(prev.start, prev.end))
+                });
+            }
+            return null;
+        });
+    };
+
     // Attach global handlers
     React.useEffect(() => {
         if (chartContainerRef.current) {
@@ -184,10 +226,13 @@ export const BoxplotChart: React.FC<BoxplotChartProps> = ({ selectedRow, title, 
             {/* Returns Chart - Top */}
             <div
                 ref={chartContainerRef}
-                className="w-full mb-1 select-none"
+                className="w-full mb-1 select-none touch-none"
                 style={{ height: '200px' }}
                 onMouseDown={handleMouseDown}
                 onWheel={handleWheel}
+                onTouchStart={handleTouchStart}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={handleTouchEnd}
             >
                 <ResponsiveContainer width="100%" height={200}>
                     <ComposedChart
