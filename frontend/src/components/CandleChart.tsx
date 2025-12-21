@@ -45,10 +45,10 @@ const CustomTooltip = ({ active, payload, label }: any) => {
         // Find the main payload item (usually the candle or volume, we want all info)
         // payload[0] might be volume or candle depending on order/hover
         // But we can extract from payload[0].payload which is the full data object
-        const { open, high, low, close, volume, cd_signal, mc_signal } = payload[0].payload;
+        const { open, high, low, close, volume, cd_signal, mc_signal, ema_13, ema_21, ema_144, ema_169 } = payload[0].payload;
 
         return (
-            <div className="bg-card border border-border p-2 rounded shadow text-xs z-50">
+            <div className="bg-background border border-border p-2 rounded shadow text-xs z-50">
                 <p className="font-semibold mb-1">{format(new Date(label), 'yyyy-MM-dd HH:mm')}</p>
                 <div className="grid grid-cols-2 gap-x-4">
                     <span className="text-muted-foreground">Open:</span> <span className="text-foreground text-right">{open.toFixed(2)}</span>
@@ -57,6 +57,15 @@ const CustomTooltip = ({ active, payload, label }: any) => {
                     <span className="text-muted-foreground">Close:</span> <span className="text-foreground text-right">{close.toFixed(2)}</span>
                     <span className="text-muted-foreground">Vol:</span> <span className="text-foreground text-right">{formatNumberShort(volume)}</span>
                 </div>
+
+                {/* EMA Section */}
+                <div className="mt-2 pt-2 border-t border-border/50 grid grid-cols-2 gap-x-4">
+                    <span className="text-muted-foreground">EMA 13:</span> <span className="text-[#0ea5e9] text-right">{ema_13?.toFixed(2) || 'N/A'}</span>
+                    <span className="text-muted-foreground">EMA 21:</span> <span className="text-[#3b82f6] text-right">{ema_21?.toFixed(2) || 'N/A'}</span>
+                    <span className="text-muted-foreground">EMA 144:</span> <span className="text-[#ef4444] text-right">{ema_144?.toFixed(2) || 'N/A'}</span>
+                    <span className="text-muted-foreground">EMA 169:</span> <span className="text-[#f97316] text-right">{ema_169?.toFixed(2) || 'N/A'}</span>
+                </div>
+
                 {(cd_signal || mc_signal) && (
                     <div className="mt-2 pt-2 border-t border-border flex flex-col gap-1">
                         {cd_signal && <span className="text-green-500 font-bold flex items-center gap-1">↑ CD BUY</span>}
@@ -308,7 +317,27 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
     }, [handleMouseMove, handleMouseUp]);
 
     // Define intervals to show
-    const intervals = ['5m', '15m', '30m', '1h', '2h', '4h', '1d', '1wk'];
+    const intervals = ['5m', '15m', '30m', '1h', '2h', '4h', '1d', '1w'];
+
+    // Date format logic for XAxis
+    const axisDateFormat = useMemo(() => {
+        if (visibleData.length === 0) return 'MM-dd';
+        const start = new Date(visibleData[0].time);
+        const end = new Date(visibleData[visibleData.length - 1].time);
+
+        const diffTime = Math.abs(end.getTime() - start.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+        // If spans across years
+        if (start.getFullYear() !== end.getFullYear()) {
+            // For longer durations (e.g. > 3 months), show Year-Month
+            if (diffDays > 90) return 'yyyy-MM';
+            // For shorter cross-year durations, show full date to distinct days
+            return 'yyyy-MM-dd';
+        }
+
+        return 'MM-dd';
+    }, [visibleData]);
 
     if (!allData || allData.length === 0) {
         return <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/10 rounded border border-dashed border-border p-4">No price data available</div>;
@@ -368,7 +397,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                             dataKey="time"
                             tickFormatter={(tick) => {
                                 try {
-                                    return format(new Date(tick), 'MM-dd')
+                                    return format(new Date(tick), axisDateFormat)
                                 } catch (e) {
                                     return tick;
                                 }
@@ -486,7 +515,7 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                             dataKey="time"
                             tickFormatter={(tick) => {
                                 try {
-                                    return format(new Date(tick), 'MM-dd')
+                                    return format(new Date(tick), axisDateFormat)
                                 } catch (e) {
                                     return tick;
                                 }
