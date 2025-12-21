@@ -16,6 +16,8 @@ import {
 import { format } from 'date-fns';
 import { formatNumberShort } from '../utils/chartUtils';
 
+import { cn } from '../utils/cn';
+
 interface CandleData {
     time: string;
     open: number;
@@ -35,6 +37,7 @@ interface CandleChartProps {
     data: CandleData[];
     ticker: string;
     interval: string;
+    onIntervalChange?: (interval: string) => void;
 }
 
 const CustomTooltip = ({ active, payload, label }: any) => {
@@ -119,7 +122,7 @@ const CandleShape = (props: any) => {
     );
 };
 
-export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval }) => {
+export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval, onIntervalChange }) => {
 
     // --- Zoom State & Logic ---
     const [zoomState, setZoomState] = React.useState<{ start: number, end: number } | null>(null);
@@ -304,6 +307,8 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
         };
     }, [handleMouseMove, handleMouseUp]);
 
+    // Define intervals to show
+    const intervals = ['5m', '15m', '30m', '1h', '2h', '4h', '1d', '1wk'];
 
     if (!allData || allData.length === 0) {
         return <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/10 rounded border border-dashed border-border p-4">No price data available</div>;
@@ -312,7 +317,27 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
     return (
         <div className="w-full h-full flex flex-col">
             <div className="flex justify-between items-center mb-2">
-                <h3 className="text-sm font-semibold">Price History - {ticker} ({interval})</h3>
+                <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold">Price History - {ticker} ({interval})</h3>
+                    {onIntervalChange && (
+                        <div className="flex bg-muted/20 rounded-lg p-0.5 ml-2">
+                            {intervals.map((int) => (
+                                <button
+                                    key={int}
+                                    onClick={() => onIntervalChange(int)}
+                                    className={cn(
+                                        "px-2 py-0.5 text-[10px] font-medium rounded transition-all",
+                                        interval === int
+                                            ? "bg-background shadow-sm text-foreground"
+                                            : "text-muted-foreground hover:text-foreground"
+                                    )}
+                                >
+                                    {int}
+                                </button>
+                            ))}
+                        </div>
+                    )}
+                </div>
                 <button
                     onClick={() => setZoomState(null)} // Reset
                     className="px-2 py-1 text-xs font-medium rounded-md border border-border text-muted-foreground hover:bg-muted"

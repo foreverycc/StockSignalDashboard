@@ -19,11 +19,18 @@ interface DashboardProps {
 
 // Wrapper component to handle individual chart data fetching
 const DetailedChartRow = ({ row, activeSubTab: _activeSubTab }: { row: any, activeSubTab: string }) => {
+    const [selectedInterval, setSelectedInterval] = React.useState(row.interval);
+
+    // Reset selected interval when switching rows
+    React.useEffect(() => {
+        setSelectedInterval(row.interval);
+    }, [row.interval]);
+
     const { data: priceHistory, isLoading } = useQuery({
-        queryKey: ['priceHistory', row.ticker, row.interval],
-        queryFn: () => analysisApi.getPriceHistory(row.ticker, row.interval),
+        queryKey: ['priceHistory', row.ticker, selectedInterval],
+        queryFn: () => analysisApi.getPriceHistory(row.ticker, selectedInterval),
         staleTime: 1000 * 60 * 60 * 24, // 24 hours
-        enabled: !!row.ticker && !!row.interval
+        enabled: !!row.ticker && !!selectedInterval
     });
 
     return (
@@ -42,7 +49,8 @@ const DetailedChartRow = ({ row, activeSubTab: _activeSubTab }: { row: any, acti
                     <CandleChart
                         data={priceHistory || []}
                         ticker={row.ticker}
-                        interval={row.interval}
+                        interval={selectedInterval}
+                        onIntervalChange={setSelectedInterval}
                     />
                 )}
             </div>
