@@ -42,7 +42,7 @@ export const OptionAnalysisPanel: React.FC = () => {
                 const headers = header.split(',').map(h => h.trim());
 
                 // Detection Logic
-                const isLongFormat = headers.includes('strike') && headers.includes('open_interest') && headers.includes('option_type');
+                const isLongFormat = headers.includes('strike') && headers.includes('open_interest') && (headers.includes('option_type') || headers.includes('type'));
 
                 // Fallback detection for Wide Format
                 const colMap = { strike: -1, calls: -1, puts: -1 };
@@ -54,36 +54,59 @@ export const OptionAnalysisPanel: React.FC = () => {
                 const isWideFormat = colMap.strike !== -1 && (colMap.calls !== -1 || colMap.puts !== -1);
 
                 if (!isLongFormat && !isWideFormat) {
-                    throw new Error("Could not detect valid columns. Need 'Strike' and ('Calls'/'Puts' OR 'Open Interest' + 'Option Type').");
+                    throw new Error("Could not detect valid columns. Need 'Strike' and ('Calls'/'Puts' OR 'Open Interest' + 'Option Type'/'Type').");
                 }
 
                 let parsedData: any[] = [];
                 let minStrike = Infinity;
                 let maxStrike = -Infinity;
 
+                // Helper to split CSV line respecting quotes
+                const splitCSV = (str: string) => {
+                    const result = [];
+                    let current = '';
+                    let inQuote = false;
+                    for (let i = 0; i < str.length; i++) {
+                        const char = str[i];
+                        if (char === '"') {
+                            inQuote = !inQuote;
+                        } else if (char === ',' && !inQuote) {
+                            result.push(current);
+                            current = '';
+                        } else {
+                            current += char;
+                        }
+                    }
+                    result.push(current);
+                    return result;
+                };
+
+                // Helper to clean number string (remove quotes, commas)
+                const parseNumber = (val: string) => {
+                    if (!val) return NaN;
+                    return parseFloat(val.replace(/["',]/g, '').trim());
+                };
+
                 if (isLongFormat) {
                     // Long Format Parsing (Aggregation)
                     const strikeIdx = headers.indexOf('strike');
                     const oiIdx = headers.indexOf('open_interest');
-                    const typeIdx = headers.indexOf('option_type');
+                    const typeIdx = headers.indexOf('option_type') !== -1 ? headers.indexOf('option_type') : headers.indexOf('type');
 
                     const strikeMap: Record<number, { strike: number, calls: number, puts: number }> = {};
 
                     for (let i = 1; i < lines.length; i++) {
                         const line = lines[i].trim();
                         if (!line) continue;
-                        // Handle quoted CSV values? Assuming simple CSV for now based on sample
-                        // Sample has quoted strings but numbers are plain. Split by comma is safe for numbers as long as no commas inside quotes affect the index.
-                        // Sample: ...,"SPX Dec 19, 2025...", ... 
-                        // Split by comma WILL break on column 4 (contract_display_name).
-                        // BUT we only need indices 0, 1, 2.
-                        // As long as Headers are correct (0, 1, 2), we are safe if commas appear later.
-                        // The sample headers are: strike(0), open_interest(1), option_type(2). Safely before any quotes.
 
-                        const cols = line.split(',');
-                        const strike = parseFloat(cols[strikeIdx]);
-                        const oi = parseFloat(cols[oiIdx]);
-                        const type = cols[typeIdx]?.toUpperCase().trim(); // 'CALL' or 'PUT'
+                        const cols = splitCSV(line);
+
+                        // Safety check
+                        if (cols.length < headers.length) continue;
+
+                        const strike = parseNumber(cols[strikeIdx]);
+                        const oi = parseNumber(cols[oiIdx]);
+                        const type = cols[typeIdx]?.toUpperCase().trim().replace(/["']/g, ''); // Clean quotes from type too
 
                         if (isNaN(strike) || isNaN(oi)) continue;
 
@@ -106,11 +129,11 @@ export const OptionAnalysisPanel: React.FC = () => {
                     for (let i = 1; i < lines.length; i++) {
                         const line = lines[i].trim();
                         if (!line) continue;
-                        const cols = line.split(',');
+                        const cols = splitCSV(line);
 
-                        const strike = parseFloat(cols[colMap.strike]);
-                        let calls = colMap.calls !== -1 ? parseFloat(cols[colMap.calls]) : 0;
-                        let puts = colMap.puts !== -1 ? parseFloat(cols[colMap.puts]) : 0;
+                        const strike = parseNumber(cols[colMap.strike]);
+                        let calls = colMap.calls !== -1 ? parseNumber(cols[colMap.calls]) : 0;
+                        let puts = colMap.puts !== -1 ? parseNumber(cols[colMap.puts]) : 0;
 
                         if (isNaN(strike)) continue;
                         if (isNaN(calls)) calls = 0;

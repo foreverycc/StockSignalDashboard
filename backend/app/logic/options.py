@@ -126,17 +126,9 @@ def get_option_data(ticker_symbol: str):
                     pain_values = []
                     
                     if len(strikes) > 0:
-                        for price_point in strikes:
-                            call_loss = np.maximum(0, price_point - strikes) * call_ois
-                            put_loss = np.maximum(0, strikes - price_point) * put_ois
-                            # Multiply by 100 because each contract is 100 shares
-                            total_pain = np.sum(call_loss + put_loss) * 100
-                            
-                            pain_values.append(float(total_pain))
-                            
-                            if total_pain < min_pain_value:
-                                min_pain_value = total_pain
-                                max_pain_strike = price_point
+                        max_pain_strike, pain_values = calculate_max_pain(strikes, call_ois, put_ois)
+                    else:
+                        max_pain_strike, pain_values = None, []
                     
                     # Add pain curve to data
                     merged['pain'] = pain_values
@@ -187,4 +179,108 @@ def get_option_data(ticker_symbol: str):
 
     except Exception as e:
         print(f"Error in get_option_data: {e}")
+        return None
+
+def calculate_max_pain(strikes, calls, puts):
+    """
+    Calculate max pain strike and pain curve.
+    
+    Args:
+        strikes: Array of strike prices
+        calls: Array of call open interest
+        puts: Array of put open interest
+        
+    Returns:
+        tuple: (max_pain_strike, pain_values_list)
+    """
+    if len(strikes) == 0:
+        return None, []
+        
+    min_pain_value = float('inf')
+    max_pain_strike = None
+    pain_values = []
+    
+    for price_point in strikes:
+        # Intrinsic value of calls at this price point (if price < strike, val is 0)
+        # Call holders lose nothing if price < strike (option expires worthless)
+        # Error in logic in previous code?
+        # Standard Max Pain Formula:
+        # For a given expiration price P:
+        # Call Pain (Intrinsic Value) = Max(0, P - Strike) * Open Interest
+        # Put Pain (Intrinsic Value) = Max(0, Strike - P) * Open Interest
+        # The Market Makers want to Minimize this total payout.
+        
+        # Previous logic:
+        # call_loss = np.maximum(0, price_point - strikes) * call_ois
+        # If 'price_point' is the hypothetical stock price at expiration.
+        # Yes, that matches.
+        
+        call_loss = np.maximum(0, price_point - strikes) * calls
+        put_loss = np.maximum(0, strikes - price_point) * puts
+        
+        # Multiply by 100 because each contract is 100 shares
+        total_pain = np.sum(call_loss + put_loss) * 100
+        
+        pain_values.append(float(total_pain))
+        
+        if total_pain < min_pain_value:
+            min_pain_value = total_pain
+            max_pain_strike = price_point
+            
+    return max_pain_strike, pain_values
+
+def process_options_csv(file_path):
+    """
+    Process option data from CSV file.
+    Expects columns: symbol,type,strike,expiration_date,last_price,bid,mid,ask,volume,open_interest,...
+    """
+    try:
+        # Read CSV
+        df = pd.read_csv(file_path)
+        
+        # Clean numeric columns (remove commas)
+        numeric_cols = ['strike', 'last_price', 'bid', 'mid', 'ask', 'volume', 'open_interest']
+        for col in numeric_cols:
+            if col in df.columns and df[col].dtype == 'object':
+                df[col] = df[col].astype(str).str.replace(',', '').apply(pd.to_numeric, errors='coerce').fillna(0)
+                
+        # Normalize types
+        df['type'] = df['type'].str.upper().str.strip()
+        
+        # Filter mostly relevant checks? No, take all.
+        
+        # We need to restructure to standardized format:
+        # List of Check: strike, calls, puts, pain
+        # But separate rows for CALL and PUT in CSV.
+        
+        # Pivot or Group
+        # Create separate DFs
+        calls_df = df[df['type'].str.contains('CALL')].set_index('strike')['open_interest']
+        puts_df = df[df['type'].str.contains('PUT')].set_index('strike')['open_interest']
+        
+        # Align indexes (strikes)
+        # Use outer join concept via pandas
+        merged = pd.DataFrame({'calls': calls_df, 'puts': puts_df}).fillna(0).sort_index()
+        merged.index.name = 'strike'
+        merged = merged.reset_index()
+        
+        # Calculate Max Pain
+        strikes = merged['strike'].values
+        call_ois = merged['calls'].values
+        put_ois = merged['puts'].values
+        
+        max_pain, pain_values = calculate_max_pain(strikes, call_ois, put_ois)
+        
+        merged['pain'] = pain_values
+        
+        # Convert to records
+        data = merged.to_dict(orient='records')
+        
+        return {
+            "data": data,
+            "max_pain": max_pain
+        }
+        
+    except Exception as e:
+        print(f"Error processing CSV {file_path}: {e}")
         return None
