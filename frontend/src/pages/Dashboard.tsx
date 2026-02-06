@@ -19,7 +19,7 @@ interface DashboardProps {
 }
 
 // Wrapper component to handle individual chart data fetching
-const DetailedChartRow = ({ row, activeSubTab: _activeSubTab }: { row: any, activeSubTab: string }) => {
+export const DetailedChartRow = ({ row, activeSubTab: _activeSubTab }: { row: any, activeSubTab: string }) => {
     const [selectedInterval, setSelectedInterval] = React.useState(row.interval);
 
     // Reset selected interval when switching rows
@@ -59,7 +59,7 @@ const DetailedChartRow = ({ row, activeSubTab: _activeSubTab }: { row: any, acti
     );
 };
 
-const InteractiveOptionChart = ({ ticker }: { ticker: string }) => {
+export const InteractiveOptionChart = ({ ticker }: { ticker: string }) => {
     const [priceRange, setPriceRange] = useState<{ min: number, max: number } | undefined>(undefined);
 
     // Reset range when ticker changes
@@ -363,7 +363,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
 
                 {activeTab === 'summary' ? (
-                    <SummaryPanel runId={currentRun?.id} />
+                    <SummaryPanel
+                        runId={currentRun?.id}
+                        onRowClick={(row, type) => {
+                            setActiveTab(type === 'bull' ? 'cd' : 'mc');
+                            setActiveSubTab('best_intervals_50'); // Summary uses 50-period data
+                            setSelectedRow(row);
+                        }}
+                    />
                 ) : activeTab === 'option' ? (
                     <OptionAnalysisPanel />
                 ) : (
