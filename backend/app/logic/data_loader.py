@@ -77,7 +77,7 @@ def download_stock_data(ticker, end_date=None):
     try:
         # Get 1-hour data for medium timeframes
         # data_ticker['1h'] = stock.history(interval='60m', period='3mo')
-        data_ticker['1h'] = stock.history(interval='60m', period='1y')
+        data_ticker['1h'] = stock.history(interval='60m', period='2y')
         if not data_ticker['1h'].empty:
             print(f"Downloaded 1h data for {ticker}")
         else:

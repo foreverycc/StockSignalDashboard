@@ -312,12 +312,55 @@ def analyze_stocks(file_path, end_date=None, progress_callback=None):
 
         logger.info(f"Aggregated {len(cd_eval_results)} CD evaluation results and {len(mc_eval_results)} MC evaluation results")
         
+        # --- NEW: Fetch SPX Index Data for Market Breadth ---
+        try:
+            logger.info("Fetching SPX index data...")
+            spx_ticker = "^SPX"
+            spx_data = download_stock_data(spx_ticker, end_date=end_date)
+            for interval, df in spx_data.items():
+                if not df.empty:
+                    save_price_history(spx_ticker, interval, df)
+            logger.info("SPX index data saved.")
+        except Exception as e:
+            logger.error(f"Failed to fetch SPX data: {e}")
+
+        # --- NEW: Aggregate Market Breadth (Signal Counts) ---
+        def aggregate_signals(df, metric_name):
+            if df is None or df.empty:
+                return []
+            
+            try:
+                # Ensure date column exists
+                if 'date' not in df.columns:
+                    return []
+                
+                # Count unique tickers per day
+                # df['date'] is already date object or string? identify_... returns date objects
+                daily_counts = df.groupby('date')['ticker'].nunique().reset_index()
+                daily_counts.columns = ['date', 'count']
+                
+                # Sort by date
+                daily_counts = daily_counts.sort_values('date')
+                
+                # Convert date to string for JSON serialization
+                daily_counts['date'] = daily_counts['date'].astype(str)
+                
+                return daily_counts.to_dict(orient='records')
+            except Exception as e:
+                logger.error(f"Error aggregating {metric_name}: {e}")
+                return []
+
         # 1. Save 1234 results and identify breakout candidates
         print("Saving 1234 breakout results...")
         save_analysis_result(run_id, "ALL", "ALL", 'cd_breakout_candidates_details_1234', cd_results_1234)
         df_breakout_1234 = identify_1234(cd_results_1234, all_ticker_data)
         if not df_breakout_1234.empty:
             save_analysis_result(run_id, "ALL", "ALL", 'cd_breakout_candidates_summary_1234', df_breakout_1234.to_dict(orient='records'))
+            
+            # Aggregate Breadth for CD 1234
+            breadth_cd_1234 = aggregate_signals(df_breakout_1234, 'CD 1234')
+            if breadth_cd_1234:
+                save_analysis_result(run_id, "ALL", "ALL", 'cd_market_breadth_1234', breadth_cd_1234)
         
         # 2. Save 5230 results and identify breakout candidates
         print("Saving 5230 breakout results...")
@@ -326,12 +369,22 @@ def analyze_stocks(file_path, end_date=None, progress_callback=None):
         if not df_breakout_5230.empty:
             save_analysis_result(run_id, "ALL", "ALL", 'cd_breakout_candidates_summary_5230', df_breakout_5230.to_dict(orient='records'))
 
+            # Aggregate Breadth for CD 5230
+            breadth_cd_5230 = aggregate_signals(df_breakout_5230, 'CD 5230')
+            if breadth_cd_5230:
+                save_analysis_result(run_id, "ALL", "ALL", 'cd_market_breadth_5230', breadth_cd_5230)
+
         # 3. Save MC 1234 results and identify breakout candidates
         logger.info("Saving MC 1234 breakout results...")
         save_analysis_result(run_id, "ALL", "ALL", 'mc_breakout_candidates_details_1234', mc_results_1234)
         df_mc_breakout_1234 = identify_mc_1234(mc_results_1234, all_ticker_data)
         if not df_mc_breakout_1234.empty:
             save_analysis_result(run_id, "ALL", "ALL", 'mc_breakout_candidates_summary_1234', df_mc_breakout_1234.to_dict(orient='records'))
+
+            # Aggregate Breadth for MC 1234
+            breadth_mc_1234 = aggregate_signals(df_mc_breakout_1234, 'MC 1234')
+            if breadth_mc_1234:
+                save_analysis_result(run_id, "ALL", "ALL", 'mc_market_breadth_1234', breadth_mc_1234)
         
         # 4. Save MC 5230 results and identify breakout candidates
         logger.info("Saving MC 5230 breakout results...")
@@ -339,6 +392,11 @@ def analyze_stocks(file_path, end_date=None, progress_callback=None):
         df_mc_breakout_5230 = identify_mc_5230(mc_results_5230, all_ticker_data)
         if not df_mc_breakout_5230.empty:
             save_analysis_result(run_id, "ALL", "ALL", 'mc_breakout_candidates_summary_5230', df_mc_breakout_5230.to_dict(orient='records'))
+
+            # Aggregate Breadth for MC 5230
+            breadth_mc_5230 = aggregate_signals(df_mc_breakout_5230, 'MC 5230')
+            if breadth_mc_5230:
+                save_analysis_result(run_id, "ALL", "ALL", 'mc_market_breadth_5230', breadth_mc_5230)
 
         # 5. Save CD evaluation results
         logger.info("Saving CD evaluation results...")

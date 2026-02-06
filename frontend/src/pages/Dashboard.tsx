@@ -8,6 +8,7 @@ import { CandleChart } from '../components/CandleChart';
 import { OptionOIChart } from '../components/OptionOIChart';
 import { OptionAnalysisPanel } from '../components/OptionAnalysisPanel';
 import { LogViewer } from '../components/LogViewer';
+import { SummaryPanel } from '../components/SummaryPanel';
 import { cn } from '../utils/cn';
 
 interface DashboardProps {
@@ -81,7 +82,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setShowLogs,
     dateRange
 }) => {
-    const [activeTab, setActiveTab] = useState<'cd' | 'mc' | 'option'>('cd');
+    const [activeTab, setActiveTab] = useState<'summary' | 'cd' | 'mc' | 'option'>('summary');
     const [activeSubTab, setActiveSubTab] = useState<string>('best_intervals_50');
     const [selectedRow, setSelectedRow] = useState<any>(null);
     const [searchQuery, setSearchQuery] = useState('');
@@ -312,6 +313,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 {/* Tabs */}
                 <div className="flex border-b border-border overflow-x-auto scrollbar-hide">
                     <button
+                        onClick={() => setActiveTab('summary')}
+                        className={cn(
+                            "px-4 md:px-6 py-3 text-sm font-medium transition-colors relative whitespace-nowrap",
+                            activeTab === 'summary'
+                                ? "text-primary"
+                                : "text-muted-foreground hover:text-foreground"
+                        )}
+                    >
+                        Summary
+                        {activeTab === 'summary' && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-primary" />}
+                    </button>
+                    <button
                         onClick={() => setActiveTab('cd')}
                         className={cn(
                             "px-4 md:px-6 py-3 text-sm font-medium transition-colors relative whitespace-nowrap",
@@ -349,7 +362,9 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </button>
                 </div>
 
-                {activeTab === 'option' ? (
+                {activeTab === 'summary' ? (
+                    <SummaryPanel runId={currentRun?.id} />
+                ) : activeTab === 'option' ? (
                     <OptionAnalysisPanel />
                 ) : (
                     <>
