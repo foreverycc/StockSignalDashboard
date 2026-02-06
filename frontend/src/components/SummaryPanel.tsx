@@ -135,22 +135,7 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
     // --- Helpers ---
     const formatPercent = (val: number) => `${val.toFixed(1)}%`;
 
-    const ChartView = ({ row }: { row: any }) => (
-        <div className="flex flex-col border rounded-lg bg-card overflow-hidden h-[400px]">
-            <div className="p-2 border-b bg-muted/30 flex justify-between items-center">
-                <span className="font-medium pl-2">Analysis: {row.ticker}</span>
-                <button
-                    onClick={() => { setSelectedRow(null); setSelectedType(null); }}
-                    className="px-2 py-1 text-xs hover:bg-muted rounded border border-transparent hover:border-border"
-                >
-                    Close
-                </button>
-            </div>
-            <div className="p-2 flex-1 min-h-0 overflow-y-auto">
-                <DetailedChartRow row={row} activeSubTab="summary" />
-            </div>
-        </div>
-    );
+
 
     const TopTable = ({ data, title, type, onRowClick }: {
         data: any[],
