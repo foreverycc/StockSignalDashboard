@@ -339,6 +339,31 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
         return 'MM-dd';
     }, [visibleData]);
 
+    // Calculate Y-Axis Domain with padding
+    const yDomain = useMemo(() => {
+        if (visibleData.length === 0) return ['auto', 'auto'];
+
+        // Consider both candle prices and EMA lines for domain calculation
+        let min = Infinity;
+        let max = -Infinity;
+
+        visibleData.forEach(d => {
+            if (d.low < min) min = d.low;
+            if (d.high > max) max = d.high;
+            // Include EMAs if valid
+            if (d.ema_13) { if (d.ema_13 < min) min = d.ema_13; if (d.ema_13 > max) max = d.ema_13; }
+            if (d.ema_144) { if (d.ema_144 < min) min = d.ema_144; if (d.ema_144 > max) max = d.ema_144; }
+        });
+
+        if (min === Infinity || max === -Infinity) return ['auto', 'auto'];
+
+        const padding = (max - min) * 0.2; // 20% padding
+        // If flat line, add minimal padding
+        const finalPadding = padding === 0 ? max * 0.05 : padding;
+
+        return [min - finalPadding, max + finalPadding];
+    }, [visibleData]);
+
     if (!allData || allData.length === 0) {
         return <div className="h-full flex items-center justify-center text-muted-foreground bg-muted/10 rounded border border-dashed border-border p-4">No price data available</div>;
     }
@@ -409,11 +434,12 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
                         />
 
                         <YAxis
-                            domain={['auto', 'auto']}
+                            domain={yDomain}
                             stroke="hsl(var(--muted-foreground))"
                             tick={{ fontSize: 11 }}
                             tickFormatter={(val: number) => formatNumberShort(val)}
                             scale="linear"
+                            allowDataOverflow={true} // Allow overflow to respect domain
                             label={{ value: 'Price', angle: -90, position: 'insideLeft', style: { textAnchor: 'middle' }, fill: 'hsl(var(--muted-foreground))', fontSize: 11 }}
                         />
 
