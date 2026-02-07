@@ -92,16 +92,18 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
         staleTime: 1000 * 60 * 60, // 1 hour
     });
 
+    // 1b. QQQ Data
+    const { data: qqqHistory } = useQuery({
+        queryKey: ['priceHistory', 'QQQ', '1d'],
+        queryFn: () => analysisApi.getPriceHistory('QQQ', '1d'),
+        staleTime: 1000 * 60 * 60, // 1 hour
+    });
+
     // 2. Market Breadth Data
-    // We fetch all 4 types
+    // We fetch 2 types
     const { data: breadthCD1234 } = useQuery({
         queryKey: ['breadth', runId, 'cd_market_breadth_1234'],
         queryFn: () => runId ? analysisApi.getResult(runId, 'cd_market_breadth_1234') : null,
-        enabled: !!runId
-    });
-    const { data: breadthCD5230 } = useQuery({
-        queryKey: ['breadth', runId, 'cd_market_breadth_5230'],
-        queryFn: () => runId ? analysisApi.getResult(runId, 'cd_market_breadth_5230') : null,
         enabled: !!runId
     });
     const { data: breadthMC1234 } = useQuery({
@@ -109,13 +111,8 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
         queryFn: () => runId ? analysisApi.getResult(runId, 'mc_market_breadth_1234') : null,
         enabled: !!runId
     });
-    const { data: breadthMC5230 } = useQuery({
-        queryKey: ['breadth', runId, 'mc_market_breadth_5230'],
-        queryFn: () => runId ? analysisApi.getResult(runId, 'mc_market_breadth_5230') : null,
-        enabled: !!runId
-    });
 
-    // 3. High Return Opportunities (Best Intervals 50)
+    // 3. Best Opportunities
     // Fetching just 50 period range for summary
     const { data: bestCD } = useQuery({
         queryKey: ['best', runId, 'cd_eval_best_intervals_50'],
@@ -130,7 +127,6 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
 
     // Date Filters
     const oneYearAgo = useMemo(() => subYears(new Date(), 1), []);
-    const oneMonthAgo = useMemo(() => subMonths(new Date(), 1), []);
 
     // --- Helpers ---
     const formatPercent = (val: number) => `${val.toFixed(1)}%`;
@@ -216,47 +212,23 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
     return (
         <div className="p-4 md:p-6 h-full overflow-y-auto space-y-6">
 
-            {/* Market Breadth Charts */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+            {/* Market Breadth Overview (Combined) */}
+            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full">
                 <MarketBreadthChart
-                    title="Market Breadth: CD 1234 Buy Signals vs SPX"
+                    title="SPX & Market Breadth"
                     spxData={spxHistory ?? []}
-                    breadthData={breadthCD1234 ?? []}
-                    breadthLabel="New Buy Signals"
-                    color="#22c55e" // Green
+                    cdBreadth={breadthCD1234 ?? []}
+                    mcBreadth={breadthMC1234 ?? []}
                     minDate={oneYearAgo}
                 />
                 <MarketBreadthChart
-                    title="Market Breadth: MC 1234 Sell Signals vs SPX"
-                    spxData={spxHistory ?? []}
-                    breadthData={breadthMC1234 ?? []}
-                    breadthLabel="New Sell Signals"
-                    color="#ef4444" // Red
+                    title="QQQ & Market Breadth"
+                    spxData={qqqHistory ?? []}
+                    cdBreadth={breadthCD1234 ?? []}
+                    mcBreadth={breadthMC1234 ?? []}
                     minDate={oneYearAgo}
                 />
             </div>
-
-            {/* Secondary Breadth (Collapsible or just below? Let's fit them below if data exists) */}
-            {((breadthCD5230?.length ?? 0) > 0 || (breadthMC5230?.length ?? 0) > 0) && (
-                <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 opacity-80">
-                    <MarketBreadthChart
-                        title="Market Breadth: CD 5230 Buy Signals vs SPX"
-                        spxData={spxHistory ?? []}
-                        breadthData={breadthCD5230 ?? []}
-                        breadthLabel="New Buy Signals"
-                        color="#10b981" // Emerald
-                        minDate={oneMonthAgo}
-                    />
-                    <MarketBreadthChart
-                        title="Market Breadth: MC 5230 Sell Signals vs SPX"
-                        spxData={spxHistory ?? []}
-                        breadthData={breadthMC5230 ?? []}
-                        breadthLabel="New Sell Signals"
-                        color="#f43f5e" // Rose
-                        minDate={oneMonthAgo}
-                    />
-                </div>
-            )}
 
             <div className="border-t border-border pt-6"></div>
 
