@@ -1,50 +1,82 @@
 import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import {
     ComposedChart,
-    Line,
     Bar,
     XAxis,
     YAxis,
     CartesianGrid,
     Tooltip,
-    Legend,
+
     ResponsiveContainer,
     ReferenceArea
 } from 'recharts';
 import { format } from 'date-fns';
+import { formatNumberShort } from '../utils/chartUtils';
 
 interface BreadthDataPoint {
     date: string;
     count: number;
 }
 
-interface PriceDataPoint {
-    time: string;
-    close: number;
-}
+const CandleShape = (props: any) => {
+    const { x, y, width, height } = props;
+    const { payload } = props;
+    if (!payload || !payload.open || !payload.close || !payload.high || !payload.low) return null;
+
+    const { open: openVal, close: closeVal, high: highVal, low: lowVal } = payload;
+
+    const isUp = closeVal >= openVal;
+    const color = isUp ? '#22c55e' : '#ef4444';
+
+    const range = highVal - lowVal;
+    const scale = range === 0 ? 0 : height / range;
+
+    const openOffset = (highVal - openVal) * scale;
+    const closeOffset = (highVal - closeVal) * scale;
+
+    const bodyTop = Math.min(openOffset, closeOffset);
+    const bodyHeight = Math.max(1, Math.abs(openOffset - closeOffset));
+
+    const wickX = x + width / 2;
+
+    return (
+        <g>
+            <line x1={wickX} y1={y} x2={wickX} y2={y + height} stroke={color} strokeWidth={1} />
+            <rect
+                x={x}
+                y={y + bodyTop}
+                width={width}
+                height={bodyHeight}
+                fill={color}
+                stroke={color}
+            />
+        </g>
+    );
+};
 
 interface MarketBreadthChartProps {
     title: string;
-    spxData: PriceDataPoint[];
-    breadthData: BreadthDataPoint[];
-    breadthLabel: string;
-    color?: string;
+    spxData: any[];
+    cdBreadth?: BreadthDataPoint[];
+    mcBreadth?: BreadthDataPoint[];
     minDate?: Date;
 }
 
 export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
     title,
     spxData,
-    breadthData,
-    breadthLabel,
-    color = "#8884d8",
+    cdBreadth = [],
+    mcBreadth = [],
     minDate
 }) => {
     // --- Zoom State & Logic (Adapted from CandleChart) ---
     const [zoomState, setZoomState] = useState<{ start: number, end: number } | null>(null);
     const [selection, setSelection] = useState<{ start: number, end: number } | null>(null);
     const isSelectingRef = useRef(false);
-    const chartContainerRef = useRef<HTMLDivElement>(null);
+
+    // We only need one ref to track mouse movement for all synchronized charts
+    // But we need to attach listeners to a wrapper
+    const wrapperRef = useRef<HTMLDivElement>(null);
 
     // Merge data by date
     const mergedData = useMemo(() => {
@@ -56,16 +88,26 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
             if (!dataMap.has(dateStr)) {
                 dataMap.set(dateStr, { date: dateStr });
             }
-            dataMap.get(dateStr).spx = p.close;
+            const d = dataMap.get(dateStr);
+            d.open = p.open;
+            d.high = p.high;
+            d.low = p.low;
+            d.close = p.close;
+            d.spxVolume = p.volume;
         });
 
-        // Process Breadth Data
-        breadthData.forEach(b => {
+        // Process CD Breadth
+        cdBreadth.forEach(b => {
             const dateStr = b.date;
-            if (!dataMap.has(dateStr)) {
-                dataMap.set(dateStr, { date: dateStr });
-            }
-            dataMap.get(dateStr).count = b.count;
+            if (!dataMap.has(dateStr)) dataMap.set(dateStr, { date: dateStr });
+            dataMap.get(dateStr).cdCount = b.count;
+        });
+
+        // Process MC Breadth
+        mcBreadth.forEach(b => {
+            const dateStr = b.date;
+            if (!dataMap.has(dateStr)) dataMap.set(dateStr, { date: dateStr });
+            dataMap.get(dateStr).mcCount = b.count;
         });
 
         // Convert to array and sort
@@ -77,11 +119,11 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
             result = result.filter(d => d.date >= minStr);
         }
 
-        // Filter out days without SPX data (Market Closed/Weekends)
-        result = result.filter(d => d.spx !== undefined);
+        // Filter to generally available days (mostly SPX days) for cleaner chart
+        result = result.filter(d => d.close !== undefined);
 
         return result;
-    }, [spxData, breadthData, minDate]);
+    }, [spxData, cdBreadth, mcBreadth, minDate]);
 
     // Visible slice
     const visibleData = useMemo(() => {
@@ -93,12 +135,11 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
 
     // Helpers
     const getChartArea = (container: HTMLElement) => {
-        // Approximate for mouse tracking. The ComposedChart has internal margins.
-        // We'll use width based logic.
         const width = container.clientWidth;
-        // Recharts default margins or custom? We didn't set margins explicitly in Render but ComposedChart has defaults.
-        // Let's assume full width mapping for simplicity or consistent small margins
-        const chartWidth = width - 20; // approximate
+        // Approximation: Recharts uses responsive width.
+        // We assume generic margins for calculation: left 0, right 50-ish?
+        // Actually we need to be careful. Let's assume standard full width for index calculation.
+        const chartWidth = width - 20;
         if (chartWidth <= 0) return null;
         return { width: chartWidth, left: 10 };
     };
@@ -121,11 +162,26 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
     };
 
     const handleMouseMove = useCallback((e: MouseEvent) => {
-        if (!isSelectingRef.current || !chartContainerRef.current) return;
-        const chartArea = getChartArea(chartContainerRef.current);
-        if (!chartArea) return;
-        const count = visibleData.length;
-        const moveIndex = pixelToIndex(e.offsetX, chartArea, count);
+        if (!isSelectingRef.current || !wrapperRef.current) return;
+        // Use wrapper width estimation or the target element?
+        // Ideally we track the element that fired mousedown, but all charts share width.
+        // We can just use the wrapper's first child dimensions if uniform.
+        // Simply reusing logic on the event target if it's within our wrapper is okay.
+
+        // Simpler: assume the mouse X relative to the wrapper is consistent for all stacked charts.
+        const rect = wrapperRef.current.getBoundingClientRect();
+        const offsetX = e.clientX - rect.left;
+        const width = rect.width;
+
+        // Margins need to match chart margins. Recharts usually has some side padding.
+        // Let's assume 10px padding for now.
+        const chartWidth = width - 20;
+        const left = 10;
+
+        const relativeX = offsetX - left;
+        const fraction = relativeX / chartWidth;
+        const moveIndex = Math.max(0, Math.min(visibleData.length - 1, Math.floor(fraction * visibleData.length)));
+
         setSelection(prev => prev ? { ...prev, end: moveIndex } : null);
     }, [visibleData.length]);
 
@@ -169,7 +225,7 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
 
     // Global listeners
     useEffect(() => {
-        if (chartContainerRef.current) {
+        if (wrapperRef.current) {
             window.addEventListener('mousemove', handleMouseMove);
             window.addEventListener('mouseup', handleMouseUp);
         }
@@ -183,13 +239,47 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
     if (mergedData.length === 0) {
         return (
             <div className="h-64 flex items-center justify-center border rounded-lg bg-card/50 text-muted-foreground">
-                No data available for {title}
+                No data available
             </div>
         );
     }
 
+    const commonXAxis = (hide: boolean = true) => (
+        <XAxis
+            dataKey="date"
+            tickFormatter={(str) => str.substring(5)}
+            minTickGap={30}
+            axisLine={!hide}
+            tickLine={!hide}
+            hide={hide}
+        />
+    );
+
+    // Calculate Y Domains
+    const spxMin = Math.min(...visibleData.map(d => d.low - 0.1 || Infinity)); // small buffer if undefined?
+    const spxMax = Math.max(...visibleData.map(d => d.high + 0.1 || -Infinity));
+
+    // Safety check
+    const validMin = spxMin === Infinity ? 0 : spxMin;
+    const validMax = spxMax === -Infinity ? 100 : spxMax;
+
+    const spxPadding = (validMax - validMin) * 0.2; // 20% padding
+    const spxDomain = [validMin - spxPadding, validMax + spxPadding];
+
+    const ReferenceBlock = () => (
+        selection && visibleData[Math.min(selection.start, selection.end)] && visibleData[Math.max(selection.start, selection.end)] ? (
+            <ReferenceArea
+                x1={visibleData[Math.min(selection.start, selection.end)].date}
+                x2={visibleData[Math.max(selection.start, selection.end)].date}
+                strokeOpacity={0}
+                fill="hsl(var(--primary))"
+                fillOpacity={0.1}
+            />
+        ) : <></>
+    );
+
     return (
-        <div className="flex flex-col h-[400px] border rounded-lg bg-card p-4">
+        <div className="flex flex-col h-[600px] border rounded-lg bg-card p-4">
             <div className="flex justify-between items-center mb-2">
                 <h3 className="text-lg font-semibold text-foreground">{title}</h3>
                 <button
@@ -199,78 +289,96 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
                     Reset Zoom
                 </button>
             </div>
+
             <div
-                ref={chartContainerRef}
-                className="flex-1 min-h-0 select-none"
-                onMouseDown={handleMouseDown}
+                ref={wrapperRef}
+                className="flex-1 flex flex-col min-h-0 select-none pb-2"
                 onWheel={handleWheel}
+                onMouseDown={handleMouseDown}
             >
-                <ResponsiveContainer width="100%" height="100%">
-                    <ComposedChart data={visibleData} margin={{ left: 10, right: 10 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#333" vertical={false} />
-                        <XAxis
-                            dataKey="date"
-                            tickFormatter={(str) => str.substring(5)}
-                            minTickGap={30}
-                            axisLine={false}
-                            tickLine={false}
-                        />
-                        <YAxis
-                            yAxisId="left"
-                            orientation="left"
-                            stroke={color}
-                            axisLine={false}
-                            tickLine={false}
-                            label={{ value: 'Signal Count', angle: -90, position: 'insideLeft', fill: color }}
-                        />
-                        <YAxis
-                            yAxisId="right"
-                            orientation="right"
-                            stroke="#82ca9d"
-                            domain={['auto', 'auto']}
-                            axisLine={false}
-                            tickLine={false}
-                            label={{ value: 'SPX', angle: 90, position: 'insideRight', fill: '#82ca9d' }}
-                            width={50}
-                        />
-                        <Tooltip
-                            contentStyle={{ backgroundColor: 'hsl(var(--background))', borderColor: 'hsl(var(--border))' }}
-                            labelStyle={{ color: 'hsl(var(--foreground))' }}
-                            labelFormatter={(label) => label}
-                        />
-                        <Legend wrapperStyle={{ paddingTop: '10px' }} />
-
-                        <Bar
-                            yAxisId="left"
-                            dataKey="count"
-                            name={breadthLabel}
-                            fill={color}
-                            barSize={20}
-                            radius={[4, 4, 0, 0]}
-                            opacity={0.8}
-                        />
-                        <Line
-                            yAxisId="right"
-                            type="monotone"
-                            dataKey="spx"
-                            name="SPX Index"
-                            stroke="#82ca9d"
-                            dot={false}
-                            strokeWidth={2}
-                        />
-
-                        {selection && visibleData[Math.min(selection.start, selection.end)] && visibleData[Math.max(selection.start, selection.end)] && (
-                            <ReferenceArea
-                                yAxisId="left"
-                                x1={visibleData[Math.min(selection.start, selection.end)].date}
-                                x2={visibleData[Math.max(selection.start, selection.end)].date}
-                                strokeOpacity={0}
-                                fill="hsl(var(--primary))"
-                                fillOpacity={0.1}
+                {/* 1. Price History (Candle) */}
+                <div className="flex-[2] min-h-0 border-b border-border/50">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                            {commonXAxis(true)}
+                            <YAxis
+                                orientation="right"
+                                domain={spxDomain}
+                                tickFormatter={(val) => val.toFixed(0)}
+                                width={50}
+                                tick={{ fontSize: 11 }}
+                                label={{ value: 'Price', angle: 90, position: 'insideRight', fill: '#8884d8', fontSize: 10 }}
                             />
-                        )}
-                    </ComposedChart>
-                </ResponsiveContainer>
+                            <Tooltip content={<></>} />
+                            <Bar
+                                dataKey={d => [d.low, d.high]}
+                                shape={<CandleShape />}
+                                isAnimationActive={false}
+                                name="Price"
+                            />
+                            <ReferenceBlock />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* 2. SPX Volume */}
+                <div className="flex-1 min-h-0 border-b border-border/50">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                            {commonXAxis(true)}
+                            <YAxis
+                                orientation="right"
+                                tickFormatter={(val) => formatNumberShort(val)}
+                                width={50}
+                                tick={{ fontSize: 11 }}
+                                label={{ value: 'Vol', angle: 90, position: 'insideRight', fill: '#82ca9d', fontSize: 10 }}
+                            />
+                            <Tooltip content={<></>} />
+                            <Bar dataKey="spxVolume" fill="#82ca9d" opacity={0.6} name="Volume" />
+                            <ReferenceBlock />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* 3. CD Counts */}
+                <div className="flex-1 min-h-0 border-b border-border/50">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                            {commonXAxis(true)}
+                            <YAxis
+                                orientation="right"
+                                width={50}
+                                tick={{ fontSize: 11 }}
+                                label={{ value: 'Buy', angle: 90, position: 'insideRight', fill: '#22c55e', fontSize: 10 }}
+                            />
+                            <Tooltip content={<></>} />
+                            <Bar dataKey="cdCount" fill="#22c55e" name="Buy Signals" />
+                            <ReferenceBlock />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
+
+                {/* 4. MC Counts */}
+                <div className="flex-1 min-h-0">
+                    <ResponsiveContainer width="100%" height="100%">
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                            {commonXAxis(false)}
+                            <YAxis
+                                orientation="right"
+                                width={50}
+                                tick={{ fontSize: 11 }}
+                                label={{ value: 'Sell', angle: 90, position: 'insideRight', fill: '#ef4444', fontSize: 10 }}
+                            />
+                            <Tooltip labelStyle={{ color: 'black' }} />
+                            <Bar dataKey="mcCount" fill="#ef4444" name="Sell Signals" />
+                            <ReferenceBlock />
+                        </ComposedChart>
+                    </ResponsiveContainer>
+                </div>
             </div>
         </div>
     );
