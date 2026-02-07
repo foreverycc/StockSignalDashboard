@@ -70,6 +70,7 @@ export const analysisApi = {
         const response = await api.get<AnalysisRun[]>('/analysis/runs');
         return response.data;
     },
+    updateIndices: () => fetch(`${API_BASE_URL}/analysis/update-indices`, { method: 'POST' }).then(res => res.json()),
     getResult: async (runId: number, resultType: string, ticker?: string) => {
         const response = await api.get<any[]>(`/analysis/runs/${runId}/results/${resultType}`, {
             params: { ticker }

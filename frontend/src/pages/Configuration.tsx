@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { stocksApi } from '../services/api';
+import { stocksApi, analysisApi } from '../services/api';
 import { Save, Trash2, Plus, RefreshCw, FileText } from 'lucide-react';
 import { cn } from '../utils/cn';
 
@@ -70,6 +70,19 @@ export const Configuration: React.FC = () => {
         onError: (error) => alert(`Error deleting: ${error}`)
     });
 
+    const updateIndicesMutation = useMutation({
+        mutationFn: analysisApi.updateIndices,
+        onSuccess: (data) => {
+            if (data.status === 'success') {
+                alert('Indices updated successfully!\n' + (data.output || ''));
+                queryClient.invalidateQueries({ queryKey: ['stockFiles'] });
+            } else {
+                alert('Failed to update indices: ' + data.message);
+            }
+        },
+        onError: (error) => alert(`Error triggering update: ${error}`)
+    });
+
     const handleSave = () => {
         if (selectedFile) {
             saveMutation.mutate({ filename: selectedFile, content: fileContent });
@@ -95,40 +108,58 @@ export const Configuration: React.FC = () => {
             </div>
 
             <div className="grid grid-cols-12 gap-8">
-                {/* File List */}
-                <div className="col-span-4 bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col h-[600px]">
-                    <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center">
-                        <h3 className="font-semibold flex items-center gap-2">
-                            <FileText className="w-4 h-4" /> Stock Lists
-                        </h3>
-                        <button
-                            onClick={() => setIsCreating(!isCreating)}
-                            className="p-1 hover:bg-muted rounded-md transition-colors"
-                            title="Create New"
-                        >
-                            <Plus className="w-5 h-5 text-primary" />
-                        </button>
+                {/* Left Column */}
+                <div className="col-span-4 flex flex-col gap-6 h-[600px]">
+                    {/* File List */}
+                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden flex flex-col flex-1 min-h-0">
+                        <div className="p-4 border-b border-border bg-muted/30 flex justify-between items-center">
+                            <h3 className="font-semibold flex items-center gap-2">
+                                <FileText className="w-4 h-4" /> Stock Lists
+                            </h3>
+                            <button
+                                onClick={() => setIsCreating(!isCreating)}
+                                className="p-1 hover:bg-muted rounded-md transition-colors"
+                                title="Create New"
+                            >
+                                <Plus className="w-5 h-5 text-primary" />
+                            </button>
+                        </div>
+
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                            {isLoadingFiles ? (
+                                <div className="p-4 text-center text-muted-foreground">Loading...</div>
+                            ) : (
+                                files?.map(file => (
+                                    <button
+                                        key={file}
+                                        onClick={() => { setSelectedFile(file); setIsCreating(false); }}
+                                        className={cn(
+                                            "w-full text-left px-4 py-3 rounded-lg text-sm transition-colors flex items-center justify-between group",
+                                            selectedFile === file
+                                                ? "bg-primary/10 text-primary font-medium"
+                                                : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                                        )}
+                                    >
+                                        {file}
+                                    </button>
+                                ))
+                            )}
+                        </div>
                     </div>
 
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                        {isLoadingFiles ? (
-                            <div className="p-4 text-center text-muted-foreground">Loading...</div>
-                        ) : (
-                            files?.map(file => (
-                                <button
-                                    key={file}
-                                    onClick={() => { setSelectedFile(file); setIsCreating(false); }}
-                                    className={cn(
-                                        "w-full text-left px-4 py-3 rounded-lg text-sm transition-colors flex items-center justify-between group",
-                                        selectedFile === file
-                                            ? "bg-primary/10 text-primary font-medium"
-                                            : "hover:bg-muted text-muted-foreground hover:text-foreground"
-                                    )}
-                                >
-                                    {file}
-                                </button>
-                            ))
-                        )}
+                    {/* System Maintenance */}
+                    <div className="bg-card rounded-xl border border-border shadow-sm overflow-hidden p-4">
+                        <h3 className="font-semibold mb-4 flex items-center gap-2">
+                            <RefreshCw className="w-4 h-4" /> System Maintenance
+                        </h3>
+                        <button
+                            onClick={() => updateIndicesMutation.mutate()}
+                            disabled={updateIndicesMutation.isPending}
+                            className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-all font-medium disabled:opacity-50"
+                        >
+                            <RefreshCw className={cn("w-4 h-4", updateIndicesMutation.isPending ? "animate-spin" : "")} />
+                            {updateIndicesMutation.isPending ? 'Updating...' : 'Update Indices (SP500, NDX100, R2000)'}
+                        </button>
                     </div>
                 </div>
 

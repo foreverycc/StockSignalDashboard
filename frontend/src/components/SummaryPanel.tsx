@@ -99,6 +99,13 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
         staleTime: 1000 * 60 * 60, // 1 hour
     });
 
+    // 1c. RUT Data
+    const { data: rutHistory } = useQuery({
+        queryKey: ['priceHistory', '^RUT', '1d'],
+        queryFn: () => analysisApi.getPriceHistory('^RUT', '1d'),
+        staleTime: 1000 * 60 * 60, // 1 hour
+    });
+
     // 2. Market Breadth Data
     // We fetch 2 types
     const { data: breadthCD1234 } = useQuery({
@@ -213,7 +220,7 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
         <div className="p-4 md:p-6 h-full overflow-y-auto space-y-6">
 
             {/* Market Breadth Overview (Combined) */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 w-full">
+            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 w-full">
                 <MarketBreadthChart
                     title="SPX & Market Breadth"
                     spxData={spxHistory ?? []}
@@ -224,6 +231,13 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
                 <MarketBreadthChart
                     title="QQQ & Market Breadth"
                     spxData={qqqHistory ?? []}
+                    cdBreadth={breadthCD1234 ?? []}
+                    mcBreadth={breadthMC1234 ?? []}
+                    minDate={oneYearAgo}
+                />
+                <MarketBreadthChart
+                    title="Russell 2000 & Market Breadth"
+                    spxData={rutHistory ?? []}
                     cdBreadth={breadthCD1234 ?? []}
                     mcBreadth={breadthMC1234 ?? []}
                     minDate={oneYearAgo}

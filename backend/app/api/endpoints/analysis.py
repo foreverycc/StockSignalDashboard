@@ -22,6 +22,45 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+import subprocess
+import sys
+
+@router.post("/update-indices")
+async def update_indices():
+    """Run the script to update SP500 and Nasdaq 100 indices."""
+    try:
+        # Assuming the script is in backend/scripts/fetch_indices.py
+        # and we are running from the project root or backend root.
+        # Let's use absolute path or relative from where uvicorn runs.
+        # Usually uvicorn runs from backend/ or project root.
+        # Safest is to find relative to this file? Or just assume standard layout.
+        
+        # We are in backend/app/api/endpoints/analysis.py
+        # script is in backend/scripts/fetch_indices.py
+        # cmd: python3 backend/scripts/fetch_indices.py
+        
+        # Let's try to locate it relative to current working directory of the process
+        script_path = os.path.join("backend", "scripts", "fetch_indices.py")
+        if not os.path.exists(script_path):
+             # Try without 'backend' prefix if running from inside backend
+             script_path = os.path.join("scripts", "fetch_indices.py")
+
+        if not os.path.exists(script_path):
+            return {"status": "error", "message": f"Script not found at {script_path}"}
+
+        # Use sys.executable to ensure we use the same python environment
+        result = subprocess.run([sys.executable, script_path], capture_output=True, text=True)
+        
+        if result.returncode == 0:
+            return {"status": "success", "message": "Indices updated successfully", "output": result.stdout}
+        else:
+            return {"status": "error", "message": "Script failed", "detail": result.stderr}
+            
+    except Exception as e:
+        logger.error(f"Error updating indices: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 # Dependency
 def get_db():
     db = SessionLocal()
