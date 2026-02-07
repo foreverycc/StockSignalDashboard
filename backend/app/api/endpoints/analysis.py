@@ -227,6 +227,12 @@ async def get_price_history(
         df['ema_144'] = df['Close'].ewm(span=144, adjust=False).mean()
         df['ema_169'] = df['Close'].ewm(span=169, adjust=False).mean()
 
+        # Requested MAs
+        df['ema_20'] = df['Close'].ewm(span=20, adjust=False).mean()
+        df['sma_50'] = df['Close'].rolling(window=50).mean()
+        df['sma_100'] = df['Close'].rolling(window=100).mean()
+        df['sma_200'] = df['Close'].rolling(window=200).mean()
+
     except Exception as e:
         logger.error(f"Error computing indicators for {ticker}: {e}")
         # Fallback to no signals if error
@@ -246,6 +252,11 @@ async def get_price_history(
         e21 = df.loc[ts, 'ema_21'] if 'ema_21' in df else None
         e144 = df.loc[ts, 'ema_144'] if 'ema_144' in df else None
         e169 = df.loc[ts, 'ema_169'] if 'ema_169' in df else None
+        
+        e20 = df.loc[ts, 'ema_20'] if 'ema_20' in df else None
+        s50 = df.loc[ts, 'sma_50'] if 'sma_50' in df else None
+        s100 = df.loc[ts, 'sma_100'] if 'sma_100' in df else None
+        s200 = df.loc[ts, 'sma_200'] if 'sma_200' in df else None
 
         response.append({
             "time": p.timestamp.isoformat(),
@@ -259,7 +270,11 @@ async def get_price_history(
             "ema_13": float(e13) if pd.notna(e13) else None,
             "ema_21": float(e21) if pd.notna(e21) else None,
             "ema_144": float(e144) if pd.notna(e144) else None,
-            "ema_169": float(e169) if pd.notna(e169) else None
+            "ema_169": float(e169) if pd.notna(e169) else None,
+            "ema_20": float(e20) if pd.notna(e20) else None,
+            "sma_50": float(s50) if pd.notna(s50) else None,
+            "sma_100": float(s100) if pd.notna(s100) else None,
+            "sma_200": float(s200) if pd.notna(s200) else None
         })
         
     return response

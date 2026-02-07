@@ -2,6 +2,8 @@ import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react'
 import {
     ComposedChart,
     Bar,
+    Line,
+    Scatter,
     XAxis,
     YAxis,
     CartesianGrid,
@@ -94,6 +96,18 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
             d.low = p.low;
             d.close = p.close;
             d.spxVolume = p.volume;
+
+            // Indicators
+            d.ema_20 = p.ema_20;
+            d.sma_50 = p.sma_50;
+            d.sma_100 = p.sma_100;
+            d.sma_200 = p.sma_200;
+            d.cd_signal = p.cd_signal;
+            d.mc_signal = p.mc_signal;
+
+            // Signal Markers
+            d.buySignal = p.cd_signal ? p.low * 0.995 : null; // Slightly below low
+            d.sellSignal = p.mc_signal ? p.high * 1.005 : null; // Slightly above high
         });
 
         // Process CD Breadth
@@ -316,6 +330,52 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
                                 shape={<CandleShape />}
                                 isAnimationActive={false}
                                 name="Price"
+                            />
+
+                            {/* Moving Averages */}
+                            <Line type="monotone" dataKey="ema_20" stroke="#3b82f6" strokeWidth={1} dot={false} name="EMA 20" isAnimationActive={false} />
+                            <Line type="monotone" dataKey="sma_50" stroke="#f59e0b" strokeWidth={1} dot={false} name="SMA 50" isAnimationActive={false} />
+                            <Line type="monotone" dataKey="sma_100" stroke="#a855f7" strokeWidth={1} dot={false} name="SMA 100" isAnimationActive={false} />
+                            <Line type="monotone" dataKey="sma_200" stroke="#ef4444" strokeWidth={1} dot={false} name="SMA 200" isAnimationActive={false} />
+
+                            {/* Buy Signals (CD) */}
+                            <Scatter
+                                name="CD Buy Signal"
+                                dataKey="buySignal"
+                                shape={(props: any) => {
+                                    const { cx, cy } = props;
+                                    if (!cx || !cy) return <g />;
+                                    return (
+                                        <path
+                                            d={`M${cx},${cy} l-4,6 l8,0 z`}
+                                            fill="#22c55e"
+                                            stroke="#22c55e"
+                                            transform={`translate(0, 10)`}
+                                        />
+                                    );
+                                }}
+                                isAnimationActive={false}
+                                fill="#22c55e"
+                            />
+
+                            {/* Sell Signals (MC) */}
+                            <Scatter
+                                name="MC Sell Signal"
+                                dataKey="sellSignal"
+                                shape={(props: any) => {
+                                    const { cx, cy } = props;
+                                    if (!cx || !cy) return <g />;
+                                    return (
+                                        <path
+                                            d={`M${cx},${cy} l-4,-6 l8,0 z`}
+                                            fill="#ef4444"
+                                            stroke="#ef4444"
+                                            transform={`translate(0, -10)`}
+                                        />
+                                    );
+                                }}
+                                isAnimationActive={false}
+                                fill="#ef4444"
                             />
                             <ReferenceBlock />
                         </ComposedChart>
