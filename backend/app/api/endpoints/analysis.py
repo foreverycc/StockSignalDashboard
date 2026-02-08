@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc
 
 from app.services.engine import job_manager
-from app.logic.indicators import compute_cd_indicator, compute_mc_indicator
+from app.logic.indicators import compute_cd_indicator, compute_mc_indicator, compute_nx_break_through
 from app.db.database import SessionLocal
 from app.db.models import AnalysisRun, AnalysisResult, PriceBar
 from app.logic.db_utils import save_price_history
@@ -255,10 +255,22 @@ async def get_price_history(
     try:
         cd_signals = compute_cd_indicator(df)
         mc_signals = compute_mc_indicator(df)
+        breakthrough = compute_nx_break_through(df)
         
         # Fill NaNs with False
         cd_signals = cd_signals.fillna(False).astype(bool)
         mc_signals = mc_signals.fillna(False).astype(bool)
+        breakthrough = breakthrough.fillna(False).astype(bool)
+
+        # 1234 Logic: (Signal & Breakthrough) | (Signal & Breakthrough[t-9])
+        # Logic analysis: `breakthrough.rolling(10).apply(lambda x: x.iloc[0] if x.any() else False)`
+        # If x.iloc[0] (t-9) is True, then x.any() is True, so it returns True.
+        # If x.iloc[0] is False, it returns False regardless of x.any().
+        # Thus, it simplifies to breakthrough.shift(9).
+        oldest_breakthrough = breakthrough.shift(9).fillna(False)
+        
+        cd_1234 = (cd_signals & breakthrough) | (cd_signals & oldest_breakthrough)
+        mc_1234 = (mc_signals & breakthrough) | (mc_signals & oldest_breakthrough)
 
         # Vegas Channel EMAs
         df['ema_13'] = df['Close'].ewm(span=13, adjust=False).mean()
@@ -285,6 +297,8 @@ async def get_price_history(
         ts = p.timestamp
         is_cd = bool(cd_signals.get(ts, False))
         is_mc = bool(mc_signals.get(ts, False))
+        is_cd_1234 = bool(cd_1234.get(ts, False))
+        is_mc_1234 = bool(mc_1234.get(ts, False))
         
         # Ema values
         e13 = df.loc[ts, 'ema_13'] if 'ema_13' in df else None
@@ -306,6 +320,8 @@ async def get_price_history(
             "volume": p.volume,
             "cd_signal": is_cd,
             "mc_signal": is_mc,
+            "cd_1234_signal": is_cd_1234,
+            "mc_1234_signal": is_mc_1234,
             "ema_13": float(e13) if pd.notna(e13) else None,
             "ema_21": float(e21) if pd.notna(e21) else None,
             "ema_144": float(e144) if pd.notna(e144) else None,
@@ -347,3 +363,62 @@ def get_logs(lines: int = 100):
     except Exception as e:
         logger.error(f"Error reading logs: {e}")
         return {"logs": [f"Error reading logs: {str(e)}"]}
+
+@router.get("/signals_1234/{ticker}")
+async def get_signals_1234(ticker: str, db: Session = Depends(get_db)):
+    """Get 1234 CD/MC signal dates for a specific ticker from the latest analysis run."""
+    # Get latest analysis run
+    latest_run = db.query(AnalysisRun).order_by(desc(AnalysisRun.id)).first()
+    if not latest_run:
+        logger.info(f"No analysis run found for signals_1234/{ticker}")
+        return {"cd_dates": [], "mc_dates": []}
+    
+    run_id = latest_run.id
+    logger.info(f"Fetching signals_1234 for ticker={ticker}, run_id={run_id}")
+    
+    # Fetch CD 1234 results (stored as 'cd_breakout_candidates_summary_1234')
+    cd_results = db.query(AnalysisResult).filter(
+        AnalysisResult.run_id == run_id,
+        AnalysisResult.result_type == "cd_breakout_candidates_summary_1234",
+        AnalysisResult.ticker == "ALL"
+    ).all()
+    
+    cd_dates = []
+    for res in cd_results:
+        if res.data and isinstance(res.data, list):
+            for item in res.data:
+                if isinstance(item, dict) and item.get('ticker') == ticker and 'date' in item:
+                    # Normalize date to YYYY-MM-DD string format
+                    date_val = item['date']
+                    if hasattr(date_val, 'strftime'):
+                        date_str = date_val.strftime('%Y-%m-%d')
+                    else:
+                        date_str = str(date_val)[:10]  # Take first 10 chars (YYYY-MM-DD)
+                    cd_dates.append(date_str)
+    
+    logger.info(f"ticker={ticker} CD 1234 dates: {cd_dates}")
+    
+    # Fetch MC 1234 results (stored as 'mc_breakout_candidates_summary_1234')
+    mc_results = db.query(AnalysisResult).filter(
+        AnalysisResult.run_id == run_id,
+        AnalysisResult.result_type == "mc_breakout_candidates_summary_1234",
+        AnalysisResult.ticker == "ALL"
+    ).all()
+    
+    mc_dates = []
+    for res in mc_results:
+        if res.data and isinstance(res.data, list):
+            for item in res.data:
+                if isinstance(item, dict) and item.get('ticker') == ticker and 'date' in item:
+                    # Normalize date to YYYY-MM-DD string format
+                    date_val = item['date']
+                    if hasattr(date_val, 'strftime'):
+                        date_str = date_val.strftime('%Y-%m-%d')
+                    else:
+                        date_str = str(date_val)[:10]  # Take first 10 chars (YYYY-MM-DD)
+                    mc_dates.append(date_str)
+    
+    logger.info(f"ticker={ticker} MC 1234 dates: {mc_dates}")
+    
+    return {"cd_dates": cd_dates, "mc_dates": mc_dates}
+

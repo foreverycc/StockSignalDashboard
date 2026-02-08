@@ -232,7 +232,12 @@ def analyze_stocks(file_path, end_date=None, progress_callback=None):
             raw_tickers = [line.strip() for line in f if line.strip()]
             # Deduplicate while preserving order
             tickers = list(dict.fromkeys(raw_tickers))
-        logger.info(f"Loaded {len(tickers)} tickers from {file_path}")
+        
+        # Prepend Index tickers so they are included in 1234 analysis
+        index_tickers = ["^SPX", "QQQ", "IWM"]
+        tickers = index_tickers + [t for t in tickers if t not in index_tickers]
+        
+        logger.info(f"Loaded {len(tickers)} tickers from {file_path} (including indices)")
     except Exception as e:
         logger.error(f"Failed to load stock list: {e}")
         update_analysis_run_status(run_id, "failed")
@@ -312,40 +317,7 @@ def analyze_stocks(file_path, end_date=None, progress_callback=None):
 
         logger.info(f"Aggregated {len(cd_eval_results)} CD evaluation results and {len(mc_eval_results)} MC evaluation results")
         
-        # --- NEW: Fetch SPX & RUT Index Data for Market Breadth ---
-        # Note: ^RUT volume is often broken (mirrors ^SPX), so we use IWM volume as proxy
-        try:
-            logger.info("Fetching Index data (SPX, RUT)...")
-            
-            # 1. SPX
-            spx_data = download_stock_data("^SPX", end_date=end_date)
-            for interval, df in spx_data.items():
-                if not df.empty:
-                    save_price_history("^SPX", interval, df)
-                    
-            # 2. RUT (with IWM volume proxy)
-            rut_data = download_stock_data("^RUT", end_date=end_date)
-            iwm_data = download_stock_data("IWM", end_date=end_date)
-            
-            for interval, df_rut in rut_data.items():
-                if df_rut.empty:
-                    continue
-                    
-                # Fix Volume using IWM if available
-                if interval in iwm_data and not iwm_data[interval].empty:
-                    df_iwm = iwm_data[interval]
-                    # Align IWM volume to RUT index.
-                    # We use reindex to map IWM volume to RUT's timestamps.
-                    # If IWM data is missing for a timestamp, we fallback to existing RUT volume 
-                    # (even if it's potentially bad, better than 0).
-                    iwm_vol = df_iwm['Volume']
-                    df_rut['Volume'] = iwm_vol.reindex(df_rut.index).fillna(df_rut['Volume'])
-                
-                save_price_history("^RUT", interval, df_rut)
-                
-            logger.info("Index data saved.")
-        except Exception as e:
-            logger.error(f"Failed to fetch Index data: {e}")
+        # Note: Index tickers (^SPX, QQQ, IWM) are now processed as part of the regular stock list above.
 
         # --- NEW: Aggregate Market Breadth (Signal Counts) ---
         def aggregate_signals(df, metric_name):

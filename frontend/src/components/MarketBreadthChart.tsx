@@ -62,6 +62,7 @@ interface MarketBreadthChartProps {
     cdBreadth?: BreadthDataPoint[];
     mcBreadth?: BreadthDataPoint[];
     minDate?: Date;
+    signals1234?: { cd_dates: string[], mc_dates: string[] };
 }
 
 export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
@@ -69,7 +70,8 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
     spxData,
     cdBreadth = [],
     mcBreadth = [],
-    minDate
+    minDate,
+    signals1234
 }) => {
     // --- Zoom State & Logic (Adapted from CandleChart) ---
     const [zoomState, setZoomState] = useState<{ start: number, end: number } | null>(null);
@@ -82,6 +84,14 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
 
     // Merge data by date
     const mergedData = useMemo(() => {
+        // Debug: Log signals1234 prop with actual dates
+        console.log(`[MarketBreadthChart] ${title} signals1234:`, {
+            cd_dates: signals1234?.cd_dates ?? [],
+            mc_dates: signals1234?.mc_dates ?? [],
+            cd_count: signals1234?.cd_dates?.length ?? 0,
+            mc_count: signals1234?.mc_dates?.length ?? 0
+        });
+
         const dataMap = new Map<string, any>();
 
         // Process SPX Data
@@ -105,9 +115,25 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
             d.cd_signal = p.cd_signal;
             d.mc_signal = p.mc_signal;
 
+            // Check if this date is in the external 1234 signals (from analysis results)
+            const is1234CD = signals1234?.cd_dates?.includes(dateStr) ?? false;
+            const is1234MC = signals1234?.mc_dates?.includes(dateStr) ?? false;
+
+            // Debug logging (first 3 items only to avoid spam)
+            if (is1234CD || is1234MC) {
+                console.log(`[MarketBreadthChart] 1234 signal matched: date=${dateStr}, CD=${is1234CD}, MC=${is1234MC}`);
+            }
+
+            d.cd_1234_signal = is1234CD;
+            d.mc_1234_signal = is1234MC;
+
             // Signal Markers
             d.buySignal = p.cd_signal ? p.low * 0.995 : null; // Slightly below low
             d.sellSignal = p.mc_signal ? p.high * 1.005 : null; // Slightly above high
+
+            // 1234 Markers (from analysis results)
+            d.buySignal1234 = is1234CD ? p.low * 0.98 : null;
+            d.sellSignal1234 = is1234MC ? p.high * 1.02 : null;
         });
 
         // Process CD Breadth
@@ -137,7 +163,7 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
         result = result.filter(d => d.close !== undefined);
 
         return result;
-    }, [spxData, cdBreadth, mcBreadth, minDate]);
+    }, [spxData, cdBreadth, mcBreadth, minDate, signals1234]);
 
     // Visible slice
     const visibleData = useMemo(() => {
@@ -277,7 +303,7 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
     const validMin = spxMin === Infinity ? 0 : spxMin;
     const validMax = spxMax === -Infinity ? 100 : spxMax;
 
-    const spxPadding = (validMax - validMin) * 0.2; // 20% padding
+    const spxPadding = (validMax - validMin) * 0.3; // 30% padding for signals visibility
     const spxDomain = [validMin - spxPadding, validMax + spxPadding];
 
     const ReferenceBlock = () => (
@@ -347,15 +373,37 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
                                     if (!cx || !cy) return <g />;
                                     return (
                                         <path
-                                            d={`M${cx},${cy} l-4,6 l8,0 z`}
-                                            fill="#22c55e"
+                                            d={`M${cx},${cy} l-5,8 l10,0 z`}
+                                            fill="none"
                                             stroke="#22c55e"
-                                            transform={`translate(0, 10)`}
+                                            strokeWidth={2}
+                                            transform={`translate(0, 8)`}
                                         />
                                     );
                                 }}
                                 isAnimationActive={false}
                                 fill="#22c55e"
+                            />
+
+                            {/* Buy Signals 1234 (Diamond) */}
+                            <Scatter
+                                name="CD 1234 Buy Signal"
+                                dataKey="buySignal1234"
+                                shape={(props: any) => {
+                                    const { cx, cy } = props;
+                                    if (!cx || !cy) return <g />;
+                                    return (
+                                        <path
+                                            d={`M${cx},${cy} l5,5 l-5,5 l-5,-5 z`}
+                                            fill="none"
+                                            stroke="#15803d"
+                                            strokeWidth={2}
+                                            transform={`translate(0, 22)`}
+                                        />
+                                    );
+                                }}
+                                isAnimationActive={false}
+                                fill="#15803d"
                             />
 
                             {/* Sell Signals (MC) */}
@@ -367,15 +415,37 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
                                     if (!cx || !cy) return <g />;
                                     return (
                                         <path
-                                            d={`M${cx},${cy} l-4,-6 l8,0 z`}
-                                            fill="#ef4444"
+                                            d={`M${cx},${cy} l-5,-8 l10,0 z`}
+                                            fill="none"
                                             stroke="#ef4444"
-                                            transform={`translate(0, -10)`}
+                                            strokeWidth={2}
+                                            transform={`translate(0, -8)`}
                                         />
                                     );
                                 }}
                                 isAnimationActive={false}
                                 fill="#ef4444"
+                            />
+
+                            {/* Sell Signals 1234 (Diamond) */}
+                            <Scatter
+                                name="MC 1234 Sell Signal"
+                                dataKey="sellSignal1234"
+                                shape={(props: any) => {
+                                    const { cx, cy } = props;
+                                    if (!cx || !cy) return <g />;
+                                    return (
+                                        <path
+                                            d={`M${cx},${cy} l5,5 l-5,5 l-5,-5 z`}
+                                            fill="none"
+                                            stroke="#b91c1c"
+                                            strokeWidth={2}
+                                            transform={`translate(0, -22)`}
+                                        />
+                                    );
+                                }}
+                                isAnimationActive={false}
+                                fill="#b91c1c"
                             />
                             <ReferenceBlock />
                         </ComposedChart>

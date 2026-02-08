@@ -99,10 +99,10 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
         staleTime: 1000 * 60 * 60, // 1 hour
     });
 
-    // 1c. RUT Data
-    const { data: rutHistory } = useQuery({
-        queryKey: ['priceHistory', '^RUT', '1d'],
-        queryFn: () => analysisApi.getPriceHistory('^RUT', '1d'),
+    // 1c. R2000 Data (using IWM)
+    const { data: iwmHistory } = useQuery({
+        queryKey: ['priceHistory', 'IWM', '1d'],
+        queryFn: () => analysisApi.getPriceHistory('IWM', '1d'),
         staleTime: 1000 * 60 * 60, // 1 hour
     });
 
@@ -117,6 +117,23 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
         queryKey: ['breadth', runId, 'mc_market_breadth_1234'],
         queryFn: () => runId ? analysisApi.getResult(runId, 'mc_market_breadth_1234') : null,
         enabled: !!runId
+    });
+
+    // 2b. 1234 Signals for each index (from analysis results)
+    const { data: spxSignals1234 } = useQuery({
+        queryKey: ['signals1234', '^SPX'],
+        queryFn: () => analysisApi.getSignals1234('^SPX'),
+        staleTime: 1000 * 60 * 60,
+    });
+    const { data: qqqSignals1234 } = useQuery({
+        queryKey: ['signals1234', 'QQQ'],
+        queryFn: () => analysisApi.getSignals1234('QQQ'),
+        staleTime: 1000 * 60 * 60,
+    });
+    const { data: iwmSignals1234 } = useQuery({
+        queryKey: ['signals1234', 'IWM'],
+        queryFn: () => analysisApi.getSignals1234('IWM'),
+        staleTime: 1000 * 60 * 60,
     });
 
     // 3. Best Opportunities
@@ -227,6 +244,7 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
                     cdBreadth={breadthCD1234 ?? []}
                     mcBreadth={breadthMC1234 ?? []}
                     minDate={oneYearAgo}
+                    signals1234={spxSignals1234}
                 />
                 <MarketBreadthChart
                     title="QQQ & Market Breadth"
@@ -234,13 +252,15 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
                     cdBreadth={breadthCD1234 ?? []}
                     mcBreadth={breadthMC1234 ?? []}
                     minDate={oneYearAgo}
+                    signals1234={qqqSignals1234}
                 />
                 <MarketBreadthChart
-                    title="Russell 2000 & Market Breadth"
-                    spxData={rutHistory ?? []}
+                    title="Russell 2000 (IWM) & Market Breadth"
+                    spxData={iwmHistory ?? []}
                     cdBreadth={breadthCD1234 ?? []}
                     mcBreadth={breadthMC1234 ?? []}
                     minDate={oneYearAgo}
+                    signals1234={iwmSignals1234}
                 />
             </div>
 

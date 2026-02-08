@@ -89,5 +89,10 @@ export const analysisApi = {
     getOptions: async (ticker: string) => {
         const response = await axios.get(`${API_BASE_URL}/analysis/options/${ticker}`);
         return response.data;
+    },
+
+    getSignals1234: async (ticker: string) => {
+        const response = await api.get<{ cd_dates: string[], mc_dates: string[] }>(`/analysis/signals_1234/${ticker}`);
+        return response.data;
     }
 };
