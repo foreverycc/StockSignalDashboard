@@ -158,7 +158,7 @@ export const Configuration: React.FC = () => {
                             className="w-full flex items-center justify-center gap-2 px-4 py-3 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/80 transition-all font-medium disabled:opacity-50"
                         >
                             <RefreshCw className={cn("w-4 h-4", updateIndicesMutation.isPending ? "animate-spin" : "")} />
-                            {updateIndicesMutation.isPending ? 'Updating...' : 'Update Indices (SP500, NDX100, R2000)'}
+                            {updateIndicesMutation.isPending ? 'Updating...' : 'Update Indices (SP500, Nasdaq 100, Dow Jones, Russell 2000)'}
                         </button>
                     </div>
                 </div>

@@ -234,7 +234,7 @@ def analyze_stocks(file_path, end_date=None, progress_callback=None):
             tickers = list(dict.fromkeys(raw_tickers))
         
         # Prepend Index tickers so they are included in 1234 analysis
-        index_tickers = ["^SPX", "QQQ", "IWM"]
+        index_tickers = ["^SPX", "^DJI", "QQQ", "IWM"]
         tickers = index_tickers + [t for t in tickers if t not in index_tickers]
         
         logger.info(f"Loaded {len(tickers)} tickers from {file_path} (including indices)")

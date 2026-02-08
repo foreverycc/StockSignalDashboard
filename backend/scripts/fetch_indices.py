@@ -66,6 +66,22 @@ def fetch_russell2000():
         return sorted(list(set(stocks)))
     return []
 
+def fetch_dowjones():
+    url = "https://en.wikipedia.org/wiki/Dow_Jones_Industrial_Average"
+    content = get_html_content(url)
+    tables = pd.read_html(io.BytesIO(content))
+    # Find the table with stock components
+    for table in tables:
+        if 'Symbol' in table.columns:
+            stocks = table['Symbol'].tolist()
+            stocks = [s.replace('.', '-') for s in stocks]
+            return sorted(stocks)
+        elif 'Ticker' in table.columns:
+            stocks = table['Ticker'].tolist()
+            stocks = [s.replace('.', '-') for s in stocks]
+            return sorted(stocks)
+    return []
+
 def save_to_tab(stocks, filename):
     # Ensure data directory exists
     os.makedirs('data', exist_ok=True)
@@ -96,3 +112,10 @@ if __name__ == "__main__":
         save_to_tab(russell2000, 'stocks_russell2000.tab')
     except Exception as e:
         print(f"Error fetching Russell 2000: {e}")
+
+    print("Fetching Dow Jones 30...")
+    try:
+        dowjones = fetch_dowjones()
+        save_to_tab(dowjones, 'stocks_dowjones.tab')
+    except Exception as e:
+        print(f"Error fetching Dow Jones 30: {e}")

@@ -106,6 +106,13 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
         staleTime: 1000 * 60 * 60, // 1 hour
     });
 
+    // 1d. Dow Jones Data
+    const { data: djiHistory } = useQuery({
+        queryKey: ['priceHistory', '^DJI', '1d'],
+        queryFn: () => analysisApi.getPriceHistory('^DJI', '1d'),
+        staleTime: 1000 * 60 * 60, // 1 hour
+    });
+
     // 2. Market Breadth Data
     // We fetch 2 types
     const { data: breadthCD1234 } = useQuery({
@@ -133,6 +140,11 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
     const { data: iwmSignals1234 } = useQuery({
         queryKey: ['signals1234', 'IWM'],
         queryFn: () => analysisApi.getSignals1234('IWM'),
+        staleTime: 1000 * 60 * 60,
+    });
+    const { data: djiSignals1234 } = useQuery({
+        queryKey: ['signals1234', '^DJI'],
+        queryFn: () => analysisApi.getSignals1234('^DJI'),
         staleTime: 1000 * 60 * 60,
     });
 
@@ -237,7 +249,7 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
         <div className="p-4 md:p-6 h-full overflow-y-auto space-y-6">
 
             {/* Market Breadth Overview (Combined) */}
-            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-3 gap-6 w-full">
+            <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4 w-full">
                 <MarketBreadthChart
                     title="SPX & Market Breadth"
                     spxData={spxHistory ?? []}
@@ -255,7 +267,15 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
                     signals1234={qqqSignals1234}
                 />
                 <MarketBreadthChart
-                    title="Russell 2000 (IWM) & Market Breadth"
+                    title="Dow Jones & Market Breadth"
+                    spxData={djiHistory ?? []}
+                    cdBreadth={breadthCD1234 ?? []}
+                    mcBreadth={breadthMC1234 ?? []}
+                    minDate={oneYearAgo}
+                    signals1234={djiSignals1234}
+                />
+                <MarketBreadthChart
+                    title="IWM & Market Breadth"
                     spxData={iwmHistory ?? []}
                     cdBreadth={breadthCD1234 ?? []}
                     mcBreadth={breadthMC1234 ?? []}

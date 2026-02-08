@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import {
     ComposedChart,
     Bar,
+    Cell,
     Line,
     XAxis,
     YAxis,
@@ -564,12 +565,18 @@ export const CandleChart: React.FC<CandleChartProps> = ({ data, ticker, interval
 
                         <Bar
                             dataKey="volume"
-                            fill="hsl(var(--muted-foreground))"
-                            opacity={0.5}
+                            opacity={0.6}
                             barSize={30}
                             name="Volume"
                             isAnimationActive={false}
-                        />
+                        >
+                            {visibleData.map((entry, index) => (
+                                <Cell
+                                    key={`cell-${index}`}
+                                    fill={entry.close >= entry.open ? '#22c55e' : '#ef4444'}
+                                />
+                            ))}
+                        </Bar>
                     </ComposedChart>
                 </ResponsiveContainer>
             </div>

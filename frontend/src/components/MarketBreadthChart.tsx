@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react'
 import {
     ComposedChart,
     Bar,
+    Cell,
     Line,
     Scatter,
     XAxis,
@@ -13,7 +14,6 @@ import {
     ReferenceArea
 } from 'recharts';
 import { format } from 'date-fns';
-import { formatNumberShort } from '../utils/chartUtils';
 
 interface BreadthDataPoint {
     date: string;
@@ -172,6 +172,19 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
         return mergedData.slice(zoomState.start, zoomState.end + 1);
     }, [mergedData, zoomState]);
 
+    // Calculate unified volume scale based on max volume in visible data
+    const volumeScale = useMemo(() => {
+        const maxVol = Math.max(...visibleData.map(d => d.spxVolume || 0));
+        if (maxVol >= 1e9) {
+            return { divisor: 1e9, suffix: 'B' };
+        } else if (maxVol >= 1e6) {
+            return { divisor: 1e6, suffix: 'M' };
+        } else if (maxVol >= 1e3) {
+            return { divisor: 1e3, suffix: 'K' };
+        }
+        return { divisor: 1, suffix: '' };
+    }, [visibleData]);
+
 
     // Helpers
     const getChartArea = (container: HTMLElement) => {
@@ -292,6 +305,7 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
             axisLine={!hide}
             tickLine={!hide}
             hide={hide}
+            fontSize={12}
         />
     );
 
@@ -337,18 +351,18 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
                 onMouseDown={handleMouseDown}
             >
                 {/* 1. Price History (Candle) */}
-                <div className="flex-[2] min-h-0 border-b border-border/50">
+                <div className="flex-[2] min-h-0 border-b border-border/50 relative">
+                    <span className="absolute top-1 left-2 text-xs font-medium text-[#8884d8] z-10">Price</span>
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 2, top: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={1} />
                             {commonXAxis(true)}
                             <YAxis
                                 orientation="right"
                                 domain={spxDomain}
                                 tickFormatter={(val) => val.toFixed(0)}
-                                width={50}
-                                tick={{ fontSize: 11 }}
-                                label={{ value: 'Price', angle: 90, position: 'insideRight', fill: '#8884d8', fontSize: 10 }}
+                                width={38}
+                                tick={{ fontSize: 10 }}
                             />
                             <Tooltip content={<></>} />
                             <Bar
@@ -453,36 +467,44 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
                 </div>
 
                 {/* 2. SPX Volume */}
-                <div className="flex-1 min-h-0 border-b border-border/50">
+                <div className="flex-[0.6] min-h-0 border-b border-border/50 relative">
+                    <span className="absolute top-1 left-2 text-xs font-medium text-[#00A5E3] z-10">Vol</span>
+                    <span className="absolute bottom-0 right-7 text-[9px] text-muted-foreground z-10">{volumeScale.suffix}</span>
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 2, top: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={1} />
                             {commonXAxis(true)}
                             <YAxis
                                 orientation="right"
-                                tickFormatter={(val) => formatNumberShort(val)}
-                                width={50}
-                                tick={{ fontSize: 11 }}
-                                label={{ value: 'Vol', angle: 90, position: 'insideRight', fill: '#82ca9d', fontSize: 10 }}
+                                tickFormatter={(val) => (val / volumeScale.divisor).toFixed(1)}
+                                width={38}
+                                tick={{ fontSize: 10 }}
                             />
                             <Tooltip content={<></>} />
-                            <Bar dataKey="spxVolume" fill="#82ca9d" opacity={0.6} name="Volume" />
+                            <Bar dataKey="spxVolume" opacity={0.6} name="Volume">
+                                {visibleData.map((entry, index) => (
+                                    <Cell
+                                        key={`vol-${index}`}
+                                        fill={entry.close >= entry.open ? '#22c55e' : '#ef4444'}
+                                    />
+                                ))}
+                            </Bar>
                             <ReferenceBlock />
                         </ComposedChart>
                     </ResponsiveContainer>
                 </div>
 
                 {/* 3. CD Counts */}
-                <div className="flex-1 min-h-0 border-b border-border/50">
+                <div className="flex-[0.6] min-h-0 border-b border-border/50 relative">
+                    <span className="absolute top-1 left-2 text-xs font-medium text-[#22c55e] z-10">Buy</span>
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 2, top: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={1} />
                             {commonXAxis(true)}
                             <YAxis
                                 orientation="right"
-                                width={50}
-                                tick={{ fontSize: 11 }}
-                                label={{ value: 'Buy', angle: 90, position: 'insideRight', fill: '#22c55e', fontSize: 10 }}
+                                width={38}
+                                tick={{ fontSize: 10 }}
                             />
                             <Tooltip content={<></>} />
                             <Bar dataKey="cdCount" fill="#22c55e" name="Buy Signals" />
@@ -492,16 +514,16 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
                 </div>
 
                 {/* 4. MC Counts */}
-                <div className="flex-1 min-h-0">
+                <div className="flex-[0.8] min-h-0 border-b border-border/50 relative">
+                    <span className="absolute top-1 left-2 text-xs font-medium text-[#ef4444] z-10">Sell</span>
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 10, right: 10, top: 5, bottom: 5 }}>
-                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={0.3} />
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 2, top: 5, bottom: 5 }}>
+                            <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={1} />
                             {commonXAxis(false)}
                             <YAxis
                                 orientation="right"
-                                width={50}
-                                tick={{ fontSize: 11 }}
-                                label={{ value: 'Sell', angle: 90, position: 'insideRight', fill: '#ef4444', fontSize: 10 }}
+                                width={38}
+                                tick={{ fontSize: 10 }}
                             />
                             <Tooltip labelStyle={{ color: 'black' }} />
                             <Bar dataKey="mcCount" fill="#ef4444" name="Sell Signals" />
