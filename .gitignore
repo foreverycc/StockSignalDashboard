@@ -1,0 +1,5 @@
+
+backend/data/db/*.db
+backend/data/db/*.sqlite
+backend/data/db/*.sqlite3
+backend/data/db/
