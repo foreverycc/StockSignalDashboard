@@ -176,14 +176,20 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
     const volumeScale = useMemo(() => {
         const maxVol = Math.max(...visibleData.map(d => d.spxVolume || 0));
         if (maxVol >= 1e9) {
-            return { divisor: 1e9, suffix: 'B' };
+            return { divisor: 1e9, suffix: 'B', maxVol };
         } else if (maxVol >= 1e6) {
-            return { divisor: 1e6, suffix: 'M' };
+            return { divisor: 1e6, suffix: 'M', maxVol };
         } else if (maxVol >= 1e3) {
-            return { divisor: 1e3, suffix: 'K' };
+            return { divisor: 1e3, suffix: 'K', maxVol };
         }
-        return { divisor: 1, suffix: '' };
+        return { divisor: 1, suffix: '', maxVol };
     }, [visibleData]);
+
+    // Calculate explicit tick values for volume to ensure consistent grid lines
+    const volumeTicks = useMemo(() => {
+        const max = volumeScale.maxVol || 1;
+        return [0, max / 2, max];
+    }, [volumeScale.maxVol]);
 
 
     // Helpers
@@ -317,7 +323,7 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
     const validMin = spxMin === Infinity ? 0 : spxMin;
     const validMax = spxMax === -Infinity ? 100 : spxMax;
 
-    const spxPadding = (validMax - validMin) * 0.3; // 30% padding for signals visibility
+    const spxPadding = (validMax - validMin) * 0.5; // 50% padding for signals visibility
     const spxDomain = [validMin - spxPadding, validMax + spxPadding];
 
     const ReferenceBlock = () => (
@@ -352,13 +358,14 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
             >
                 {/* 1. Price History (Candle) */}
                 <div className="flex-[2] min-h-0 border-b border-border/50 relative">
-                    <span className="absolute top-1 left-2 text-xs font-medium text-[#8884d8] z-10">Price</span>
+                    <span className="absolute top-5 left-2 text-[10px] font-medium text-[#8884d8] z-10">Price</span>
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 2, top: 5, bottom: 5 }}>
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 5, top: 5, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={1} />
                             {commonXAxis(true)}
                             <YAxis
-                                orientation="right"
+                                orientation="left"
+                                mirror={true}
                                 domain={spxDomain}
                                 tickFormatter={(val) => val.toFixed(0)}
                                 width={38}
@@ -468,15 +475,18 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
 
                 {/* 2. SPX Volume */}
                 <div className="flex-[0.6] min-h-0 border-b border-border/50 relative">
-                    <span className="absolute top-1 left-2 text-xs font-medium text-[#00A5E3] z-10">Vol</span>
-                    <span className="absolute bottom-0 right-7 text-[9px] text-muted-foreground z-10">{volumeScale.suffix}</span>
+                    <span className="absolute top-3 left-2 text-[10px] font-medium text-[#00A5E3] z-10">Vol</span>
+                    <span className="absolute bottom-1 left-2 text-[10px] text-muted-foreground z-10">{volumeScale.suffix}</span>
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 2, top: 5, bottom: 5 }}>
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 5, top: 5, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={1} />
                             {commonXAxis(true)}
                             <YAxis
-                                orientation="right"
-                                tickFormatter={(val) => (val / volumeScale.divisor).toFixed(1)}
+                                orientation="left"
+                                mirror={true}
+                                domain={[0, volumeScale.maxVol]}
+                                ticks={volumeTicks}
+                                tickFormatter={(val) => val === 0 ? '' : (val / volumeScale.divisor).toFixed(1)}
                                 width={38}
                                 tick={{ fontSize: 10 }}
                             />
@@ -496,15 +506,19 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
 
                 {/* 3. CD Counts */}
                 <div className="flex-[0.6] min-h-0 border-b border-border/50 relative">
-                    <span className="absolute top-1 left-2 text-xs font-medium text-[#22c55e] z-10">Buy</span>
+                    <span className="absolute top-3 left-2 text-[10px] font-medium text-[#22c55e] z-10">Buy</span>
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 2, top: 5, bottom: 5 }}>
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 5, top: 5, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={1} />
                             {commonXAxis(true)}
                             <YAxis
-                                orientation="right"
+                                orientation="left"
+                                mirror={true}
+                                domain={[0, 'auto']}
+                                tickFormatter={(val) => val === 0 ? '' : val}
                                 width={38}
                                 tick={{ fontSize: 10 }}
+                                tickCount={3}
                             />
                             <Tooltip content={<></>} />
                             <Bar dataKey="cdCount" fill="#22c55e" name="Buy Signals" />
@@ -515,15 +529,19 @@ export const MarketBreadthChart: React.FC<MarketBreadthChartProps> = ({
 
                 {/* 4. MC Counts */}
                 <div className="flex-[0.8] min-h-0 border-b border-border/50 relative">
-                    <span className="absolute top-1 left-2 text-xs font-medium text-[#ef4444] z-10">Sell</span>
+                    <span className="absolute top-3 left-2 text-[10px] font-medium text-[#ef4444] z-10">Sell</span>
                     <ResponsiveContainer width="100%" height="100%">
-                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 2, top: 5, bottom: 5 }}>
+                        <ComposedChart data={visibleData} syncId="breadthSync" margin={{ left: 5, right: 5, top: 5, bottom: 5 }}>
                             <CartesianGrid strokeDasharray="3 3" vertical={false} opacity={1} />
                             {commonXAxis(false)}
                             <YAxis
-                                orientation="right"
+                                orientation="left"
+                                mirror={true}
+                                domain={[0, 'auto']}
+                                tickFormatter={(val) => val === 0 ? '' : val}
                                 width={38}
                                 tick={{ fontSize: 10 }}
+                                tickCount={3}
                             />
                             <Tooltip labelStyle={{ color: 'black' }} />
                             <Bar dataKey="mcCount" fill="#ef4444" name="Sell Signals" />

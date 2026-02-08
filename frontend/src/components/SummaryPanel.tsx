@@ -251,7 +251,7 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
             {/* Market Breadth Overview (Combined) */}
             <div className="grid grid-cols-1 xl:grid-cols-2 2xl:grid-cols-4 gap-4 w-full">
                 <MarketBreadthChart
-                    title="SPX & Market Breadth"
+                    title="SPX"
                     spxData={spxHistory ?? []}
                     cdBreadth={breadthCD1234 ?? []}
                     mcBreadth={breadthMC1234 ?? []}
@@ -259,7 +259,7 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
                     signals1234={spxSignals1234}
                 />
                 <MarketBreadthChart
-                    title="QQQ & Market Breadth"
+                    title="QQQ"
                     spxData={qqqHistory ?? []}
                     cdBreadth={breadthCD1234 ?? []}
                     mcBreadth={breadthMC1234 ?? []}
@@ -267,7 +267,7 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
                     signals1234={qqqSignals1234}
                 />
                 <MarketBreadthChart
-                    title="Dow Jones & Market Breadth"
+                    title="Dow Jones"
                     spxData={djiHistory ?? []}
                     cdBreadth={breadthCD1234 ?? []}
                     mcBreadth={breadthMC1234 ?? []}
@@ -275,7 +275,7 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
                     signals1234={djiSignals1234}
                 />
                 <MarketBreadthChart
-                    title="IWM & Market Breadth"
+                    title="IWM"
                     spxData={iwmHistory ?? []}
                     cdBreadth={breadthCD1234 ?? []}
                     mcBreadth={breadthMC1234 ?? []}
