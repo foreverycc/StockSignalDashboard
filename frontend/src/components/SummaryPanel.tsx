@@ -15,10 +15,13 @@ const FetchingChartView = ({ row, type, runId, onClose }: { row: any, type: 'bul
         enabled: !!runId && !!row.ticker
     });
 
-    // Find the matching interval row from detailed data
+    // Find the matching interval row from detailed data and extract best metrics
     const detailedRow = useMemo(() => {
         if (!detailedData || !Array.isArray(detailedData)) return null;
-        return detailedData.find((d: any) => d.interval === row.interval) || detailedData[0];
+        const match = detailedData.find((d: any) => d.interval === row.interval) || detailedData[0];
+        if (!match) return null;
+        // Apply extractBestMetrics so success_rate and avg_return are correct
+        return { ...match, ...extractBestMetrics(match) };
     }, [detailedData, row.interval]);
 
     return (
@@ -213,15 +216,15 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
         }
     };
 
-    // 1. Best Opportunities (existing)
+    // 1. High Return Opportunities (from High Return Intervals / good_signals)
     const { data: bestCD } = useQuery({
-        queryKey: ['best', runId, 'cd_eval_best_intervals_50'],
-        queryFn: () => runId ? analysisApi.getResult(runId, 'cd_eval_best_intervals_50') : null,
+        queryKey: ['best', runId, 'cd_eval_good_signals'],
+        queryFn: () => runId ? analysisApi.getResult(runId, 'cd_eval_good_signals') : null,
         enabled: !!runId
     });
     const { data: bestMC } = useQuery({
-        queryKey: ['best', runId, 'mc_eval_best_intervals_50'],
-        queryFn: () => runId ? analysisApi.getResult(runId, 'mc_eval_best_intervals_50') : null,
+        queryKey: ['best', runId, 'mc_eval_good_signals'],
+        queryFn: () => runId ? analysisApi.getResult(runId, 'mc_eval_good_signals') : null,
         enabled: !!runId
     });
 
@@ -313,7 +316,7 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
                                         {row.latest_signal ? format(parseISO(row.latest_signal), 'MM-dd HH:mm') : '-'}
                                     </td>
                                     <td className="p-2 text-muted-foreground">{row.interval}</td>
-                                    <td className={cn("p-2 text-right font-medium", type === 'bull' ? "text-green-500" : "text-red-500")}>
+                                    <td className={cn("p-2 text-right font-medium", row.avg_return >= 0 ? "text-green-500" : "text-red-500")}>
                                         {formatPercent(row.avg_return)}
                                     </td>
                                     <td className="p-2 text-right">{formatPercent(row.success_rate)}</td>
@@ -443,7 +446,7 @@ export const SummaryPanel: React.FC<SummaryPanelProps> = ({ runId }) => {
                                         {row.date ? format(parseISO(row.date), 'MM-dd') : '-'}
                                     </td>
                                     <td className="p-2 text-muted-foreground">{row.intervals}</td>
-                                    <td className={cn("p-2 text-right font-medium", type === 'bull' ? "text-green-500" : "text-red-500")}>
+                                    <td className={cn("p-2 text-right font-medium", (row.calculatedReturn ?? 0) >= 0 ? "text-green-500" : "text-red-500")}>
                                         {row.calculatedReturn !== null ? formatPercent(row.calculatedReturn) : '-'}
                                     </td>
                                     <td className={cn("p-2 text-center", row.nx_1d ? "text-green-500" : "text-red-500")}>
